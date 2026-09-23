@@ -116,9 +116,16 @@ internal static class AtlasTasks
                 }
                 // "world:storm" usw.: Welt-System ausloesen, nach 6 s Bildschirmfoto
                 // "eject:2": Rauswurf-Szene Nr. 2 der Karte, drei Fotos im Verlauf
-                if (kind.StartsWith("eject:", StringComparison.Ordinal))
+                if (kind == "voidscene")
                 {
-                    AtlasEject.Diag(int.TryParse(kind.Substring(6), out var ei) ? ei : 0);
+                    AtlasEject.DiagVoid();
+                    _ejectShots = 3; _shotAt = Time.time + 2.2f; _diagPhase = 7;
+                    return;
+                }
+                if (kind.StartsWith("eject:", StringComparison.Ordinal) || kind.StartsWith("ejectskip:", StringComparison.Ordinal))
+                {
+                    bool sk = kind.StartsWith("ejectskip:", StringComparison.Ordinal);
+                    AtlasEject.Diag(int.TryParse(kind.Substring(sk ? 10 : 6), out var ei) ? ei : 0, sk);
                     _ejectShots = 3; _shotAt = Time.time + 2.0f; _diagPhase = 7;
                     return;
                 }

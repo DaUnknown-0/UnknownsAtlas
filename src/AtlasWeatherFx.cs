@@ -133,6 +133,9 @@ internal static class AtlasWeatherFx
     public static void Tick(float dt, bool wald)
     {
         if (!EnsureScreen()) return;
+        // Rauswurf-Szenen (Atlas wie UC-Void) bringen ihr eigenes Wetter mit; der Schleier lag sonst darueber
+        bool cutscene = ExileController.Instance != null;
+        if (_screen.gameObject.activeSelf == cutscene) _screen.gameObject.SetActive(!cutscene);
         var cam = Camera.main;
         // Kamera-Kind: lokale Einheiten koennen skaliert sein, also die Sichtflaeche in den lokalen Raum umrechnen
         float sc = Mathf.Max(0.01f, _screen.lossyScale.y);

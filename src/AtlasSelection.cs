@@ -218,13 +218,29 @@ internal static class AtlasSelection
         catch { }
     }
 
+    /// <summary>
+    /// Der Lobby-Bildschirm oder null, OHNE einen zu erzeugen. GameStartManager.Instance ist ein
+    /// DestroyableSingleton-Getter und KONSTRUIERT ein leeres Objekt, wenn keins existiert (alle
+    /// Felder null). Beim Rundenstart wird der echte Lobby-Bildschirm abgebaut, waehrend
+    /// LobbyBehaviour.Update noch einen Moment laeuft; traf LobbyVisualTick dieses Fenster, blieb
+    /// ein Phantom-GameStartManager in die Runde stehen, das native ShipStatus.Start warf eine
+    /// NullReferenceException, der Atlas-Bau lief nie und die Runde spielte auf der Skeld
+    /// (User 23.09., 0.3.0.3/0.3.0.4; im Log immer "GameStartManager=ALIVE (leak)"). Gleiches
+    /// Muster wie UTS LobbyScreen.InstanceOrNull.
+    /// </summary>
+    private static GameStartManager LobbyScreenOrNull()
+    {
+        try { return DestroyableSingleton<GameStartManager>.InstanceExists ? DestroyableSingleton<GameStartManager>._instance : null; }
+        catch { return null; }
+    }
+
     private static void LobbyVisualTick()
     {
         if (Time.time < _visualNext) return;
         _visualNext = Time.time + 0.5f;
         try
         {
-            var g = GameStartManager.Instance;
+            var g = LobbyScreenOrNull();
             var banner = g != null ? g.MapImage : null;
             if (_current > 0)
             {
@@ -285,7 +301,7 @@ internal static class AtlasSelection
     {
         try
         {
-            var g = GameStartManager.Instance;
+            var g = LobbyScreenOrNull();
             if (g == null) return;
             _visualNext = 0f;                                   // sofort beim naechsten Lobby-Frame abgleichen
             if (_current > 0) ShowAtlasBanner(g);

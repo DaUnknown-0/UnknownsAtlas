@@ -1,0 +1,556 @@
+<title>Rauswurf-Kino</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --ground: #0a0c11;
+    --panel: #121620;
+    --panel-2: #181d2a;
+    --line: #262d3d;
+    --text: #ece6d8;
+    --muted: #8e94a5;
+    --accent: #f0b340;
+    --accent-ink: #1a1204;
+    --danger: #ff6a5a;
+    --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+    --sans: "IBM Plex Sans", system-ui, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+  html, body { height: auto; }
+  body { background: var(--ground); color: var(--text); font: 15px/1.5 var(--sans); margin: 0; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 22px 40px; display: grid; gap: 18px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 20px; }
+  h1 { font: 900 clamp(34px, 6vw, 56px)/0.9 var(--display); letter-spacing: 0.02em; text-transform: uppercase; margin: 0;
+       color: var(--accent); text-shadow: 0 0 22px rgba(240, 179, 64, 0.28); }
+  .sub { color: var(--muted); font-size: 14px; }
+  .sub b { color: var(--text); font-weight: 600; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+  .stage { position: relative; background: #000; border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+           box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.9); }
+  .stage canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; max-width: 100%; }
+  .loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font: 500 13px var(--mono); }
+  .transport { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
+               background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+  @media (max-width: 560px) { .transport { grid-template-columns: auto auto minmax(0, 1fr); } .transport .tc, .transport .snd { grid-column: span 1; } }
+  button { font: 600 13px var(--sans); color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
+           border-radius: 5px; padding: 7px 12px; cursor: pointer; }
+  button:hover { border-color: #3a4358; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); min-width: 88px; }
+  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .tc { font: 500 13px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  aside { display: grid; gap: 14px; }
+  .group { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: grid; gap: 8px; }
+  .group h2 { font: 700 18px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 2px; color: var(--muted); }
+  .scene { display: grid; grid-template-columns: 1fr auto; align-items: center; text-align: left; gap: 8px; padding: 9px 11px; }
+  .scene small { font: 500 12px var(--mono); color: var(--muted); }
+  .scene[aria-current="true"] { background: #2a2110; border-color: var(--accent); color: var(--accent); }
+  .scene[aria-current="true"] small { color: var(--accent); }
+  .group h3 { font: 600 12px var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 6px 0 0; }
+  .opts { display: grid; gap: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sw { width: 26px; height: 26px; border-radius: 50%; padding: 0; border: 2px solid transparent; }
+  .sw[aria-pressed="true"] { border-color: var(--text); }
+  .note { color: var(--muted); font-size: 13px; max-width: 70ch; }
+  .note code { font: 500 12px var(--mono); color: var(--text); }
+  label.tog { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+  label.tog input { accent-color: var(--accent); width: 16px; height: 16px; }
+  @media (prefers-reduced-motion: reduce) { h1 { text-shadow: none; } }
+  body.sheet .wrap > *:not(.sheetbox) { display: none; }
+  .sheetbox { display: none; }
+  body.sheet .sheetbox { display: block; }
+  body.sheet .sheetbox canvas { width: 100%; height: auto; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Rauswurf-Kino</h1>
+    <div class="sub"><b>Unknown's Atlas</b> · sieben Rauswürfe, vier Skip-Szenen und der Void, abgespielt aus <code style="font:500 12px var(--mono)">eject_scenes.json</code>, derselben Datei wie im Spiel</div>
+  </header>
+
+  <div class="layout">
+    <div style="display:grid; gap:12px; min-width:0">
+      <div class="stage">
+        <canvas id="stage" width="1280" height="720" aria-label="Rauswurf-Szene"></canvas>
+        <div class="loading" id="loading">Lädt Grafiken …</div>
+      </div>
+      <div class="transport">
+        <button class="primary" id="play">Pause</button>
+        <button id="restart">Von vorn</button>
+        <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Zeit in der Szene">
+        <span class="tc" id="tc">0,00 / 0,00 s</span>
+        <button class="snd" id="sound" aria-pressed="false">Ton an</button>
+      </div>
+      <p class="note">Die Figur ist hier gezeichnet; im Spiel steht an ihrer Stelle der echte ausgeworfene Spieler mit Hut und Farbe. Text und Impostor-Zeile tippt im Spiel Among Us selbst, hier werden sie nachgestellt. Der Host würfelt beim Meeting-Start eine normale Szene und eine für Skip oder Gleichstand, nie zweimal dieselbe hintereinander.</p>
+    </div>
+
+    <aside>
+      <div class="group" id="museum"><h2>Vesper Museum</h2></div>
+      <div class="group" id="wald"><h2>Forest Station</h2></div>
+      <div class="group" id="any"><h2>Unknown's Collection</h2></div>
+      <div class="group opts">
+        <h2>Einstellungen</h2>
+        <label class="tog"><input type="checkbox" id="confirm" checked> Rolle bestätigen (Impostor-Zeile)</label>
+        <label class="tog"><input type="checkbox" id="auto" checked> Alle Szenen nacheinander</label>
+        <div class="swatches" id="swatches" aria-label="Farbe der Figur"></div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="sheetbox"><canvas id="sheet" width="1920" height="1080"></canvas></div>
+</div>
+
+<script>
+"use strict";
+// =====================================================================================================
+// Engine: dieselbe Logik wie src/AtlasEject.cs (Keyframes je Eigenschaft, Wobble, Flicker, Parent,
+// Parallax, Kamera mit Grenzen, Partikel, Ereignisse, Kinobalken). Einheiten: 1 = 180 px der Grafik.
+// =====================================================================================================
+const PPU = 180, VIEW_W = 11, VIEW_H = 6.2;
+const EASE = {
+  lin: u => u, in: u => u * u, out: u => 1 - (1 - u) * (1 - u), io: u => u * u * (3 - 2 * u),
+  back: u => { const c = 1.70158, v = u - 1; return 1 + v * v * ((c + 1) * v + c); },
+  inback: u => { const c = 1.70158; return u * u * ((c + 1) * u - c); },
+  hold: u => (u < 1 ? 0 : 1),
+};
+const PROPS = ["x", "y", "rot", "sx", "sy", "s", "a", "b", "flip"];
+
+function mulberry(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function hash(str) { let h = 2166136261; for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
+
+function buildTracks(keys) {
+  const tr = {};
+  for (const [t, p, e] of keys || []) for (const k of Object.keys(p)) {
+    if (k === "arc") continue;
+    (tr[k] = tr[k] || []).push({ t, v: p[k], e: e || "io", arc: k === "y" ? (p.arc || 0) : 0 });
+  }
+  for (const k in tr) tr[k].sort((a, b) => a.t - b.t);
+  return tr;
+}
+function sample(track, t, def) {
+  if (!track || !track.length) return def;
+  if (t <= track[0].t) return track[0].v;
+  for (let i = 1; i < track.length; i++) {
+    const n = track[i];
+    if (t < n.t) {
+      const p = track[i - 1], u = (t - p.t) / Math.max(1e-6, n.t - p.t);
+      if (n.e === "hold") return p.v;
+      let v = p.v + (n.v - p.v) * (EASE[n.e] || EASE.io)(u);
+      if (n.arc) v += n.arc * 4 * u * (1 - u);
+      return v;
+    }
+  }
+  return track[track.length - 1].v;
+}
+function envelope(t, t0, t1) {
+  if (t0 === undefined) return 1;
+  if (t < t0 || t > t1) return 0;
+  return Math.min(1, (t - t0) / 0.12) * Math.min(1, (t1 - t) / 0.12);
+}
+function flickerMul(fl, t) {
+  if (!fl) return 1;
+  const env = envelope(t, fl.t0, fl.t1);
+  if (env <= 0) return 1;
+  const w = 2 * Math.PI * fl.f;
+  const n = 0.5 + 0.5 * (0.5 * Math.sin(w * t) + 0.3 * Math.sin(w * 1.73 * t + 1.3) + 0.2 * Math.sin(w * 2.71 * t + 2.1));
+  return 1 - fl.amp * n * env;
+}
+function hexRgb(h) { if (!h) return [1, 1, 1]; const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; }
+
+class Scene {
+  constructor(def, opts) {
+    this.def = def; this.opts = opts;
+    this.len = def.length;
+    this.cam = buildTracks(def.camera);
+    this.objs = def.objects.map(o => ({ o, tr: buildTracks(o.keys) }));
+    this.player = { o: Object.assign({ z: 0 }, def.player || {}), tr: buildTracks((def.player || {}).keys) };
+    this.rng = mulberry(hash(def.id));
+    this.reset();
+  }
+  reset() {
+    this.t = 0; this.parts = []; this.fired = new Set(); this.acc = this.def.emitters.map(() => 0);
+    this.shake = null; this.flash = null; this.sounds = [];
+    this.rng = mulberry(hash(this.def.id));
+  }
+  // Eigenschaften eines Objekts (lokal) zur Zeit t
+  local(o, tr, t, isPlayer) {
+    const s0 = o.s ?? 1;
+    const L = {
+      x: sample(tr.x, t, o.x ?? 0), y: sample(tr.y, t, o.y ?? 0), rot: sample(tr.rot, t, o.rot ?? 0),
+      sx: sample(tr.sx, t, o.sx ?? 1), sy: sample(tr.sy, t, o.sy ?? 1), s: sample(tr.s, t, s0),
+      a: sample(tr.a, t, o.a ?? 1), b: sample(tr.b, t, o.b ?? 1), flip: sample(tr.flip, t, 1),
+    };
+    for (const w of o.wobble || []) {
+      const env = envelope(t, w.t0, w.t1);
+      if (env > 0) L[w.p] += w.amp * Math.sin(2 * Math.PI * w.f * t + (w.ph || 0)) * env;
+    }
+    L.a *= flickerMul(o.flicker, t);
+    return L;
+  }
+  compose(L, P) {
+    const W = { x: L.x, y: L.y, rot: L.rot, sx: L.s * L.sx * (L.flip < 0 ? -1 : 1), sy: L.s * L.sy, a: L.a, b: L.b };
+    if (!P) return W;
+    const r = P.rot * Math.PI / 180, lx = W.x * P.sx, ly = W.y * P.sy;
+    return {
+      x: P.x + lx * Math.cos(r) - ly * Math.sin(r), y: P.y + lx * Math.sin(r) + ly * Math.cos(r),
+      rot: P.rot + W.rot * Math.sign(P.sx * P.sy || 1), sx: W.sx * P.sx, sy: W.sy * P.sy, a: W.a * P.a, b: W.b,
+    };
+  }
+  evaluate() {
+    const t = this.t, map = {}, out = [];
+    let cam = { z: sample(this.cam.z, t, 1), x: sample(this.cam.x, t, 0), y: sample(this.cam.y, t, 0) };
+    const [bw, bh] = this.def.bounds || [12, 6.8];
+    const hx = Math.max(0, bw / 2 - VIEW_W / 2 / cam.z), hy = Math.max(0, bh / 2 - VIEW_H / 2 / cam.z);
+    cam.x = Math.max(-hx, Math.min(hx, cam.x)); cam.y = Math.max(-hy, Math.min(hy, cam.y));
+    const place = (entry, W) => {
+      const d = entry.o.depth ?? 1;
+      if (!entry.o.parent && d !== 1) { W.x += cam.x * (1 - d); W.y += cam.y * (1 - d); }
+      return W;
+    };
+    for (const e of this.objs) if (e.o.parent !== "player") {
+      if (e.o.screen) { out.push({ kind: "screen", e, W: this.compose(this.local(e.o, e.tr, t), null) }); continue; }
+      const W = place(e, this.compose(this.local(e.o, e.tr, t), e.o.parent ? map[e.o.parent] : null));
+      map[e.o.id] = W; out.push({ kind: "obj", e, W });
+    }
+    const pl = this.player;
+    const PL = this.local(pl.o, pl.tr, t, true);
+    let PW = this.compose(PL, pl.o.parent ? map[pl.o.parent] : null);
+    const hidden = this.def.skip || (pl.o.hide !== undefined && t >= pl.o.hide);
+    if (hidden) PW.a = 0;
+    map.player = PW;
+    out.push({ kind: "player", W: PW, z: 0 });
+    for (const e of this.objs) if (e.o.parent === "player") {
+      const W = this.compose(this.local(e.o, e.tr, t), PW);
+      map[e.o.id] = W; out.push({ kind: "obj", e, W });
+    }
+    return { cam, list: out };
+  }
+  step(dt) {
+    const t0 = this.t, t1 = Math.min(this.len + 2.2, this.t + dt);
+    this.def.emitters.forEach((em, i) => {
+      if (em.burst !== undefined) {
+        if (em.burst >= t0 && em.burst < t1 && !this.fired.has("b" + i)) {
+          this.fired.add("b" + i);
+          for (let k = 0; k < em.n; k++) this.spawn(em);
+        }
+      } else if (t1 > em.t0 && t0 < em.t1) {
+        this.acc[i] += em.rate * (Math.min(t1, em.t1) - Math.max(t0, em.t0));
+        while (this.acc[i] >= 1) { this.acc[i] -= 1; this.spawn(em); }
+      }
+    });
+    for (const p of this.parts) {
+      p.vx += p.ax * dt; p.vy += p.ay * dt;
+      const k = Math.max(0, 1 - p.drag * dt); p.vx *= k; p.vy *= k;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.spin * dt; p.scale *= Math.max(0, 1 + p.grow * dt); p.age += dt;
+    }
+    this.parts = this.parts.filter(p => p.age < p.life);
+    for (const ev of this.def.events) {
+      const id = "e" + this.def.events.indexOf(ev);
+      if (ev.t >= t0 && ev.t < t1 && !this.fired.has(id)) {
+        this.fired.add(id);
+        if (ev.sound) this.sounds.push([ev.sound, ev.vol ?? 0.7]);
+        if (ev.shake) this.shake = { until: ev.t + ev.shake[0], dur: ev.shake[0], amp: ev.shake[1] };
+        if (ev.flash) this.flash = { at: ev.t, rgb: hexRgb(ev.flash[0]), a: ev.flash[1], dur: ev.flash[2] };
+      }
+    }
+    this.t = t1;
+  }
+  spawn(em) {
+    const r = this.rng, R = (a, b) => a + (b - a) * r();
+    const [x0, y0, x1, y1] = em.area || [0, 0, 0, 0], v = em.vel || [0, 0, 0, 0];
+    const size = em.size ? R(em.size[0], em.size[1]) : 0.2;
+    this.parts.push({
+      em, x: R(x0, x1), y: R(y0, y1), vx: R(v[0], v[2]), vy: R(v[1], v[3]), ax: (em.acc || [0, 0])[0], ay: (em.acc || [0, 0])[1],
+      drag: em.drag || 0, life: em.life ? R(em.life[0], em.life[1]) : 1, age: 0, size, scale: 1,
+      rot: em.rot ? R(em.rot[0], em.rot[1]) : 0, spin: em.spin ? R(em.spin[0], em.spin[1]) : 0, grow: em.grow || 0,
+    });
+  }
+}
+
+// ----------------------------------------------------------------------------------- Zeichnen
+const IMG = {}, TINT = new Map();
+function tinted(name, hex) {
+  const img = IMG[name];
+  if (!hex || hex.toLowerCase() === "#ffffff") return img;
+  const key = name + hex;
+  if (TINT.has(key)) return TINT.get(key);
+  const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+  const g = c.getContext("2d");
+  g.drawImage(img, 0, 0); g.globalCompositeOperation = "multiply"; g.fillStyle = hex; g.fillRect(0, 0, c.width, c.height);
+  g.globalCompositeOperation = "destination-in"; g.drawImage(img, 0, 0);
+  TINT.set(key, c); return c;
+}
+
+const CREW = {
+  red: ["#c51111", "#7a0838"], blue: ["#132ed1", "#09158e"], green: ["#117f2d", "#0a4d2e"], pink: ["#ed54ba", "#ab2bad"],
+  orange: ["#ef7d0d", "#b33e15"], yellow: ["#f5f557", "#c38823"], black: ["#3f474e", "#1e1f26"], white: ["#d6e0f0", "#8394bf"],
+  purple: ["#6b2fbb", "#3b177c"], brown: ["#71491e", "#5e2615"], cyan: ["#38fedc", "#24a8be"], lime: ["#50ef39", "#15a742"],
+};
+function rr(g, x, y, w, h, r) { g.beginPath(); g.roundRect(x, y, w, h, r); }
+function drawCrew(g, col) {                       // Einheiten: Koerper 1,0 hoch, Mitte = Ursprung, Blick nach rechts
+  const [c, d] = CREW[col] || CREW.red, ink = "#101014", lw = 0.045;
+  g.lineWidth = lw; g.strokeStyle = ink; g.lineJoin = "round";
+  rr(g, -0.46, -0.2, 0.2, 0.44, 0.09); g.fillStyle = d; g.fill(); g.stroke();            // Rucksack
+  rr(g, -0.28, -0.5, 0.2, 0.3, 0.08); g.fillStyle = d; g.fill(); g.stroke();             // Beine
+  rr(g, 0.08, -0.5, 0.2, 0.3, 0.08); g.fillStyle = c; g.fill(); g.stroke();
+  rr(g, -0.33, -0.34, 0.66, 0.84, [0.12, 0.12, 0.33, 0.33]); g.fillStyle = c; g.fill();  // Koerper
+  const gr = g.createLinearGradient(-0.33, 0, 0.33, 0); gr.addColorStop(0, "rgba(0,0,0,0)"); gr.addColorStop(1, "rgba(0,0,0,0.28)");
+  g.fillStyle = gr; g.fill(); g.stroke();
+  rr(g, 0.0, 0.1, 0.42, 0.24, 0.12); g.fillStyle = "#95cadc"; g.fill(); g.stroke();       // Visier
+  rr(g, 0.1, 0.23, 0.2, 0.06, 0.03); g.fillStyle = "rgba(255,255,255,0.85)"; g.fill();
+}
+
+function render(g, sc, W, H, crewColor) {
+  const { cam, list } = sc.evaluate();
+  const base = Math.min(W / VIEW_W, H / VIEW_H), ppu = base * cam.z;
+  let sx = 0, sy = 0;
+  if (sc.shake && sc.t < sc.shake.until) {
+    const k = (sc.shake.until - sc.t) / sc.shake.dur;
+    sx = (Math.random() * 2 - 1) * sc.shake.amp * k; sy = (Math.random() * 2 - 1) * sc.shake.amp * k;
+  }
+  const toX = x => W / 2 + (x - cam.x + sx) * ppu, toY = y => H / 2 - (y - cam.y + sy) * ppu;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = "#000"; g.fillRect(0, 0, W, H);
+  const items = [];
+  const screens = list.filter(it => it.kind === "screen");
+  list.filter(it => it.kind !== "screen").forEach((it, i) => items.push({ z: it.kind === "player" ? 0 : it.e.o.z || 0, ord: i, it }));
+  sc.parts.forEach((p, i) => items.push({ z: p.em.z || 0, ord: 10000 + i, part: p }));
+  items.sort((a, b) => a.z - b.z || a.ord - b.ord);
+  for (const e of items) {
+    if (e.part) {
+      const p = e.part, em = p.em, img = IMG[em.sprite];
+      if (!img) continue;
+      const u = p.age / p.life, [fi, fo] = em.fade || [0.15, 0.35];
+      const a = (em.a ?? 1) * Math.min(1, u / Math.max(1e-3, fi), (1 - u) / Math.max(1e-3, fo));
+      if (a <= 0.003) continue;
+      const iw = img.width / PPU, ih = img.height / PPU, k = p.size / Math.max(iw, ih) * p.scale;
+      let rot = p.rot;
+      if (em.stretch && (p.vx || p.vy)) rot = Math.atan2(p.vx, -p.vy) * 180 / Math.PI;
+      g.setTransform(1, 0, 0, 1, toX(p.x), toY(p.y));
+      g.rotate(-rot * Math.PI / 180); g.scale(k * ppu, k * ppu);
+      g.globalAlpha = Math.min(1, a); g.drawImage(tinted(em.sprite, em.tint), -iw / 2, -ih / 2, iw, ih);
+      continue;
+    }
+    const it = e.it, Wt = it.W;
+    if (Wt.a <= 0.003) continue;
+    if (it.kind === "player") {
+      g.setTransform(1, 0, 0, 1, toX(Wt.x), toY(Wt.y));
+      g.rotate(-Wt.rot * Math.PI / 180); g.scale(Wt.sx * ppu, -Wt.sy * ppu);
+      g.globalAlpha = Wt.a; drawCrew(g, crewColor);
+      continue;
+    }
+    const o = it.e.o;
+    if (!o.sprite) continue;
+    const img = IMG[o.sprite]; if (!img) continue;
+    const iw = img.width / PPU, ih = img.height / PPU, [px, py] = o.pivot || [0.5, 0.5];
+    g.setTransform(1, 0, 0, 1, toX(Wt.x), toY(Wt.y));
+    g.rotate(-Wt.rot * Math.PI / 180); g.scale(Wt.sx * ppu, Wt.sy * ppu);
+    g.globalAlpha = Math.min(1, Wt.a);
+    g.filter = Wt.b !== 1 ? `brightness(${Wt.b})` : "none";
+    g.drawImage(tinted(o.sprite, o.tint), -px * iw, -(1 - py) * ih, iw, ih);
+    g.filter = "none";
+  }
+  g.globalAlpha = 1; g.setTransform(1, 0, 0, 1, 0, 0);
+  for (const it of screens.sort((a, b) => (a.e.o.z || 0) - (b.e.o.z || 0))) {
+    const o = it.e.o, Wt = it.W, img = IMG[o.sprite];
+    if (!img || Wt.a <= 0.003) continue;
+    const iw = img.width / PPU, ih = img.height / PPU, [px, py] = o.pivot || [0.5, 0.5];
+    g.setTransform(1, 0, 0, 1, W / 2 + Wt.x * base, H / 2 - Wt.y * base);
+    g.rotate(-Wt.rot * Math.PI / 180); g.scale(Wt.sx * base, Wt.sy * base);
+    g.globalAlpha = Math.min(1, Wt.a); g.drawImage(tinted(o.sprite, o.tint), -px * iw, -(1 - py) * ih, iw, ih);
+  }
+  g.globalAlpha = 1; g.setTransform(1, 0, 0, 1, 0, 0);
+  // Bildschirm: Vignette, Blitz, Kinobalken, Texte
+  const cin = DATA.cinema;
+  if (IMG["task_eject_vignette.png"]) { g.globalAlpha = cin.vignette; g.drawImage(IMG["task_eject_vignette.png"], -W * 0.02, -H * 0.02, W * 1.04, H * 1.04); g.globalAlpha = 1; }
+  if (sc.flash) {
+    const k = 1 - (sc.t - sc.flash.at) / sc.flash.dur;
+    if (k > 0) { const [r, gg, b] = sc.flash.rgb; g.fillStyle = `rgba(${r * 255},${gg * 255},${b * 255},${sc.flash.a * k})`; g.fillRect(0, 0, W, H); }
+  }
+  const bi = EASE.out(Math.min(1, sc.t / cin.in));
+  const top = cin.top * base * bi, bot = cin.bottom * base * bi;
+  g.fillStyle = "#000"; g.fillRect(0, 0, W, top); g.fillRect(0, H - bot, W, bot);
+  const [at, dur] = sc.def.text;
+  const full = TEXT.line;
+  const n = Math.max(0, Math.min(full.length, Math.floor((sc.t - at) / dur * full.length)));
+  g.font = `600 ${Math.round(base * 0.3)}px "IBM Plex Sans", system-ui, sans-serif`;
+  g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#ffffff";
+  if (n > 0) {
+    const shown = full.slice(0, n), ty = top * 0.55;
+    if (sc.def.textStyle === "void") {
+      const ph = sc.t * 1.9, burst = (ph % 1) < 0.12, spread = (burst ? 0.09 : 0.025) * base, ga = burst ? 0.75 : 0.3;
+      const jx = burst ? (Math.sin(sc.t * 97) * 0.03 * base) : 0;
+      g.fillStyle = `rgba(255,64,230,${ga})`; g.fillText(shown, W / 2 - spread + jx * 0.5, ty - spread * 0.35);
+      g.fillStyle = `rgba(82,20,140,${ga})`; g.fillText(shown, W / 2 + spread - jx * 0.5, ty + spread * 0.35);
+      const br = 0.85 + 0.15 * Math.sin(sc.t * 5.5);
+      g.fillStyle = burst ? "rgb(222,112,245)" : `rgb(${158 * br | 0},${56 * br | 0},${242 * br | 0})`;
+      g.fillText(shown, W / 2 + jx, ty);
+    } else g.fillText(shown, W / 2, ty);
+  }
+  if (TEXT.imp && sc.t > sc.len) {
+    const u = Math.min(1, (sc.t - sc.len) / 0.3), s = u < 1 ? 0.2 + 0.9 * u : 1.1 - 0.1 * Math.min(1, (sc.t - sc.len - 0.3) / 0.2);
+    g.save(); g.translate(W / 2, H - bot * 0.5); g.scale(s, s); g.fillStyle = "#ff6a5a"; g.fillText(TEXT.imp, 0, 0); g.restore();
+  }
+}
+
+// ----------------------------------------------------------------------------------- Klang (wie AtlasWeatherFx.cs)
+const SR = 22050;
+let AC = null, soundOn = false;
+const BUF = {};
+function synth(name) {
+  let seed = 1234; const N = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff * 2 - 1; };
+  const brown = (n, a, gain) => { const s = new Float32Array(n); let y = 0; for (let i = 0; i < n; i++) { y += a * (N() - y); s[i] = y * gain; } return s; };
+  const sin = Math.sin, PI = Math.PI, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  let s;
+  switch (name) {
+    case "whoosh": { const n = SR * 0.7 | 0; s = new Float32Array(n); let y = 0; for (let i = 0; i < n; i++) { const t = i / n, a = 0.02 + 0.25 * sin(PI * t); y += a * (N() - y); s[i] = y * 2.2 * sin(PI * t); } break; }
+    case "thud": { const n = SR * 0.6 | 0; s = brown(n, 0.05, 0.8); for (let i = 0; i < n; i++) { const t = i / SR; s[i] = (s[i] * 0.4 + sin(2 * PI * (70 - 40 * t) * t)) * Math.exp(-t * 9) * 0.9; } break; }
+    case "splash": { const n = SR; s = brown(n, 0.35, 0.9); for (let i = 0; i < n; i++) { const t = i / SR; s[i] *= Math.exp(-t * 5); if ((N() + 1) / 2 < 0.0012) { const f = 600 + (N() + 1) / 2 * 900; for (let j = 0; j < 500 && i + j < n; j++) s[i + j] += sin(2 * PI * f * (1 + j / 900) * j / SR) * 0.12 * (1 - j / 500); } } break; }
+    case "slam": { s = synth("thud"); for (let j = 0; j < 260; j++) s[j] += N() * 0.7 * (1 - j / 260); break; }
+    case "roar": { const n = SR * 1.6 | 0; s = brown(n, 0.08, 1.4); for (let i = 0; i < n; i++) { const t = i / SR, f = 95 + 25 * sin(t * 3) + 8 * sin(t * 37), saw = (t * f) % 1 * 2 - 1, env = clamp(t / 0.15, 0, 1) * clamp((1.6 - t) / 0.6, 0, 1); s[i] = clamp((saw * 0.55 + s[i] * 0.6) * env, -1, 1); } break; }
+    case "grind": { const n = SR * 0.9 | 0; s = brown(n, 0.12, 1.2); for (let i = 0; i < n; i++) { const t = i / SR; s[i] *= (0.6 + 0.4 * sin(t * 60)) * sin(PI * t / 0.9); } break; }
+    case "growl": { const n = SR * 1.2 | 0; s = new Float32Array(n); for (let i = 0; i < n; i++) { const t = i / SR, f = 60 + 10 * sin(t * 5); s[i] = (sin(2 * PI * f * t) + 0.5 * sin(2 * PI * f * 2.02 * t)) * 0.35 * (0.6 + 0.4 * sin(t * 23)) * sin(PI * t / 1.2); } break; }
+    case "rush": { s = brown(SR * 4, 0.25, 0.9); for (let i = 0; i < s.length; i++) s[i] *= clamp(i / SR, 0, 1) * clamp((s.length - i) / SR, 0, 1); break; }
+    case "thunder": { const n = SR * 4; s = brown(n, 0.015, 6); for (let i = 0; i < n; i++) { const t = i / SR, env = t < 0.05 ? t / 0.05 : Math.exp(-(t - 0.05) * 1.1) * (0.7 + 0.3 * sin(t * 9)); s[i] = clamp(s[i] * env, -1, 1); } break; }
+    case "owl": { const n = SR * 1.6 | 0; s = new Float32Array(n); const hoot = (at, len, f) => { for (let i = at * SR | 0; i < Math.min(n, (at + len) * SR | 0); i++) { const t = i / SR - at, k = t / len; s[i] += sin(2 * PI * f * (1 - 0.08 * k) * t) * sin(PI * k) * 0.5; } }; hoot(0, 0.35, 420); hoot(0.55, 0.12, 440); hoot(0.75, 0.6, 410); break; }
+    case "twig": { const n = SR / 3 | 0; s = new Float32Array(n); for (let c = 0; c < 3; c++) { const at = c * SR / 14 | 0; for (let j = 0; j < 400 && at + j < n; j++) s[at + j] += N() * (1 - j / 400) * 0.6; } break; }
+    case "creak": { const n = SR; s = new Float32Array(n); for (let i = 0; i < n; i++) { const t = i / SR, f = 90 + 40 * sin(t * 3), saw = (t * f) % 1 * 2 - 1; s[i] = saw * 0.25 * sin(PI * t); } break; }
+    case "fire": { const n = SR * 5; s = brown(n, 0.06, 1.2); for (let i = 0; i < n; i++) if ((N() + 1) / 2 < 0.0015) { const len = 60 + ((N() + 1) / 2 * 200 | 0); for (let j = 0; j < len && i + j < n; j++) s[i + j] += N() * 0.6 * (1 - j / len); } break; }
+    case "step": { const n = SR * 0.18 | 0; s = new Float32Array(n); for (let i = 0; i < n; i++) { const t = i / SR; s[i] = (Math.sin(2 * PI * (90 - 60 * t) * t) * Math.exp(-t * 28) + N() * 0.25 * Math.exp(-t * 60)) * 0.8; } break; }
+    case "zap": { const n = SR * 0.22 | 0; s = new Float32Array(n); let f = 300; for (let i = 0; i < n; i++) { const t = i / SR; if (i % 441 === 0) f = 180 + (N() + 1) / 2 * 900; const sq = Math.sin(2 * PI * f * t) > 0 ? 1 : -1; s[i] = (sq * 0.28 + N() * 0.18) * Math.exp(-t * 9) * ((i >> 6) % 3 === 0 ? 0.2 : 1); } break; }
+    case "click": { const n = SR * 0.12 | 0; s = new Float32Array(n); for (let i = 0; i < n; i++) { const t = i / SR; s[i] = (i < 90 ? N() * 0.8 * (1 - i / 90) : 0) + sin(2 * PI * 1800 * t) * 0.35 * Math.exp(-t * 60); } break; }
+    default: s = new Float32Array(1);
+  }
+  return s;
+}
+function play(name, vol) {
+  if (!soundOn || !AC) return;
+  let b = BUF[name];
+  if (!b) { const s = synth(name); b = AC.createBuffer(1, s.length, SR); b.copyToChannel(s, 0); BUF[name] = b; }
+  const src = AC.createBufferSource(), gn = AC.createGain(); gn.gain.value = vol * 0.8;
+  src.buffer = b; src.connect(gn).connect(AC.destination); src.start();
+}
+
+// ----------------------------------------------------------------------------------- Oberflaeche
+let DATA = null, scene = null, playing = true, crew = "red", sceneIdx = 0;
+const TEXT = { line: "", imp: "" };
+const $ = id => document.getElementById(id);
+const canvas = $("stage"), g = canvas.getContext("2d");
+
+function opts() { return {}; }
+function setTexts() {
+  const empty = !!(scene && scene.def.skip), conf = $("confirm").checked;
+  const name = crew.charAt(0).toUpperCase() + crew.slice(1);
+  const isVoid = !!(scene && scene.def.textStyle === "void");
+  TEXT.line = isVoid ? "The vote vanished into the void." : empty ? "No one was ejected. (Skipped)" : conf ? `${name} was not The Impostor.` : `${name} was ejected.`;
+  TEXT.imp = conf && !empty && !isVoid ? "1 Impostor remains." : "";
+}
+function list() { return DATA.scenes; }
+function choose(i) {
+  const L = list(); sceneIdx = (i + L.length) % L.length;
+  scene = new Scene(L[sceneIdx], opts()); setTexts(); markCurrent(); playing = true; $("play").textContent = "Pause";
+}
+function markCurrent() {
+  const cur = list()[sceneIdx];
+  document.querySelectorAll(".scene").forEach(b => b.setAttribute("aria-current", String(b.dataset.id === cur.id)));
+}
+function fmt(t) { return t.toFixed(2).replace(".", ","); }
+
+function seek(t) {
+  scene.reset(); const saved = soundOn; soundOn = false;
+  while (scene.t < t - 1e-6) scene.step(Math.min(1 / 60, t - scene.t));
+  scene.sounds.length = 0; soundOn = saved;
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (scene && playing) {
+    scene.step(dt);
+    for (const [n, v] of scene.sounds) play(n, v); scene.sounds.length = 0;
+    const end = scene.len + 2.0;
+    if (scene.t >= end) { if ($("auto").checked) choose(sceneIdx + 1); else { playing = false; $("play").textContent = "Abspielen"; } }
+  }
+  if (scene) {
+    const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.round(r.width * dpr), h = Math.round(w * 9 / 16);
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    render(g, scene, canvas.width, canvas.height, crew);
+    const end = scene.len + 2.0;
+    $("scrub").value = String(Math.round(scene.t / end * 1000));
+    $("tc").textContent = `${fmt(scene.t)} / ${fmt(end)} s`;
+  }
+  requestAnimationFrame(frame);
+}
+
+function buildUi() {
+  for (const map of ["museum", "wald", "any"]) for (const skip of [false, true]) {
+    const box = $(map);
+    if (skip && map === "any") continue;
+    if (skip) { const h = document.createElement("h3"); h.textContent = "Niemand fliegt (Skip, Gleichstand)"; box.appendChild(h); }
+    for (const s of DATA.scenes.filter(x => x.map === map && !!x.skip === skip)) {
+      const b = document.createElement("button");
+      b.className = "scene"; b.dataset.id = s.id;
+      b.innerHTML = `<span>${s.title}</span><small>${fmt(s.length)} s</small>`;
+      b.addEventListener("click", () => choose(list().findIndex(x => x.id === s.id)));
+      box.appendChild(b);
+    }
+  }
+  for (const c of Object.keys(CREW)) {
+    const b = document.createElement("button");
+    b.className = "sw"; b.style.background = CREW[c][0]; b.title = c; b.setAttribute("aria-label", "Farbe " + c);
+    b.setAttribute("aria-pressed", String(c === crew));
+    b.addEventListener("click", () => { crew = c; document.querySelectorAll(".sw").forEach(x => x.setAttribute("aria-pressed", String(x === b))); setTexts(); });
+    $("swatches").appendChild(b);
+  }
+  $("play").addEventListener("click", () => { playing = !playing; $("play").textContent = playing ? "Pause" : "Abspielen"; });
+  $("restart").addEventListener("click", () => { scene.reset(); playing = true; $("play").textContent = "Pause"; });
+  $("scrub").addEventListener("input", e => { seek(e.target.value / 1000 * (scene.len + 2.0)); });
+  $("sound").addEventListener("click", () => {
+    soundOn = !soundOn;
+    if (soundOn && !AC) { try { AC = new AudioContext(); } catch { soundOn = false; } }
+    if (AC && AC.state === "suspended") AC.resume();
+    $("sound").setAttribute("aria-pressed", String(soundOn)); $("sound").textContent = soundOn ? "Ton aus" : "Ton an";
+  });
+  $("confirm").addEventListener("change", setTexts);
+}
+
+// Kontaktbogen fuer die Abnahme: #sheet rendert alle Szenen zu festen Zeitpunkten in ein Bild
+function renderSheet(mode) {
+  document.body.classList.add("sheet");
+  const scenes = DATA.scenes.filter(s => mode === "skip" ? s.skip : mode === "void" ? s.textStyle === "void" : true);
+  const cv = $("sheet"), cols = 5, times = mode === "void" ? [1.6, 2.8, 3.3, 3.85, 4.7] : mode === "skip" ? [1.2, 2.4, 3.3, 4.0, 5.3] : [0.8, 2.6, 3.4, 4.3, 5.8];
+  const cw = 384, ch = 216, rows = scenes.length;
+  cv.width = cols * cw; cv.height = rows * ch;
+  const sg = cv.getContext("2d");
+  const tmp = document.createElement("canvas"); tmp.width = cw * 2; tmp.height = ch * 2; const tg = tmp.getContext("2d");
+  scenes.forEach((def, r) => times.forEach((t, c) => {
+    const sc = new Scene(def, {}); TEXT.line = def.textStyle === "void" ? "The vote vanished into the void." : def.skip ? "No one was ejected. (Skipped)" : "Red was ejected."; TEXT.imp = "";
+    while (sc.t < t) sc.step(1 / 60);
+    sc.shake = null; render(tg, sc, tmp.width, tmp.height, "red");
+    sg.drawImage(tmp, c * cw, r * ch, cw, ch);
+    sg.fillStyle = "rgba(0,0,0,.6)"; sg.fillRect(c * cw, r * ch, 150, 20);
+    sg.fillStyle = "#f0b340"; sg.font = "600 13px sans-serif"; sg.textAlign = "left"; sg.textBaseline = "top";
+    sg.fillText(`${def.id} t=${t}`, c * cw + 5, r * ch + 4);
+  }));
+  document.title = "SHEET READY";
+}
+
+async function boot() {
+  DATA = await (await fetch("scenes.json")).json();
+  try { const v = await (await fetch("void.json")).json(); DATA.scenes.push(...v.scenes); } catch { }
+  const order = s => (s.map === "museum" ? 0 : s.map === "wald" ? 2 : 4) + (s.skip ? 1 : 0);
+  DATA.scenes.sort((a, b) => order(a) - order(b));
+  const names = new Set(["task_eject_vignette.png"]);
+  for (const s of DATA.scenes) { for (const o of s.objects) if (o.sprite) names.add(o.sprite); for (const e of s.emitters) names.add(e.sprite); }
+  await Promise.all([...names].map(n => new Promise(res => { const im = new Image(); im.onload = () => { IMG[n] = im; res(); }; im.onerror = res; im.src = "img/" + n; })));
+  $("loading").hidden = true;
+  if (location.hash.startsWith("#sheet")) { renderSheet(location.hash.slice(6)); return; }
+  buildUi(); choose(0); requestAnimationFrame(frame);
+}
+boot();
+</script>

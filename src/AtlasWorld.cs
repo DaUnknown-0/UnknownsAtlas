@@ -10,6 +10,7 @@
 //   4 SabReq    [kind]                  Impostor -> Host: bittet um Sturmholz (Kartenknopf)
 //   5 Repair    [kind][arg]             beliebig -> Host: Baum zersaegt
 //   6 SabEnd    [kind][arg]             Host -> alle: Sabotage (bzw. ein Baum) beendet
+//   7 EjectScene [normal][skip]         Host -> alle: Szenen fuer den naechsten Rauswurf bzw. Skip (AtlasEject)
 //
 // Wald: Regen und Sturm verlangsamen den Waldbrand-Countdown (Reaktor-System) auf die Haelfte. Im
 // Sturm kann ein Blitz einen Waldbrand ausloesen, auch waehrend Licht oder Comms sabotiert sind
@@ -33,7 +34,7 @@ internal static class AtlasWorld
 {
     private const string LogPrefix = "[Atlas/World]";
     public const byte RpcId = 237;
-    private const byte OpWeather = 1, OpStrike = 2, OpSabStart = 3, OpSabReq = 4, OpRepair = 5, OpSabEnd = 6;
+    private const byte OpWeather = 1, OpStrike = 2, OpSabStart = 3, OpSabReq = 4, OpRepair = 5, OpSabEnd = 6, OpEjectScene = 7;
     public const byte SabTrees = 1;
 
     public enum Weather : byte { Clear, Rain, Fog, Storm }
@@ -91,6 +92,9 @@ internal static class AtlasWorld
 
     // ------------------------------------------------------------------ Netz
 
+    /// <summary>Host: Rauswurf-Szene an alle (AtlasEject.HostPick).</summary>
+    internal static void SendEjectScene(byte normal, byte skip) => Send(OpEjectScene, w => { w.Write(normal); w.Write(skip); });
+
     private static void Send(byte op, Action<MessageWriter> body)
     {
         try
@@ -129,6 +133,7 @@ internal static class AtlasWorld
                 case OpSabEnd when fromHost: ApplySabEnd(reader.ReadByte(), reader.ReadByte()); break;
                 case OpSabReq when AmHost: HostSabRequest(__instance, reader.ReadByte()); break;
                 case OpRepair when AmHost: HostRepair(reader.ReadByte(), reader.ReadByte()); break;
+                case OpEjectScene when fromHost: AtlasEject.NextScene = reader.ReadByte(); AtlasEject.NextSkip = reader.ReadByte(); break;
             }
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} rpc: {e.Message}"); }
