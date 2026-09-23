@@ -80,6 +80,7 @@ internal static class AtlasTasks
     // ------------------------------------------------------------ Autotest (Diagnostics.TaskTest)
 
     private static float _diagAt = -1f, _shotAt, _sabAt = -1f;
+    private static int _ejectShots;
     private static int _diagPhase;
     private static AtlasMinigame _diagGame;
 
@@ -114,6 +115,13 @@ internal static class AtlasTasks
                     return;
                 }
                 // "world:storm" usw.: Welt-System ausloesen, nach 6 s Bildschirmfoto
+                // "eject:2": Rauswurf-Szene Nr. 2 der Karte, drei Fotos im Verlauf
+                if (kind.StartsWith("eject:", StringComparison.Ordinal))
+                {
+                    AtlasEject.Diag(int.TryParse(kind.Substring(6), out var ei) ? ei : 0);
+                    _ejectShots = 3; _shotAt = Time.time + 2.0f; _diagPhase = 7;
+                    return;
+                }
                 if (kind.StartsWith("world:", StringComparison.Ordinal))
                 {
                     AtlasWorld.Diag(kind.Substring(6));
@@ -161,6 +169,20 @@ internal static class AtlasTasks
                 Shot(kind, "start");
                 AtlasMinigame.DiagAuto = true;
                 _diagPhase = 2;
+                break;
+            case 7:
+                if (Time.time < _shotAt) return;
+                Shot(kind, $"t{4 - _ejectShots}");
+                _ejectShots--;
+                _shotAt = Time.time + 1.6f;
+                if (_ejectShots <= 0) { _shotAt = Time.time + 6f; _diagPhase = 8; }
+                break;
+            case 8:
+                // warten, bis WrapUp gelaufen ist (Controller weg), dann weiter
+                if (ExileController.Instance != null && Time.time < _shotAt) return;
+                AtlasEject.ForceScene = -1;
+                AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: {kind} finished");
+                _diagPhase = 4;
                 break;
             case 6:
                 if (Time.time < _shotAt) return;

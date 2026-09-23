@@ -461,8 +461,13 @@ internal static class AtlasWorld
                 go.transform.SetParent(__instance.transform, false);
                 go.transform.localPosition = new Vector3(0f, -1.72f, -5f);
                 // dunkler Streifen unter dem Monitor: die Tastatur darunter ist fast weiss
+                // Das Minispiel zeichnet auf eigener Sortierebene: Ebene + hoechste Order uebernehmen,
+                // sonst liegt das Protokoll hinter Monitor und Tisch (Autotest 23.09.)
+                int layerId = 0, top = 0;
+                foreach (var r in __instance.GetComponentsInChildren<SpriteRenderer>(true))
+                    if (r != null && r.sortingOrder >= top) { top = r.sortingOrder; layerId = r.sortingLayerID; }
                 var bar = MatchKit.Box(go.transform, Vector2.zero, new Vector2(7.6f, 0.34f), new Color(0.04f, 0.06f, 0.05f, 0.92f), 0);
-                bar.sortingOrder = 49;
+                bar.sortingLayerID = layerId; bar.sortingOrder = top + 1;
                 var tgo = new GameObject("text") { layer = go.layer };
                 tgo.transform.SetParent(go.transform, false);
                 tgo.transform.localPosition = new Vector3(0f, 0f, -0.1f);
@@ -472,7 +477,8 @@ internal static class AtlasWorld
                 text.fontSize = 1.5f; text.alignment = TextAlignmentOptions.Center; text.enableWordWrapping = false;
                 text.color = new Color(0.55f, 1f, 0.6f);
                 text.rectTransform.sizeDelta = new Vector2(7.4f, 0.4f);
-                var mr = tgo.GetComponent<MeshRenderer>(); if (mr != null) mr.sortingOrder = 50;
+                var mr = tgo.GetComponent<MeshRenderer>(); if (mr != null) { mr.sortingLayerID = layerId; mr.sortingOrder = top + 2; }
+                AtlasPlugin.Logger.LogInfo($"{LogPrefix} laser log on sorting layer {layerId}, order {top + 1}");
             }
             else text = holder.GetComponentInChildren<TextMeshPro>();
             if (text == null) return;
@@ -578,6 +584,16 @@ internal static class AtlasWorld
                 break;
             case "saw":
                 foreach (var kv in Trees) { AtlasMinigame.DiagAuto = true; OpenRepair("sawlog", (byte)kv.Key); break; }
+                break;
+            case "sabmap":
+                // Testspieler zum Impostor machen und die Sabotage-Karte oeffnen (Kartenknoepfe sehen)
+                RoleManager.Instance.SetRole(PlayerControl.LocalPlayer, AmongUs.GameOptions.RoleTypes.Impostor);
+                HudManager.Instance.ToggleMapVisible(new MapOptions { Mode = MapOptions.Modes.Sabotage });
+                break;
+            case "sabtap":
+                // den Sturmholz-Knopf wie ein Klick ausloesen, dann Karte zu
+                foreach (var (b, _, _) in MapButtons) { if (b != null) b.OnClick.Invoke(); break; }
+                if (MapBehaviour.Instance != null) MapBehaviour.Instance.Close();
                 break;
             case "laser":
                 if (Lasers.Count > 0)

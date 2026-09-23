@@ -316,6 +316,9 @@ internal static class AtlasWeatherFx
         src = null;
     }
 
+    /// <summary>Einzelgeraeusch (auch fuer die Rauswurf-Szenen, AtlasEject).</summary>
+    internal static void Sfx(string clip, float vol) => Play(clip, vol);
+
     private static void Play(string clip, float vol)
     {
         try { SoundManager.Instance.PlaySound(Clip(clip), false, vol); } catch { }
@@ -334,6 +337,14 @@ internal static class AtlasWeatherFx
             "owl" => Owl(),
             "twig" => Twig(),
             "creak" => Creak(),
+            "whoosh" => Whoosh(),
+            "thud" => Thud(),
+            "splash" => Splash(),
+            "slam" => Slam(),
+            "roar" => Roar(),
+            "grind" => Grind(),
+            "growl" => Growl(),
+            "rush" => Rush(),
             _ => Clock(),
         };
         c = AudioClip.Create("atlas_" + name, s.Length, 1, Rate, false);
@@ -474,6 +485,101 @@ internal static class AtlasWeatherFx
             float saw = (t * f) % 1f * 2f - 1f;
             s[i] = saw * 0.25f * Mathf.Sin(Mathf.PI * t);
         }
+        return s;
+    }
+
+    private static float[] Whoosh()
+    {
+        int n = (int)(Rate * 0.7f);
+        var s = new float[n]; float y = 0f;
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / n;
+            float a = 0.02f + 0.25f * Mathf.Sin(Mathf.PI * t);        // Luftzug: Filter oeffnet und schliesst
+            y += a * (N() - y);
+            s[i] = y * 2.2f * Mathf.Sin(Mathf.PI * t);
+        }
+        return s;
+    }
+
+    private static float[] Thud()
+    {
+        int n = (int)(Rate * 0.6f);
+        var s = Brown(n, 0.05f, 0.8f);
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / Rate;
+            s[i] = (s[i] * 0.4f + Mathf.Sin(2f * Mathf.PI * (70f - 40f * t) * t)) * Mathf.Exp(-t * 9f) * 0.9f;
+        }
+        return s;
+    }
+
+    private static float[] Splash()
+    {
+        int n = Rate;
+        var s = Brown(n, 0.35f, 0.9f);
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / Rate;
+            s[i] *= Mathf.Exp(-t * 5f);
+            if (_rng.NextDouble() < 0.0012) { float f = 600f + (float)_rng.NextDouble() * 900f;          // Blasen
+                for (int j = 0; j < 500 && i + j < n; j++) s[i + j] += Mathf.Sin(2f * Mathf.PI * f * (1f + j / 900f) * j / Rate) * 0.12f * (1f - j / 500f); }
+        }
+        return s;
+    }
+
+    private static float[] Slam()
+    {
+        var s = Thud();
+        for (int j = 0; j < 260; j++) s[j] += N() * 0.7f * (1f - j / 260f);
+        return s;
+    }
+
+    private static float[] Roar()
+    {
+        int n = (int)(Rate * 1.6f);
+        var s = Brown(n, 0.08f, 1.4f);
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / Rate;
+            float f = 95f + 25f * Mathf.Sin(t * 3f) + 8f * Mathf.Sin(t * 37f);
+            float saw = (t * f) % 1f * 2f - 1f;
+            float env = Mathf.Clamp01(t / 0.15f) * Mathf.Clamp01((1.6f - t) / 0.6f);
+            s[i] = Mathf.Clamp((saw * 0.55f + s[i] * 0.6f) * env, -1f, 1f);
+        }
+        return s;
+    }
+
+    private static float[] Grind()
+    {
+        int n = (int)(Rate * 0.9f);
+        var s = Brown(n, 0.12f, 1.2f);
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / Rate;
+            s[i] *= (0.6f + 0.4f * Mathf.Sin(t * 60f)) * Mathf.Sin(Mathf.PI * t / 0.9f);
+        }
+        return s;
+    }
+
+    private static float[] Growl()
+    {
+        int n = (int)(Rate * 1.2f);
+        var s = new float[n];
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / Rate;
+            float f = 60f + 10f * Mathf.Sin(t * 5f);
+            s[i] = (Mathf.Sin(2f * Mathf.PI * f * t) + 0.5f * Mathf.Sin(2f * Mathf.PI * f * 2.02f * t)) * 0.35f
+                   * (0.6f + 0.4f * Mathf.Sin(t * 23f)) * Mathf.Sin(Mathf.PI * t / 1.2f);
+        }
+        return s;
+    }
+
+    private static float[] Rush()
+    {
+        var s = Brown(Rate * 4, 0.25f, 0.9f);
+        for (int i = 0; i < s.Length; i++) s[i] *= Mathf.Clamp01(i / (float)Rate) * Mathf.Clamp01((s.Length - i) / (float)Rate);
         return s;
     }
 
