@@ -512,11 +512,13 @@ internal static class AtlasMuseumBuilder
         return sr;
     }
 
-    // Eigene Vent-Bilder (Key "Vent/<id>" im Konsolen-Atlas). Das Bild wird auf den Vent-Renderer
-    // selbst gesetzt, damit die rote/gelbe Kontur (Vent.SetOutline) weiter greift; die Skeld-
-    // Klappenanimation wuerde es beim Ein-/Aussteigen ueberschreiben, deshalb setzt
-    // HudManager_Update_FadePostfix es jedes Bild zurueck (9 Vergleiche, vernachlaessigbar).
-    private static readonly List<(SpriteRenderer R, Sprite S)> VentArt = new();
+    // Eigene Vent-Bilder (Key "Vent/<id>" im Konsolen-Atlas). Das Bild sitzt auf einem EIGENEN
+    // Kind-Renderer, der Skeld-Renderer (myRend) wird unsichtbar: EnterVent/ExitVent spielen die
+    // Skeld-Klappenanimation und setzen dabei das Skeld-Bild, und zwar NACH HudManager.Update, so
+    // dass ein Zuruecksetzen dort beim Venten nicht griff (User 23.09.: "Vent geht zurueck zum
+    // Original"). Der Kind-Renderer teilt die Material-Instanz von myRend, damit die rote/gelbe
+    // Kontur (Vent.SetOutline schreibt in myRend.material) weiter sichtbar ist.
+    private static readonly List<(SpriteRenderer Orig, SpriteRenderer Art, Sprite S)> VentArt = new();
 
     private static void ApplyVentArt(Vent v)
     {
@@ -537,12 +539,19 @@ internal static class AtlasMuseumBuilder
         var sprite = Sprite.Create(tex, new Rect(e.X, e.Y, e.W, e.H), new Vector2(e.PX, e.PY),
             D.PropPixelsPerMeter * Mathf.Abs(ls.x), 0, SpriteMeshType.FullRect);
         sprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
-        sr.sprite = sprite;
-        // Die Skeld-Klappenanimation setzt das Bild jedes Frame neu (Test 23.09.: Gitter blieb
-        // sichtbar) - Animation und Animator am Vent abschalten; Ein-/Aussteigen bleibt spielbar.
+        var go = new GameObject("AtlasVentArt") { layer = sr.gameObject.layer };
+        go.transform.SetParent(sr.transform, false);
+        var art = go.AddComponent<SpriteRenderer>();
+        art.sprite = sprite;
+        art.sortingLayerID = sr.sortingLayerID;
+        art.sortingOrder = sr.sortingOrder;
+        art.color = sr.color;
+        art.sharedMaterial = sr.material;                 // Instanz von myRend: Kontur greift mit
+        sr.enabled = false;
+        // Die Idle-Animation muss nicht mehr laufen; Ein-/Aussteigen spielt sie trotzdem (unsichtbar).
         try { var anim = v.myAnim; if (anim != null) anim.enabled = false; } catch { }
         foreach (var an in v.GetComponentsInChildren<Animator>(true)) an.enabled = false;
-        VentArt.Add((sr, sprite));
+        VentArt.Add((sr, art, sprite));
     }
 
     private static Sprite _markerSprite;
@@ -718,8 +727,9 @@ internal static class AtlasMuseumBuilder
         if (!Active) return;
         for (int i = 0; i < VentArt.Count; i++)
         {
-            var (r, sp) = VentArt[i];
-            if (r != null && r.sprite != sp) r.sprite = sp;
+            var (orig, art, sp) = VentArt[i];
+            if (orig != null && orig.enabled) orig.enabled = false;
+            if (art != null && art.sprite != sp) art.sprite = sp;
         }
         if (FadeProps.Count == 0) return;
         var lp = PlayerControl.LocalPlayer;
