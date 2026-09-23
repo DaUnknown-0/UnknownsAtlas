@@ -1,0 +1,402 @@
+[
+ [
+  "Cafeteria/DataConsole/2",
+  7.85,
+  -5.9,
+  "foyer",
+  "E",
+  "Download Data"
+ ],
+ [
+  "Cafeteria/FixWiringConsole/4",
+  -6.5,
+  -3.3,
+  "foyer",
+  "N",
+  "Fix Wiring (Kabelkasten)"
+ ],
+ [
+  "Cafeteria/GarbageConsole/2",
+  6.3,
+  -3.3,
+  "foyer",
+  "N",
+  "Empty Garbage (Hebel/Muellschacht)"
+ ],
+ [
+  "Admin/SwipeCardConsole/0",
+  -5.7,
+  -16.5,
+  "shop",
+  "-",
+  "Swipe Card (Kartenleser, hier Museumskasse)"
+ ],
+ [
+  "Admin/UploadDataConsole/0",
+  0.5,
+  -20.1,
+  "shop",
+  "S",
+  "Download/Upload Data (Datenterminal)"
+ ],
+ [
+  "Admin/FixWiringConsole/2",
+  8.7,
+  -14.0,
+  "shop",
+  "E",
+  "Fix Wiring (Kabelkasten)"
+ ],
+ [
+  "Admin/NoOxyConsole/1",
+  22.3,
+  -20.1,
+  "depot",
+  "S",
+  "Sabotage-Station Loeschgas-Abbruchtaster (O2-Keypad)"
+ ],
+ [
+  "Security/DivertPowerConsole/1",
+  -22.7,
+  -15.6,
+  "sicherheit",
+  "E",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "Security/FixWiringConsole/5",
+  -28.4,
+  -13.25,
+  "sicherheit",
+  "N",
+  "Fix Wiring (Kabelkasten)"
+ ],
+ [
+  "Reactor/UpperHandConsole/0",
+  -23.2,
+  -13.3,
+  "sicherheit",
+  "N",
+  "Sabotage Einbruchalarm A1 (Handscanner)"
+ ],
+ [
+  "Electrical/SwitchConsole/0",
+  -29.1,
+  -6.2,
+  "haustechnik",
+  "W",
+  "Sabotage Licht: Sicherungskasten"
+ ],
+ [
+  "Electrical/CalibrateConsole/0",
+  -23.3,
+  -4.8,
+  "haustechnik",
+  "N",
+  "Calibrate Distributor"
+ ],
+ [
+  "Electrical/DivertPowerConsole/0",
+  -22.3,
+  -6.0,
+  "haustechnik",
+  "E",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "Electrical/UploadDataConsole/0",
+  -28.8,
+  -12.2,
+  "haustechnik",
+  "S",
+  "Download/Upload Data (Datenterminal)"
+ ],
+ [
+  "Electrical/FixWiringConsole/0",
+  -22.3,
+  -10.6,
+  "haustechnik",
+  "E",
+  "Fix Wiring (Kabelkasten)"
+ ],
+ [
+  "LifeSupp/NoOxyConsole/0",
+  -22.3,
+  -9.0,
+  "haustechnik",
+  "E",
+  "Sabotage-Station Loeschgas-Abbruchtaster (O2-Keypad)"
+ ],
+ [
+  "Reactor/StartReactorConsole/2",
+  -29.1,
+  1.5,
+  "aegypten",
+  "W",
+  "Start Reactor (grosses Terminal)"
+ ],
+ [
+  "Reactor/UnlockManifoldsConsole/2",
+  -23.5,
+  2.9,
+  "aegypten",
+  "-",
+  "Unlock Manifolds (Zahlentastatur)"
+ ],
+ [
+  "Reactor/LowerHandConsole/1",
+  21.8,
+  -4.5,
+  "hof",
+  "W",
+  "Sabotage Einbruchalarm A2 (Handscanner)"
+ ],
+ [
+  "Weapons/WeaponConsole/0",
+  -10.5,
+  7.7,
+  "galerie",
+  "N",
+  "Clear Asteroids (hier: Bilderrahmen ausrichten/Galerie-Terminal)"
+ ],
+ [
+  "Weapons/UploadDataConsole/1",
+  -16.3,
+  7.8,
+  "galerie",
+  "N",
+  "Download/Upload Data (Datenterminal)"
+ ],
+ [
+  "Weapons/DivertPowerConsole/1",
+  -20.3,
+  1.6,
+  "galerie",
+  "W",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "Nav/ChartCourseConsole/0",
+  -14.5,
+  20.1,
+  "planetarium",
+  "N",
+  "Chart Course (hier: Sternkarte)"
+ ],
+ [
+  "Nav/StabilizeSteeringConsole/0",
+  -13.3,
+  15.6,
+  "planetarium",
+  "-",
+  "Stabilize Steering (hier: Projektor-Steuerpult)"
+ ],
+ [
+  "Nav/UploadDataConsole/0",
+  -20.1,
+  13.0,
+  "planetarium",
+  "W",
+  "Download/Upload Data (Datenterminal)"
+ ],
+ [
+  "Nav/DivertPowerConsole/1",
+  -20.1,
+  18.5,
+  "planetarium",
+  "W",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "Nav/FixWiringConsole/3",
+  -8.8,
+  12.5,
+  "planetarium",
+  "E",
+  "Fix Wiring (Kabelkasten)"
+ ],
+ [
+  "Shields/ShieldConsole/0",
+  0.0,
+  13.9,
+  "mineralien",
+  "-",
+  "Prime Shields (hier: Tresorvitrinen-Sicherung)"
+ ],
+ [
+  "Shields/DivertPowerConsole/1",
+  2.0,
+  20.1,
+  "mineralien",
+  "N",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "Comms/FixCommsConsole/0",
+  12.5,
+  19.1,
+  "telefon",
+  "-",
+  "Sabotage Comms: Telefonanlage"
+ ],
+ [
+  "Comms/UploadDataConsole/1",
+  17.7,
+  13.35,
+  "telefon",
+  "E",
+  "Download/Upload Data (Datenterminal)"
+ ],
+ [
+  "Comms/DivertPowerConsole/1",
+  9.3,
+  14.0,
+  "telefon",
+  "W",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "UpperEngine/AlignEngineConsole/0",
+  17.6,
+  4.95,
+  "technikhalle",
+  "-",
+  "Align Engine Output"
+ ],
+ [
+  "UpperEngine/FuelEngineConsole/0",
+  9.2,
+  4.6,
+  "technikhalle",
+  "-",
+  "Fuel Engines Teil 2 (Tankstutzen)"
+ ],
+ [
+  "UpperEngine/DivertPowerConsole/1",
+  10.0,
+  -2.7,
+  "technikhalle",
+  "S",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "LowerEngine/AlignEngineConsole/1",
+  23.0,
+  9.0,
+  "hof",
+  "-",
+  "Align Engine Output"
+ ],
+ [
+  "LowerEngine/FuelEngineConsole/0",
+  25.7,
+  3.8,
+  "hof",
+  "-",
+  "Fuel Engines Teil 2 (Tankstutzen)"
+ ],
+ [
+  "LowerEngine/DivertPowerConsole/1",
+  29.1,
+  9.0,
+  "hof",
+  "E",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "MedBay/MedScanner/0",
+  16.0,
+  -8.5,
+  "werkstatt",
+  "-",
+  "Submit Scan (hier Roentgenrahmen, Boden-Scanner)"
+ ],
+ [
+  "MedBay/MedBayConsole/0",
+  11.2,
+  -4.9,
+  "werkstatt",
+  "-",
+  "Inspect Sample (Analysegeraet)"
+ ],
+ [
+  "Storage/gasCanConsole/0",
+  24.5,
+  -19.9,
+  "depot",
+  "S",
+  "Fuel Engines Teil 1 (Kanister holen)"
+ ],
+ [
+  "Storage/FixWiringConsole/1",
+  21.8,
+  -11.4,
+  "depot",
+  "W",
+  "Fix Wiring (Kabelkasten)"
+ ],
+ [
+  "Storage/AirlockConsole/0",
+  29.1,
+  -12.0,
+  "depot",
+  "E",
+  "Empty Garbage/Chute (Hebel)"
+ ],
+ [
+  "LifeSupp/CleanFilterConsole/0",
+  -1.8,
+  6.7,
+  "rotunde",
+  "-",
+  "Clean O2 Filter (hier Skelett abstauben)"
+ ],
+ [
+  "LifeSupp/GarbageConsole/0",
+  3.75,
+  -1.2,
+  "rotunde",
+  "S",
+  "Empty Garbage (Hebel/Muellschacht)"
+ ],
+ [
+  "LifeSupp/DivertPowerConsole/1",
+  2.2,
+  10.3,
+  "rotunde",
+  "N",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "EmergencyButton",
+  0.0,
+  -5.35,
+  "-",
+  "-",
+  "Notfallknopf (Meeting)"
+ ],
+ [
+  "SurveillanceConsole",
+  -28.4,
+  -16.8,
+  "-",
+  "-",
+  "Kameras (Sicherheitszentrale)"
+ ],
+ [
+  "AdminTable",
+  -26.5,
+  -18.55,
+  "-",
+  "-",
+  "Gebaeudeplan/Admin-Karte"
+ ],
+ [
+  "FreeplayLaptop",
+  -7.3,
+  -12.3,
+  "-",
+  "-",
+  "Freeplay-Laptop (nur Freeplay)"
+ ]
+]

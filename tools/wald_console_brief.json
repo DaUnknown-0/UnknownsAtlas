@@ -1,0 +1,452 @@
+[
+ [
+  "Admin/FixWiringConsole/2",
+  -16.45,
+  -0.82,
+  "feldstation",
+  "building",
+  "W",
+  "Fix Wiring (Kabelkasten)"
+ ],
+ [
+  "Admin/NoOxyConsole/1",
+  27.6,
+  -17.8,
+  "bachsteg",
+  "clearing",
+  "-",
+  "Sabotage-Station Loeschgas-Abbruchtaster (O2-Keypad)"
+ ],
+ [
+  "Admin/SwipeCardConsole/0",
+  -10.28,
+  4.45,
+  "feldstation",
+  "building",
+  "N",
+  "Swipe Card (Kartenleser, hier Museumskasse)"
+ ],
+ [
+  "Admin/UploadDataConsole/0",
+  -16.45,
+  3.7,
+  "feldstation",
+  "building",
+  "W",
+  "Download/Upload Data (Datenterminal)"
+ ],
+ [
+  "Cafeteria/DataConsole/2",
+  -4.3,
+  5.45,
+  "messe",
+  "building",
+  "N",
+  "Download Data"
+ ],
+ [
+  "Cafeteria/FixWiringConsole/4",
+  3.53,
+  5.45,
+  "messe",
+  "building",
+  "N",
+  "Fix Wiring (Kabelkasten)"
+ ],
+ [
+  "Cafeteria/GarbageConsole/2",
+  -4.45,
+  0.79,
+  "messe",
+  "building",
+  "W",
+  "Empty Garbage (Hebel/Muellschacht)"
+ ],
+ [
+  "Comms/DivertPowerConsole/1",
+  10.57,
+  18.33,
+  "funkmast",
+  "clearing",
+  "N",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "Comms/FixCommsConsole/0",
+  6.5,
+  17.8,
+  "funkmast",
+  "clearing",
+  "-",
+  "Sabotage Comms: Telefonanlage"
+ ],
+ [
+  "Comms/UploadDataConsole/1",
+  2.48,
+  18.35,
+  "funkmast",
+  "clearing",
+  "N",
+  "Download/Upload Data (Datenterminal)"
+ ],
+ [
+  "Electrical/CalibrateConsole/0",
+  -12.73,
+  -12.55,
+  "generator",
+  "building",
+  "N",
+  "Calibrate Distributor"
+ ],
+ [
+  "Electrical/DivertPowerConsole/0",
+  -11.55,
+  -16.54,
+  "generator",
+  "building",
+  "E",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "Electrical/FixWiringConsole/0",
+  -13.68,
+  -17.45,
+  "generator",
+  "building",
+  "S",
+  "Fix Wiring (Kabelkasten)"
+ ],
+ [
+  "Electrical/SwitchConsole/0",
+  -17.4,
+  -15.0,
+  "generator",
+  "building",
+  "W",
+  "Sabotage Licht: Sicherungskasten"
+ ],
+ [
+  "Electrical/UploadDataConsole/0",
+  -11.55,
+  -14.41,
+  "generator",
+  "building",
+  "E",
+  "Download/Upload Data (Datenterminal)"
+ ],
+ [
+  "LifeSupp/CleanFilterConsole/0",
+  17.96,
+  18.45,
+  "wassertank",
+  "clearing",
+  "N",
+  "Clean O2 Filter (hier Skelett abstauben)"
+ ],
+ [
+  "LifeSupp/DivertPowerConsole/1",
+  16.55,
+  13.82,
+  "wassertank",
+  "clearing",
+  "-",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "LifeSupp/GarbageConsole/0",
+  28.45,
+  13.87,
+  "wassertank",
+  "clearing",
+  "E",
+  "Empty Garbage (Hebel/Muellschacht)"
+ ],
+ [
+  "LifeSupp/NoOxyConsole/0",
+  -29.3,
+  2.4,
+  "labor",
+  "building",
+  "W",
+  "Sabotage-Station Loeschgas-Abbruchtaster (O2-Keypad)"
+ ],
+ [
+  "LowerEngine/AlignEngineConsole/1",
+  10.7,
+  -12.55,
+  "bootshaus",
+  "building",
+  "N",
+  "Align Engine Output"
+ ],
+ [
+  "LowerEngine/DivertPowerConsole/1",
+  10.55,
+  -17.22,
+  "bootshaus",
+  "building",
+  "W",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "LowerEngine/FuelEngineConsole/0",
+  15.52,
+  -12.55,
+  "bootshaus",
+  "building",
+  "N",
+  "Fuel Engines Teil 2 (Tankstutzen)"
+ ],
+ [
+  "MedBay/MedBayConsole/0",
+  -25.66,
+  4.45,
+  "labor",
+  "building",
+  "N",
+  "Inspect Sample (Analysegeraet)"
+ ],
+ [
+  "MedBay/MedScanner/0",
+  -26.0,
+  -1.2,
+  "labor",
+  "building",
+  "-",
+  "Submit Scan (hier Roentgenrahmen, Boden-Scanner)"
+ ],
+ [
+  "Nav/ChartCourseConsole/0",
+  -25.36,
+  18.45,
+  "aussicht",
+  "clearing",
+  "N",
+  "Chart Course (hier: Sternkarte)"
+ ],
+ [
+  "Nav/DivertPowerConsole/1",
+  -22.66,
+  18.45,
+  "aussicht",
+  "clearing",
+  "N",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "Nav/FixWiringConsole/3",
+  -22.29,
+  9.55,
+  "aussicht",
+  "clearing",
+  "S",
+  "Fix Wiring (Kabelkasten)"
+ ],
+ [
+  "Nav/StabilizeSteeringConsole/0",
+  -29.45,
+  16.51,
+  "aussicht",
+  "clearing",
+  "W",
+  "Stabilize Steering (hier: Projektor-Steuerpult)"
+ ],
+ [
+  "Nav/UploadDataConsole/0",
+  -19.55,
+  12.54,
+  "aussicht",
+  "clearing",
+  "-",
+  "Download/Upload Data (Datenterminal)"
+ ],
+ [
+  "Reactor/LowerHandConsole/1",
+  -20.6,
+  16.5,
+  "aussicht",
+  "clearing",
+  "-",
+  "Sabotage Einbruchalarm A2 (Handscanner)"
+ ],
+ [
+  "Reactor/StartReactorConsole/2",
+  22.7,
+  5.42,
+  "pumpe",
+  "clearing",
+  "-",
+  "Start Reactor (grosses Terminal)"
+ ],
+ [
+  "Reactor/UnlockManifoldsConsole/2",
+  29.45,
+  1.31,
+  "pumpe",
+  "clearing",
+  "E",
+  "Unlock Manifolds (Zahlentastatur)"
+ ],
+ [
+  "Reactor/UpperHandConsole/0",
+  22.0,
+  17.5,
+  "wassertank",
+  "clearing",
+  "-",
+  "Sabotage Einbruchalarm A1 (Handscanner)"
+ ],
+ [
+  "Security/DivertPowerConsole/1",
+  -29.45,
+  -11.55,
+  "wachstube",
+  "building",
+  "N",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "Security/FixWiringConsole/5",
+  -23.55,
+  -15.63,
+  "wachstube",
+  "building",
+  "E",
+  "Fix Wiring (Kabelkasten)"
+ ],
+ [
+  "Shields/DivertPowerConsole/1",
+  27.46,
+  -9.55,
+  "bachsteg",
+  "clearing",
+  "N",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "Shields/ShieldConsole/0",
+  23.25,
+  -9.55,
+  "bachsteg",
+  "clearing",
+  "N",
+  "Prime Shields (hier: Tresorvitrinen-Sicherung)"
+ ],
+ [
+  "Storage/AirlockConsole/0",
+  -5.45,
+  -13.36,
+  "lager",
+  "building",
+  "W",
+  "Empty Garbage/Chute (Hebel)"
+ ],
+ [
+  "Storage/FixWiringConsole/1",
+  2.39,
+  -11.55,
+  "lager",
+  "building",
+  "N",
+  "Fix Wiring (Kabelkasten)"
+ ],
+ [
+  "Storage/gasCanConsole/0",
+  -1.83,
+  -11.55,
+  "lager",
+  "building",
+  "N",
+  "Fuel Engines Teil 1 (Kanister holen)"
+ ],
+ [
+  "UpperEngine/AlignEngineConsole/0",
+  -14.3,
+  18.45,
+  "saegewerk",
+  "building",
+  "N",
+  "Align Engine Output"
+ ],
+ [
+  "UpperEngine/DivertPowerConsole/1",
+  -3.55,
+  13.76,
+  "saegewerk",
+  "building",
+  "E",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "UpperEngine/FuelEngineConsole/0",
+  -10.06,
+  18.45,
+  "saegewerk",
+  "building",
+  "N",
+  "Fuel Engines Teil 2 (Tankstutzen)"
+ ],
+ [
+  "Weapons/DivertPowerConsole/1",
+  17.45,
+  0.8,
+  "hochsitz",
+  "clearing",
+  "-",
+  "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
+ ],
+ [
+  "Weapons/UploadDataConsole/1",
+  9.55,
+  0.94,
+  "hochsitz",
+  "clearing",
+  "-",
+  "Download/Upload Data (Datenterminal)"
+ ],
+ [
+  "Weapons/WeaponConsole/0",
+  10.7,
+  6.42,
+  "hochsitz",
+  "clearing",
+  "-",
+  "Clear Asteroids (hier: Bilderrahmen ausrichten/Galerie-Terminal)"
+ ],
+ [
+  "EmergencyButton",
+  0.0,
+  3.1,
+  "messe",
+  "building",
+  "-",
+  "Notfallknopf (Meeting)"
+ ],
+ [
+  "SurveillanceConsole",
+  -28.0,
+  -15.0,
+  "wachstube",
+  "building",
+  "-",
+  "Kameras (Sicherheitszentrale)"
+ ],
+ [
+  "AdminTable",
+  -13.0,
+  1.3,
+  "feldstation",
+  "building",
+  "-",
+  "Gebaeudeplan/Admin-Karte"
+ ],
+ [
+  "FreeplayLaptop",
+  3.8,
+  -1.2,
+  "messe",
+  "building",
+  "-",
+  "Freeplay-Laptop (nur Freeplay)"
+ ]
+]

@@ -1,0 +1,57 @@
+name: Build & Release
+
+# Pushe einen Tag wie "v1.0.0" (stable) oder "v1.0.0.3" (Testversion), um automatisch zu bauen und
+# ein Release mit der UnknownsAtlas.dll als Asset zu erstellen. Atlas haengt nicht an TOR, der Build
+# braucht nur die NuGet-Pakete (GameLibs, BepInEx, Reactor).
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 6
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+
+      - name: Version aus Tag ermitteln
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # vX.Y.Z (stable) oder vX.Y.Z.W (Testversion, W = Testversionsnummer).
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+            echo "::error::Tag '$GITHUB_REF_NAME' ist keine gueltige Version (erwartet vX.Y.Z oder vX.Y.Z.W)."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Version in Quellen auf Tag setzen
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sed -i -E "s/(VersionString = \")[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(\")/\1${VERSION}\3/" src/AtlasPlugin.cs
+          sed -i -E "s|(<Version>)[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(</Version>)|\1${VERSION}\3|" UnknownsAtlas.csproj
+          echo "Gesetzt auf:"; grep VersionString src/AtlasPlugin.cs
+
+      - name: Build
+        run: dotnet build -c Release
+
+      - name: Release erstellen + DLL anhaengen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DLL="bin/Release/net6.0/UnknownsAtlas.dll"
+          # 4-stellige Tags (vX.Y.Z.W) sind Testversionen -> als GitHub-Prerelease markieren.
+          PRERELEASE=""
+          if echo "${GITHUB_REF_NAME#v}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then PRERELEASE="--prerelease"; fi
+          gh release create "$GITHUB_REF_NAME" "$DLL" \
+            --title "$GITHUB_REF_NAME" --generate-notes $PRERELEASE \
+          || gh release upload "$GITHUB_REF_NAME" "$DLL" --clobber

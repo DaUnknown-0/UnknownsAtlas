@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <Version>0.3.0.1</Version>
+        <Description>UNKNOWN'S ATLAS - custom maps for Among Us, built into the Skeld (relocate-in-place). Current map: Vesper Museum. Built for AU 2024.11.26 / BepInEx 6.0.0-be.697 / Reactor 2.3.1.</Description>
+        <Authors>DaUnknown-0</Authors>
+        <LangVersion>latest</LangVersion>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <PlatformTarget>AnyCPU</PlatformTarget>
+        <Platforms>AnyCPU</Platforms>
+        <AssemblyName>UnknownsAtlas</AssemblyName>
+        <!-- Deployment kopiert NUR die DLL (keine PDB) - siehe docs\INSTALL_TESTPROTOKOLL.md -->
+        <DebugType>none</DebugType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- tools/ enthaelt Generator-Ausgaben (z.B. tools/_fable_out/AtlasMuseumData.cs), nie Quellcode der Mod -->
+        <Compile Remove="tools\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Vesper-Museum, erzeugt von tools/gen_museum.py -->
+        <!-- Boden als Kacheln (160 px/m, Unity-Grenze 8192), Objekte in mehreren Atlanten -->
+        <EmbeddedResource Include="assets\museum_floor_*.jpg"
+                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
+        <EmbeddedResource Include="assets\museum_consoles_*.png"
+                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
+        <EmbeddedResource Include="assets\museum_props_*.png"
+                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
+        <EmbeddedResource Include="assets\button_*.png"
+                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
+        <!-- Forststation Nadelkamm v6, erzeugt von tools/gen_wald.py -->
+        <EmbeddedResource Include="assets\wald_floor_*.jpg"
+                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
+        <EmbeddedResource Include="assets\wald_props_*.png"
+                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
+        <EmbeddedResource Include="assets\wald_consoles_*.png"
+                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
+        <EmbeddedResource Include="assets\wald_minimap.png"
+                          LogicalName="UnknownsAtlas.Resources.wald_minimap.png" />
+        <EmbeddedResource Include="assets\museum_minimap.png"
+                          LogicalName="UnknownsAtlas.Resources.museum_minimap.png" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Derselbe Stack wie UnknownsCollection (bewiesene Kombination fuer diese Spiel-Installation).
+             GameLibs liefern die Compilezeit-Stubs; zur Laufzeit regeneriert be.697 die Interops
+             gegen die echte 2024.11.26-GameAssembly. -->
+        <PackageReference Include="AmongUs.GameLibs.Steam" Version="2024.10.29" />
+        <PackageReference Include="BepInEx.Unity.IL2CPP" Version="6.0.0-be.697" />
+        <PackageReference Include="BepInEx.IL2CPP.MSBuild" Version="2.1.0-rc.1" />
+        <!-- Stack-Nachweis: Reactor 2.3.1 laeuft neben ATLAS (Kompilat referenziert ihn,
+             der Code ruft bewusst KEINE Reactor-API auf - es gibt dort keine Karten-API,
+             siehe docs\lightradius_chain.md Kapitel "Warum kein RegisterCustomShipStatus"). -->
+        <PackageReference Include="Reactor" Version="2.3.1" />
+    </ItemGroup>
+
+    <!-- Optional: DLL direkt ins Spiel deployen mit  dotnet build -c Release -p:AtlasDeployToGame=true -->
+    <PropertyGroup>
+        <AtlasDeployToGame Condition="'$(AtlasDeployToGame)' == ''">false</AtlasDeployToGame>
+        <AmongUsDir Condition="'$(AmongUsDir)' == ''">C:\Users\moritz\Downloads\Among Us - 4.7.0\Among Us - 4.7.0</AmongUsDir>
+    </PropertyGroup>
+    <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(AtlasDeployToGame)' == 'true'">
+        <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AmongUsDir)\BepInEx\plugins\" />
+        <Message Text="[Atlas] deployed $(TargetFileName) -> $(AmongUsDir)\BepInEx\plugins\" Importance="high" />
+    </Target>
+</Project>

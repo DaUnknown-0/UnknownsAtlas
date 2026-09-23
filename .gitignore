@@ -1,0 +1,11 @@
+bin/
+obj/
+dist/
+*.user
+.vs/
+.idea/
+*.dll
+__pycache__/
+# Vorschau- und Arbeitsbilder der Generatoren
+tools/_*/
+tools/_*.png
