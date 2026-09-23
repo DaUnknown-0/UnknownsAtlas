@@ -124,6 +124,7 @@ internal static class AtlasSelection
     [HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Update))]
     internal static void LobbyBehaviour_Update_Postfix()
     {
+        LobbyVisualTick();
         if (!AmHost) return;
         _resendTimer -= Time.deltaTime;
         if (_resendTimer > 0f) return;
@@ -151,7 +152,8 @@ internal static class AtlasSelection
     {
         var r = g != null ? g.MapImage : null;
         if (r == null || r.sprite == null || _current == 0) return;
-        var logo = AtlasAssets.ButtonSprite(Maps[_current - 1].Button, r.sprite.bounds.size.x);
+        if (OwnLogos.Contains(r.sprite)) return;
+        var logo = Logo(r.sprite.bounds.size.x);
         if (logo != null) r.sprite = logo;
     }
 
@@ -170,6 +172,114 @@ internal static class AtlasSelection
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} lobby view: {e.Message}"); }
     }
 
+    // Test 23.09.: Banner, Waehlerkopf und Uebersicht zeigten trotz der Postfixe weiter die Skeld.
+    // UpdateMapImage und die Kopfanzeige des Waehlers laufen offenbar an den Patches vorbei
+    // (kleine Il2Cpp-Methoden werden in den Aufrufer eingebaut). Deshalb gleicht die Lobby den
+    // sichtbaren Zustand zweimal pro Sekunde selbst ab, bei allen Spielern.
+    private static float _visualNext;
+    private static readonly HashSet<Sprite> OwnLogos = new();
+
+    private static Sprite Logo(float width)
+    {
+        var sp = AtlasAssets.ButtonSprite(Maps[_current - 1].Button, width);
+        if (sp != null) OwnLogos.Add(sp);
+        return sp;
+    }
+
+    // Das Spiel setzt das Kartenbanner im Infofeld jeden Frame neu (Test 23.09.: "Room Settings
+    // flackert mit dem Museum"), deshalb laeuft der Banner-Abgleich direkt NACH GameStartManager.Update.
+    private static readonly List<SpriteRenderer> SkeldNameRenderers = new();
+    private static Sprite _skeldName;
+
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(GameStartManager), nameof(GameStartManager.Update))]
+    internal static void GameStartManager_Update_Postfix(GameStartManager __instance)
+    {
+        if (_current == 0 || __instance == null) return;
+        try
+        {
+            var banner = __instance.MapImage;
+            if (banner != null && banner.sprite != null && !OwnLogos.Contains(banner.sprite))
+            {
+                var logo = Logo(banner.sprite.bounds.size.x);
+                if (logo != null) banner.sprite = logo;
+            }
+            for (int i = SkeldNameRenderers.Count - 1; i >= 0; i--)
+            {
+                var r = SkeldNameRenderers[i];
+                if (r == null) { SkeldNameRenderers.RemoveAt(i); continue; }
+                if (r.sprite != null && !OwnLogos.Contains(r.sprite))
+                {
+                    var logo = Logo(r.sprite.bounds.size.x);
+                    if (logo != null) r.sprite = logo;
+                }
+            }
+        }
+        catch { }
+    }
+
+    private static void LobbyVisualTick()
+    {
+        if (Time.time < _visualNext) return;
+        _visualNext = Time.time + 0.5f;
+        try
+        {
+            var g = GameStartManager.Instance;
+            var banner = g != null ? g.MapImage : null;
+            if (_current > 0)
+            {
+                if (banner != null && banner.sprite != null && !OwnLogos.Contains(banner.sprite))
+                {
+                    var logo = Logo(banner.sprite.bounds.size.x);
+                    if (logo != null) banner.sprite = logo;
+                }
+                var picker = Object.FindObjectOfType<GameOptionsMapPicker>();
+                if (picker != null && picker.isActiveAndEnabled)
+                {
+                    var head = picker.MapName;
+                    if (head != null && head.sprite != null && !OwnLogos.Contains(head.sprite))
+                    {
+                        var logo = Logo(head.sprite.bounds.size.x);
+                        if (logo != null) head.sprite = logo;
+                    }
+                    var sel = picker.selectedButton;
+                    if (sel != null && sel.Button != null && !sel.name.StartsWith("Atlas_", StringComparison.Ordinal))
+                        sel.Button.SelectButton(false);
+                    MarkLobby(_current);
+                }
+                // jedes weitere Bild mit dem Skeld-Schriftzug (Infofeld "Room Settings" u. a.)
+                Sprite skeldName = null;
+                if (g != null && g.AllMapIcons != null)
+                    foreach (var m in g.AllMapIcons) if (m != null && m.Name == MapNames.Skeld) skeldName = m.NameImage;
+                if (skeldName != null)
+                {
+                    void Scan(GameObject root)
+                    {
+                        if (root == null) return;
+                        foreach (var r in root.GetComponentsInChildren<SpriteRenderer>(true))
+                            if (r != null && r.sprite == skeldName && !SkeldNameRenderers.Contains(r))
+                            {
+                                SkeldNameRenderers.Add(r);
+                                var logo = Logo(r.sprite.bounds.size.x);
+                                if (logo != null) r.sprite = logo;
+                            }
+                    }
+                    Scan(g.gameObject);
+                    if (g.LobbyInfoPane != null) Scan(g.LobbyInfoPane.gameObject);
+                    if (picker != null) Scan(picker.gameObject);
+                }
+                var pane = Object.FindObjectOfType<LobbyViewSettingsPane>();
+                if (pane != null && pane.isActiveAndEnabled) LobbyViewSettingsPane_DrawNormalTab_Postfix(pane);
+            }
+            else if (banner != null && banner.sprite != null && OwnLogos.Contains(banner.sprite) && g != null)
+            {
+                // wieder eine Vanilla-Karte: Originalbanner zurueck
+                g.UpdateMapImage((MapNames)GameOptionsManager.Instance.CurrentGameOptions.MapId);
+            }
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} lobby visuals: {e.Message}"); _visualNext = Time.time + 5f; }
+    }
+
     /// <summary>Nach einer Kartenwahl (Klick oder RPC des Hosts) die Lobby-Ansicht nachziehen.</summary>
     private static void RefreshLobbyView()
     {
@@ -177,6 +287,7 @@ internal static class AtlasSelection
         {
             var g = GameStartManager.Instance;
             if (g == null) return;
+            _visualNext = 0f;                                   // sofort beim naechsten Lobby-Frame abgleichen
             if (_current > 0) ShowAtlasBanner(g);
             else g.UpdateMapImage((MapNames)GameOptionsManager.Instance.CurrentGameOptions.MapId);
             var pane = Object.FindObjectOfType<LobbyViewSettingsPane>();
@@ -348,8 +459,11 @@ internal static class AtlasSelection
             var name = picker.MapName;
             if (name != null && name.sprite != null)
             {
-                var logo = AtlasAssets.ButtonSprite(Maps[idx - 1].Button, name.sprite.bounds.size.x);
-                if (logo != null) name.sprite = logo;
+                if (!OwnLogos.Contains(name.sprite))
+                {
+                    var logo = AtlasAssets.ButtonSprite(Maps[idx - 1].Button, name.sprite.bounds.size.x);
+                    if (logo != null) { OwnLogos.Add(logo); name.sprite = logo; }
+                }
             }
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} picker header: {e.Message}"); }

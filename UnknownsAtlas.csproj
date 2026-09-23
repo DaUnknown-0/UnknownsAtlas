@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <TargetFramework>net6.0</TargetFramework>
-        <Version>0.3.0.2</Version>
+        <Version>0.3.0.3</Version>
         <Description>UNKNOWN'S ATLAS - custom maps for Among Us, built into the Skeld (relocate-in-place). Current map: Vesper Museum. Built for AU 2024.11.26 / BepInEx 6.0.0-be.697 / Reactor 2.3.1.</Description>
         <Authors>DaUnknown-0</Authors>
         <LangVersion>latest</LangVersion>
