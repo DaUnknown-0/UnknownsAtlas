@@ -11,6 +11,8 @@
 //   5 Repair    [kind][arg]             beliebig -> Host: Baum zersaegt
 //   6 SabEnd    [kind][arg]             Host -> alle: Sabotage (bzw. ein Baum) beendet
 //   7 EjectScene [normal][skip]         Host -> alle: Szenen fuer den naechsten Rauswurf bzw. Skip (AtlasEject)
+//   8 Hello [maj][min][build][rev][on]  jeder -> alle, auch in der Lobby: Versions-Abgleich (AtlasHandshake)
+//   9 BuildFailed                       Gast -> Host: Atlas-Karte wurde bei mir nicht gebaut (AtlasHandshake)
 //
 // Wald: Regen und Sturm verlangsamen den Waldbrand-Countdown (Reaktor-System) auf die Haelfte. Im
 // Sturm kann ein Blitz einen Waldbrand ausloesen, auch waehrend Licht oder Comms sabotiert sind
@@ -95,7 +97,7 @@ internal static class AtlasWorld
     /// <summary>Host: Rauswurf-Szene an alle (AtlasEject.HostPick).</summary>
     internal static void SendEjectScene(byte normal, byte skip) => Send(OpEjectScene, w => { w.Write(normal); w.Write(skip); });
 
-    private static void Send(byte op, Action<MessageWriter> body)
+    internal static void Send(byte op, Action<MessageWriter> body)
     {
         try
         {
@@ -112,12 +114,15 @@ internal static class AtlasWorld
     [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.HandleRpc))]
     internal static void PlayerControl_HandleRpc_Postfix(PlayerControl __instance, byte callId, MessageReader reader)
     {
-        if (callId != RpcId || !AtlasMuseumBuilder.Active) return;
+        if (callId != RpcId) return;
         try
         {
             var client = AmongUsClient.Instance;
             bool fromHost = __instance != null && client != null && __instance.OwnerId == client.HostId;
             byte op = reader.ReadByte();
+            // Versions-Abgleich und Bau-Meldung gelten auch in der Lobby bzw. ohne gebaute Karte
+            if (op == AtlasHandshake.OpHello || op == AtlasHandshake.OpBuildFailed) { AtlasHandshake.Receive(op, __instance, reader); return; }
+            if (!AtlasMuseumBuilder.Active) return;
             switch (op)
             {
                 case OpWeather when fromHost: ApplyWeather((Weather)reader.ReadByte()); break;

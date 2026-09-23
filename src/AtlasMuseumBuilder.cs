@@ -71,7 +71,7 @@ internal static class AtlasMuseumBuilder
         AtlasPlugin.SelectedMap() != null &&
         IsSkeld(ship);
 
-    private static bool IsSkeld(ShipStatus ship) =>
+    internal static bool IsSkeld(ShipStatus ship) =>
         ship != null && ship.Type == ShipStatus.MapType.Ship &&
         ship.name.StartsWith("SkeldShip", StringComparison.Ordinal);
 
@@ -93,6 +93,7 @@ internal static class AtlasMuseumBuilder
     internal static void ShipStatus_Start_Postfix(ShipStatus __instance)
     {
         if (!ShouldBuild(__instance) || _builtFor == __instance) return;
+        if (AtlasHandshake.DiagBuildFail) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} diag: build skipped (TaskTest buildfail)"); return; }
         try
         {
             D = AtlasPlugin.SelectedMap();
