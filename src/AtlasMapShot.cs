@@ -7,6 +7,13 @@
 // Objektplaetzen in einem Bild abnehmen, statt Raum fuer Raum durchzulaufen.
 // Abschalten: Config [Diagnostics] MapShot = false. Die Datei kann spaeter ersatzlos weg.
 //
+// NUR IM AUTOTEST (Fix 0.3.0.7): bis 0.3.0.6 lief die automatische Aufnahme in JEDER Atlas-Runde,
+// weil MapShot standardmaessig an war. Sie setzte den eigenen Spieler kurz nach dem Start per SnapTo
+// nacheinander an alle Foto-Stellen und oeffnete am Ende die Kameras (User 23.09.: "ich werde immer
+// noch rum teleportiert"). Automatik, F12 und der Vanilla-Vergleich laufen jetzt nur noch im Freeplay
+// mit Diagnostics.ForceMap oder TaskTest; bestehende Configs mit MapShot = true sind damit harmlos.
+// F11 (Kartenbild rendern, bewegt niemanden) bleibt mit MapShot erlaubt.
+//
 // Gerendert werden nur Welt-Ebenen (Players 8, Ship 9, Objects 11, ShortObjects 12): keine
 // HUD-Kamera, keine Sichtabdunklung - das Bild zeigt die Karte so, wie sie gebaut ist.
 
@@ -29,10 +36,17 @@ internal static class AtlasMapShot
 
     private static int _autoFrames = -1;
 
-    /// <summary>Vom Builder nach dem Bau gerufen: in ~1,5 s ein Bild (Dummies/Spieler stehen dann).</summary>
+    /// <summary>Autotest-Lauf: Freeplay UND Diagnostics.ForceMap oder TaskTest gesetzt. Nur dann darf
+    /// irgendetwas hier den Spieler bewegen oder von selbst aufnehmen.</summary>
+    internal static bool AutotestRun =>
+        AmongUsClient.Instance != null && AmongUsClient.Instance.NetworkMode == NetworkModes.FreePlay &&
+        (!string.IsNullOrWhiteSpace(AtlasPlugin.CfgForceMap?.Value) || !string.IsNullOrWhiteSpace(AtlasPlugin.CfgTaskTest?.Value));
+
+    /// <summary>Vom Builder nach dem Bau gerufen: im Autotest in ~1,5 s ein Bild (Dummies/Spieler stehen dann).</summary>
     internal static void Arm()
     {
-        if (AtlasPlugin.CfgMapShot is { Value: true }) { _autoFrames = 90; _viewFrames = 420; }
+        _autoFrames = _viewFrames = _screenFrames = _nextSpotFrames = -1;
+        if (AtlasPlugin.CfgMapShot is { Value: true } && AutotestRun) { _autoFrames = 90; _viewFrames = 420; }
     }
 
     [HarmonyPostfix]
@@ -40,7 +54,7 @@ internal static class AtlasMapShot
     internal static void HudManager_Update_Postfix()
     {
         // Vergleichsbasis: auf der unveraenderten Skeld dieselbe Sicht-Messung (Config ViewTestVanilla).
-        if (!AtlasMuseumBuilder.Active && AtlasPlugin.CfgViewTestVanilla is { Value: true } && ShipStatus.Instance != null)
+        if (!AtlasMuseumBuilder.Active && AtlasPlugin.CfgViewTestVanilla is { Value: true } && ShipStatus.Instance != null && AutotestRun)
         {
             if (_vanillaFor != ShipStatus.Instance) { _vanillaFor = ShipStatus.Instance; _viewFrames = 420; _vanillaMode = true; }
         }
@@ -48,7 +62,7 @@ internal static class AtlasMapShot
 
         bool shoot = Input.GetKeyDown(KeyCode.F11);
         if (_autoFrames > 0 && --_autoFrames == 0) shoot = true;
-        bool view = Input.GetKeyDown(KeyCode.F12);
+        bool view = AutotestRun && Input.GetKeyDown(KeyCode.F12);
         if (_viewFrames > 0 && --_viewFrames == 0) view = true;
 
         if (shoot)
@@ -73,6 +87,9 @@ internal static class AtlasMapShot
         if (_nextSpotFrames > 0 && --_nextSpotFrames == 0) SnapToSpot();
     }
 
+    /// <summary>Letzte Sicherung: nie ausserhalb eines Autotests teleportieren oder Kameras oeffnen.</summary>
+    private static bool MayMovePlayer() => AutotestRun;
+
     private static Vector2[] ViewSpots => AtlasMuseumBuilder.D.ViewSpots;
     private static int _spotIndex;
     private static int _nextSpotFrames = -1;
@@ -95,6 +112,7 @@ internal static class AtlasMapShot
 
     private static void SnapToSpot()
     {
+        if (!MayMovePlayer()) { _screenFrames = _nextSpotFrames = -1; return; }
         try
         {
             // Offene Minigames (Notfallknopf o.ae.) verdecken sonst die Aufnahme.

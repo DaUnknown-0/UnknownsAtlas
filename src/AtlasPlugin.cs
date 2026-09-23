@@ -23,7 +23,7 @@ public class AtlasPlugin : BasePlugin
 {
     public const string Id = "com.daunknown0.atlas";
     public const string PluginName = "Unknown's Atlas";
-    public const string VersionString = "0.3.0.6";
+    public const string VersionString = "0.3.0.7";
     public static readonly System.Version Version = System.Version.Parse(VersionString);
 
     public static BepInEx.Logging.ManualLogSource Logger = null!;
@@ -64,8 +64,9 @@ public class AtlasPlugin : BasePlugin
         CfgTaskTest = Config.Bind("Diagnostics", "TaskTest", "",
             "Diagnostics only: shortly after the round starts, open this custom minigame (dust, pump), " +
             "let it play itself and write screenshots to AtlasShots.");
-        CfgMapShot = Config.Bind("Diagnostics", "MapShot", true,
-            "Render the whole museum to <game>/AtlasShots/*.png shortly after the round starts and on F11.");
+        CfgMapShot = Config.Bind("Diagnostics", "MapShot", false,
+            "Diagnostics only: F11 renders the whole Atlas map to <game>/AtlasShots/*.png. The automatic " +
+            "shots and view spots after the round start only run in autotests (freeplay with ForceMap or TaskTest).");
         CfgViewTestVanilla = Config.Bind("Diagnostics", "ViewTestVanilla", false,
             "Diagnostics only: on an UNMODIFIED map, snap the local player to a test spot and take a screen shot + vision log once per round.");
         CfgErrorStackTraces = Config.Bind("Diagnostics", "ErrorStackTraces", true,
