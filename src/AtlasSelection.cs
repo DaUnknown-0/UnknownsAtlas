@@ -33,10 +33,11 @@ internal static class AtlasSelection
 
     // Reihenfolge = Index im RPC (+1)
     // Button = eingebettetes Logo fuer den Freeplay-Knopf (1000 x 250, tools/gen_buttons.py); null = Schrift
-    private static readonly (string Key, string Label, Func<AtlasMapDef> Make, string Button)[] Maps =
+    // Icon = rundes Symbol fuer den Lobby-Kartenwaehler (256 x 256, tools/gen_icons.py)
+    private static readonly (string Key, string Label, Func<AtlasMapDef> Make, string Button, string Icon)[] Maps =
     {
-        ("museum", "Museum", AtlasMapDef.Museum, "button_museum.png"),
-        ("wald", "Forest", AtlasMapDef.Wald, "button_wald.png"),
+        ("museum", "Museum", AtlasMapDef.Museum, "button_museum.png", "icon_museum.png"),
+        ("wald", "Forest", AtlasMapDef.Wald, "button_wald.png", "icon_wald.png"),
     };
 
     private static int _current;   // 0 = keine
@@ -61,10 +62,12 @@ internal static class AtlasSelection
     private static void Set(int idx, bool broadcast)
     {
         if (idx < 0 || idx > Maps.Length) idx = 0;
-        if (_current != idx)
+        bool changed = _current != idx;
+        if (changed)
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} map -> {(idx == 0 ? "vanilla" : Maps[idx - 1].Key)}");
         _current = idx;
         if (broadcast) Broadcast();
+        if (changed) RefreshLobbyView();
     }
 
     // ------------------------------------------------------------------ Netz
@@ -128,6 +131,60 @@ internal static class AtlasSelection
         Broadcast();
     }
 
+    // ------------------------------------------------------------ Lobby-Ansicht (nicht editieren)
+
+    // Ausserhalb des Editiermodus zeigt die Lobby die Karte an zwei Stellen: das Kartenbanner des
+    // GameStartManager und die Einstellungsuebersicht (LobbyViewSettingsPane). Beide lesen die
+    // Karte aus den Spieloptionen, und die sind bei einer Atlas-Karte technisch die Skeld
+    // (Test 23.09.: "in der Lobby wird die Skeld angezeigt").
+
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(GameStartManager), nameof(GameStartManager.UpdateMapImage))]
+    internal static void GameStartManager_UpdateMapImage_Postfix(GameStartManager __instance, MapNames __0)
+    {
+        if (_current == 0 || __0 != MapNames.Skeld) return;
+        try { ShowAtlasBanner(__instance); }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} lobby banner: {e.Message}"); }
+    }
+
+    private static void ShowAtlasBanner(GameStartManager g)
+    {
+        var r = g != null ? g.MapImage : null;
+        if (r == null || r.sprite == null || _current == 0) return;
+        var logo = AtlasAssets.ButtonSprite(Maps[_current - 1].Button, r.sprite.bounds.size.x);
+        if (logo != null) r.sprite = logo;
+    }
+
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(LobbyViewSettingsPane), nameof(LobbyViewSettingsPane.DrawNormalTab))]
+    internal static void LobbyViewSettingsPane_DrawNormalTab_Postfix(LobbyViewSettingsPane __instance)
+    {
+        if (_current == 0 || __instance == null) return;
+        try
+        {
+            string skeld = TranslationController.Instance.GetString(StringNames.MapNameSkeld, new Il2CppSystem.Object[0]);
+            string name = Maps[_current - 1].Make().DisplayName;
+            foreach (var t in __instance.GetComponentsInChildren<TextMeshPro>(true))
+                if (t != null && t.text != null && t.text.Contains(skeld)) t.text = t.text.Replace(skeld, name);
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} lobby view: {e.Message}"); }
+    }
+
+    /// <summary>Nach einer Kartenwahl (Klick oder RPC des Hosts) die Lobby-Ansicht nachziehen.</summary>
+    private static void RefreshLobbyView()
+    {
+        try
+        {
+            var g = GameStartManager.Instance;
+            if (g == null) return;
+            if (_current > 0) ShowAtlasBanner(g);
+            else g.UpdateMapImage((MapNames)GameOptionsManager.Instance.CurrentGameOptions.MapId);
+            var pane = Object.FindObjectOfType<LobbyViewSettingsPane>();
+            if (pane != null && pane.isActiveAndEnabled) pane.RefreshTab();
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} lobby refresh: {e.Message}"); }
+    }
+
     // ------------------------------------------------------------ Freeplay-Menue
 
     [HarmonyPostfix]
@@ -189,8 +246,18 @@ internal static class AtlasSelection
                 Tint(clone, i == 0 ? new Color(0.22f, 0.17f, 0.10f) : new Color(0.09f, 0.20f, 0.12f));
                 AddLabel(clone, Maps[i].Label, popover.gameObject);
             }
+            // Der Vanilla-Knopf meldet den Klick ueber OnPressEvent, das FreeplayPopover.Show zur
+            // Laufzeit abonniert; beim Klonen geht das Abo verloren (Test 23.09.: Karte gewaehlt,
+            // aber nichts gestartet). Deshalb startet der Klon die Skeld selbst.
+            var fpb = clone.GetComponent<FreeplayPopoverButton>();
+            if (fpb != null) fpb.OnPressEvent = null;
             var pb = clone.GetComponent<PassiveButton>();
-            if (pb != null) pb.OnClick.AddListener((Action)(() => Set(idx, false)));
+            if (pb != null) pb.OnClick.AddListener((Action)(() =>
+            {
+                Set(idx, false);
+                try { popover.PlayMap(MapNames.Skeld); }
+                catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} freeplay start failed: {e.Message}"); }
+            }));
         }
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} freeplay: {Maps.Length} map buttons added");
     }
@@ -207,12 +274,22 @@ internal static class AtlasSelection
 
     private static readonly List<PassiveButton> LobbyAtlasButtons = new();
 
+    private static MapIconByName SkeldInfo(GameOptionsMapPicker picker)
+    {
+        if (picker.AllMapIcons == null) return null;
+        foreach (var m in picker.AllMapIcons)
+            if (m != null && m.Name == MapNames.Skeld) return m;
+        return null;
+    }
+
     private static void AddLobbyButtons(GameOptionsMapPicker picker)
     {
         var buttons = picker.GetComponentsInChildren<MapSelectButton>(true);
         if (buttons.Length == 0) return;
         foreach (var b in buttons)
             if (b != null && b.name.StartsWith("Atlas_", StringComparison.Ordinal)) return;
+        var skeldInfo = SkeldInfo(picker);
+        if (skeldInfo == null) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} lobby picker: no Skeld entry"); return; }
 
         LobbyAtlasButtons.Clear();
         MapSelectButton first = null, last = null;
@@ -220,35 +297,62 @@ internal static class AtlasSelection
         {
             if (first == null || b.transform.localPosition.x < first.transform.localPosition.x) first = b;
             if (last == null || b.transform.localPosition.x > last.transform.localPosition.x) last = b;
+            // Vanilla-Knopf: waehlt seine Karte selbst (SelectMap(MapIconByName)), Atlas aus
             if (b.Button != null)
                 b.Button.OnClick.AddListener((Action)(() => { Set(0, true); MarkLobby(0); }));
         }
         float step = buttons.Length > 1 ? (last.transform.localPosition.x - first.transform.localPosition.x) / (buttons.Length - 1) : 1f;
-        var skeldLocal = first.transform.localPosition;
-        MapSelectButton skeldButton = first;
 
         for (int i = 0; i < Maps.Length; i++)
         {
             int idx = i + 1;
-            var clone = Object.Instantiate(skeldButton.gameObject, skeldButton.transform.parent);
+            var clone = Object.Instantiate(first.gameObject, first.transform.parent);
             clone.name = $"Atlas_{Maps[i].Key}";
             clone.transform.localPosition = last.transform.localPosition + new Vector3(step * (i + 1), 0f, 0f);
-            Tint(clone, i == 0 ? new Color(0.45f, 0.36f, 0.2f) : new Color(0.2f, 0.4f, 0.24f));
-            AddLabel(clone, Maps[i].Label, picker.gameObject);
             var msb = clone.GetComponent<MapSelectButton>();
+            // eigenes rundes Symbol in derselben Groesse wie das Skeld-Symbol; Kreis, Ring und
+            // Haken bleiben die des Vanilla-Knopfs
+            if (msb != null && msb.MapIcon != null && msb.MapIcon.sprite != null)
+            {
+                var icon = AtlasAssets.ButtonSprite(Maps[i].Icon, msb.MapIcon.sprite.bounds.size.x);
+                if (icon != null) msb.MapIcon.sprite = icon;
+            }
             var pb = msb != null ? msb.Button : clone.GetComponent<PassiveButton>();
             if (pb == null) continue;
             pb.OnClick = new UnityEngine.UI.Button.ButtonClickedEvent();
             pb.OnClick.AddListener((Action)(() =>
             {
-                picker.SelectMap(0);   // technisch Skeld
+                // Technisch die Skeld - ueber denselben Weg wie ein Vanilla-Knopf, damit die
+                // Einstellung wirklich uebernommen wird (Test 23.09.: SelectMap(0) liess Polus stehen)
+                try { picker.SelectMap(skeldInfo); }
+                catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} select skeld failed: {e.Message}"); }
                 Set(idx, true);
                 MarkLobby(idx);
+                ShowAtlasInPicker(picker, idx);
             }));
             LobbyAtlasButtons.Add(pb);
         }
         MarkLobby(_current);
+        if (_current > 0) ShowAtlasInPicker(picker, _current);
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} lobby picker: {Maps.Length} map buttons added (step {step:F2})");
+    }
+
+    /// <summary>Haken nur am Atlas-Knopf, Karten-Logo im Kopf des Waehlers.</summary>
+    private static void ShowAtlasInPicker(GameOptionsMapPicker picker, int idx)
+    {
+        if (idx <= 0) return;
+        try
+        {
+            var sel = picker.selectedButton;
+            if (sel != null && sel.Button != null) sel.Button.SelectButton(false);
+            var name = picker.MapName;
+            if (name != null && name.sprite != null)
+            {
+                var logo = AtlasAssets.ButtonSprite(Maps[idx - 1].Button, name.sprite.bounds.size.x);
+                if (logo != null) name.sprite = logo;
+            }
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} picker header: {e.Message}"); }
     }
 
     private static void MarkLobby(int idx)
@@ -355,6 +459,15 @@ internal static class AtlasUiShot
                 ScreenCapture.CaptureScreenshot(file);
                 AtlasPlugin.Logger.LogInfo($"[Atlas/Select] ui shot -> {file}");
                 _phase = 2;
+                // optional: den Atlas-Knopf wie ein Spieler druecken (Abnahme des Freeplay-Starts)
+                var key = AtlasPlugin.CfgUiShotClick?.Value;
+                if (!string.IsNullOrEmpty(key))
+                {
+                    var go = GameObject.Find($"Atlas_{key}");
+                    var pb = go != null ? go.GetComponent<PassiveButton>() : null;
+                    AtlasPlugin.Logger.LogInfo($"[Atlas/Select] ui shot: click Atlas_{key} ({(pb != null ? "found" : "missing")})");
+                    pb?.OnClick.Invoke();
+                }
             }
         }
         catch (Exception e) { AtlasPlugin.Logger.LogError($"[Atlas/Select] ui shot failed: {e}"); _phase = 2; }

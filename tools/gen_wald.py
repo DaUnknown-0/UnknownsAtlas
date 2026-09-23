@@ -457,6 +457,10 @@ def bounds(s):
 
 def draw_prop(kind, s, idx, ppm):
     x0, y0, x1, y1 = bounds(s)
+    if kind == "lagerfeuer":
+        # Bild = ganzer Steinring (1,2 m), Kollider = nur die Feuerstelle (wald_layout)
+        mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+        x0, y0, x1, y1 = mx - 1.2, my - 1.2, mx + 1.2, my + 1.2
     h = H.get(kind, 1.0)
     rnd = random.Random(idx * 131 + len(kind))
     ext = 1.2 if kind == "baum" else (0.9 if kind == "tank" else 0.0)

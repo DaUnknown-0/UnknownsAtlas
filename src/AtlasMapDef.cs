@@ -41,6 +41,10 @@ internal sealed class AtlasMapDef
     public float MinLight = 1f, MaxLight = 5f;
     /// <summary>Diagnose (AtlasMapShot): Teststellen fuer Bildschirmfotos; die letzte oeffnet die Kameras.</summary>
     public Vector2[] ViewSpots = System.Array.Empty<Vector2>();
+    /// <summary>Task-Namen der Karte (docs/TASK_KONZEPT.md): jeder Karten-Task reitet auf einem Skeld-TaskType.</summary>
+    public Dictionary<TaskTypes, string> TaskNames = new();
+    /// <summary>Eigene Minispiele (Stufe B): TaskType -> Baustein-Art (AtlasMinigame).</summary>
+    public Dictionary<TaskTypes, string> CustomTasks = new();
 
     public static AtlasMapDef Museum() => new()
     {
@@ -62,6 +66,35 @@ internal sealed class AtlasMapDef
         Cameras = AtlasMuseumLayout.Cameras, MapButtons = AtlasMuseumLayout.MapButtons,
         CameraColor = new Color(0x14 / 255f, 0x17 / 255f, 0x1c / 255f),
         ViewSpots = new Vector2[] { new(-6.9f, -7.2f), new(24.5f, -11.4f), new(22.8f, -4.3f), new(-9f, 7.65f), new(-27.4f, -16.8f) },
+        TaskNames = new()
+        {
+            { TaskTypes.FixWiring, "Repair Showcase Lighting" },
+            { TaskTypes.SwipeCard, "Close Out the Till" },
+            { TaskTypes.CalibrateDistributor, "Stabilise Climate Control" },
+            { TaskTypes.ChartCourse, "Trace a Constellation" },
+            { TaskTypes.CleanO2Filter, "Dust the Skeleton" },
+            { TaskTypes.DivertPower, "Restore Exhibit Power" },
+            { TaskTypes.PrimeShields, "Arm the Vault Showcase" },
+            { TaskTypes.StabilizeSteering, "Focus the Dome Projector" },
+            { TaskTypes.UnlockManifolds, "Hieroglyph Sequence" },
+            { TaskTypes.UploadData, "Sync the Audio Guide" },
+            { TaskTypes.AlignEngineOutput, "Align the Flywheel" },
+            { TaskTypes.ClearAsteroids, "Chase the Moths" },
+            { TaskTypes.EmptyGarbage, "Empty the Bins" },
+            { TaskTypes.FuelEngines, "Stoke the Steam Engine" },
+            { TaskTypes.InspectSample, "Pigment Analysis" },
+            { TaskTypes.StartReactor, "Tomb Lock" },
+            { TaskTypes.SubmitScan, "Authenticity X-Ray" },
+        },
+        CustomTasks = new()
+        {
+            { TaskTypes.CleanO2Filter, "dust" }, { TaskTypes.SwipeCard, "till" }, { TaskTypes.EmptyGarbage, "bins" },
+            { TaskTypes.DivertPower, "fuse" }, { TaskTypes.FixWiring, "light" }, { TaskTypes.StartReactor, "tomb" },
+            { TaskTypes.StabilizeSteering, "projector" }, { TaskTypes.UnlockManifolds, "hiero" }, { TaskTypes.PrimeShields, "vault" },
+            { TaskTypes.CalibrateDistributor, "climate" }, { TaskTypes.AlignEngineOutput, "flywheel" }, { TaskTypes.FuelEngines, "steam" },
+            { TaskTypes.ChartCourse, "constellation" }, { TaskTypes.ClearAsteroids, "moths" }, { TaskTypes.InspectSample, "pigment" },
+            { TaskTypes.UploadData, "audio" },
+        },
     };
 
     public static AtlasMapDef Wald() => new()
@@ -84,5 +117,35 @@ internal sealed class AtlasMapDef
         CameraColor = new Color(0x16 / 255f, 0x30 / 255f, 0x1f / 255f),
         // Messe (Spawn), Funkmast-Vent, Generator-Vent, Steg, Wachstube mit Kameras
         ViewSpots = new Vector2[] { new(0f, 1f), new(10.2f, 12.2f), new(-16.8f, -13.4f), new(28.5f, -14.4f), new(-27f, -14.5f) },
+        TaskNames = new()
+        {
+            { TaskTypes.FixWiring, "Splice Field Cable" },
+            { TaskTypes.SwipeCard, "Punch the Time Card" },
+            { TaskTypes.CalibrateDistributor, "Tune the Generator" },
+            { TaskTypes.ChartCourse, "Plot the Patrol Route" },
+            { TaskTypes.CleanO2Filter, "Clear the Intake Grate" },
+            { TaskTypes.DivertPower, "Route Generator Power" },
+            { TaskTypes.PrimeShields, "Light the Dock Lanterns" },
+            { TaskTypes.StabilizeSteering, "Focus the Binoculars" },
+            { TaskTypes.UnlockManifolds, "Open the Valves" },
+            { TaskTypes.UploadData, "Collect Trail Cam Footage" },
+            // zwei Motive (Saegewerk, Bootshaus) auf einem TaskType; GetString kennt den Schritt nicht
+            { TaskTypes.AlignEngineOutput, "Align Saw and Outboard" },
+            { TaskTypes.ClearAsteroids, "Wildlife Census" },
+            { TaskTypes.EmptyGarbage, "Haul the Compost" },
+            { TaskTypes.FuelEngines, "Refuel the Machines" },
+            { TaskTypes.InspectSample, "Water Sample Analysis" },
+            { TaskTypes.StartReactor, "Prime the Pump" },
+            { TaskTypes.SubmitScan, "Tick Check" },
+        },
+        CustomTasks = new()
+        {
+            { TaskTypes.StartReactor, "pump" }, { TaskTypes.EmptyGarbage, "compost" }, { TaskTypes.DivertPower, "route" },
+            { TaskTypes.FixWiring, "splice" }, { TaskTypes.SwipeCard, "timecard" }, { TaskTypes.CalibrateDistributor, "generator" },
+            { TaskTypes.ChartCourse, "patrol" }, { TaskTypes.CleanO2Filter, "grate" }, { TaskTypes.StabilizeSteering, "binoculars" },
+            { TaskTypes.UnlockManifolds, "valves" }, { TaskTypes.UploadData, "trailcam" }, { TaskTypes.AlignEngineOutput, "saw" },
+            { TaskTypes.ClearAsteroids, "census" }, { TaskTypes.FuelEngines, "refuel" }, { TaskTypes.InspectSample, "water" },
+            { TaskTypes.PrimeShields, "lanterns" },
+        },
     };
 }

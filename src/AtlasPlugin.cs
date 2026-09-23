@@ -22,7 +22,8 @@ namespace UnknownsAtlas;
 public class AtlasPlugin : BasePlugin
 {
     public const string Id = "com.daunknown0.atlas";
-    public const string VersionString = "0.3.0.1";
+    public const string PluginName = "Unknown's Atlas";
+    public const string VersionString = "0.3.0.2";
     public static readonly System.Version Version = System.Version.Parse(VersionString);
 
     public static BepInEx.Logging.ManualLogSource Logger = null!;
@@ -38,6 +39,8 @@ public class AtlasPlugin : BasePlugin
     public static ConfigEntry<string> CfgForceMap = null!;
     public static ConfigEntry<bool> CfgMapShot = null!;
     public static ConfigEntry<bool> CfgUiShot = null!;
+    public static ConfigEntry<string> CfgUiShotClick = null!;
+    public static ConfigEntry<string> CfgTaskTest = null!;
     public static ConfigEntry<bool> CfgViewTestVanilla = null!;
 
     /// <summary>Die Karte fuer die naechste Skeld-Runde (Auswahl im Freeplay-/Lobby-Menue).</summary>
@@ -56,6 +59,11 @@ public class AtlasPlugin : BasePlugin
             "in-game map selection. Leave empty for normal play.");
         CfgUiShot = Config.Bind("Diagnostics", "UiShot", false,
             "Diagnostics only: open the Freeplay map menu once in the main menu and take a screenshot.");
+        CfgUiShotClick = Config.Bind("Diagnostics", "UiShotClick", "",
+            "Diagnostics only: after the UiShot screenshot, press this Atlas map button (museum, wald).");
+        CfgTaskTest = Config.Bind("Diagnostics", "TaskTest", "",
+            "Diagnostics only: shortly after the round starts, open this custom minigame (dust, pump), " +
+            "let it play itself and write screenshots to AtlasShots.");
         CfgMapShot = Config.Bind("Diagnostics", "MapShot", true,
             "Render the whole museum to <game>/AtlasShots/*.png shortly after the round starts and on F11.");
         CfgViewTestVanilla = Config.Bind("Diagnostics", "ViewTestVanilla", false,
@@ -78,13 +86,70 @@ public class AtlasPlugin : BasePlugin
 
         Logger.LogInfo("[Atlas] Maps: museum (Vesper Museum) - chosen in the Freeplay/Lobby map picker");
 
+        // Register in the Mod Manager (hosted by Forgotten Fixes / UsefulTORStuff), same as this
+        // project family's other released mods: via AppDomain, no compile-time reference, so it
+        // works whether or not Forgotten Fixes is installed. Before the Enabled gate, so a disabled
+        // Atlas still shows up there and can be switched back on.
+        try
+        {
+            var modData = new System.Collections.Generic.Dictionary<string, object>
+            {
+                { "Guid", Id },
+                { "Name", PluginName },
+                { "Version", Version },
+                { "RepositoryOwner", AtlasUpdater.RepositoryOwner },
+                { "RepositoryName", AtlasUpdater.RepositoryName },
+                { "ButtonColor", new Color(0.89f, 0.71f, 0.31f) },
+                { "Enabled", CfgEnabled },
+                { "RuntimeEnabled", CfgEnabled.Value },
+            };
+            System.AppDomain.CurrentDomain.SetData($"ModManager.RegisteredMod.{Id}", modData);
+            Logger.LogInfo($"[Atlas] Registered in Mod Manager registry (runtime={CfgEnabled.Value}).");
+        }
+        catch (System.Exception ex)
+        {
+            Logger.LogError($"[Atlas] Failed to register in Mod Manager: {ex}");
+        }
+
         if (!CfgEnabled.Value)
         {
             Logger.LogInfo("[Atlas] Enabled=false - patches NOT applied.");
             return;
         }
 
+        // eigene Minispiele: die Il2Cpp-Klasse muss vor dem ersten AddComponent registriert sein
+        try { Il2CppInterop.Runtime.Injection.ClassInjector.RegisterTypeInIl2Cpp<AtlasMinigame>(); }
+        catch (System.Exception e) { Logger.LogError($"[Atlas] AtlasMinigame registration failed: {e}"); }
+
         Harmony.PatchAll(typeof(AtlasPlugin).Assembly);
         Logger.LogInfo("[Atlas] Patches applied (map build, map selection, diagnostics)");
+        AtlasMuseumBuilder.PatchTaskNames(Harmony);
+
+        // Self-updater: checks the GitHub releases and offers an in-game update (main menu and
+        // Mod Manager), like the family's other mods.
+        AddComponent<AtlasUpdater>();
+    }
+}
+
+// Version line in the top-corner PingTracker readout, folded into the shared "Unknown's
+// Collective" line alongside this project family's other mods (see UnknownsCollective.cs).
+[HarmonyPatch(typeof(PingTracker), nameof(PingTracker.Update))]
+[HarmonyPriority(Priority.Low)]
+internal static class AtlasVersionDisplayPatch
+{
+    private static string? cachedLine;
+
+    public static void Postfix(PingTracker __instance)
+    {
+        if (__instance == null || __instance.text == null) return;
+        string text = __instance.text.text;
+        if (string.IsNullOrEmpty(text)) return;
+
+        cachedLine ??= $"<color=#E3B64F>{AtlasPlugin.PluginName}</color> v{VersionDisplay.Format(AtlasPlugin.Version)}";
+        UnknownsCollective.Contribute(AtlasPlugin.Id, cachedLine);
+        text = UnknownsCollective.Render(__instance.text, text);
+        // TMP rebuilds its mesh on every assignment, even with an identical string
+        if (!string.Equals(__instance.text.text, text, System.StringComparison.Ordinal))
+            __instance.text.text = text;
     }
 }

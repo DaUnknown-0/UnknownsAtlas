@@ -93,6 +93,30 @@ internal static class AtlasAssets
         return sprite;
     }
 
+    /// <summary>Grafik eines eigenen Minispiels (assets/task_*.png), gecacht.</summary>
+    public static Sprite TaskSprite(string file, float ppu, Vector2 pivot)
+    {
+        string res = $"UnknownsAtlas.Resources.{file}";
+        string key = $"{res}@{ppu:F1}@{pivot.x:F3},{pivot.y:F3}";
+        if (MapSprites.TryGetValue(key, out var cached) && cached != null) return cached;
+        if (!MapTextures.TryGetValue(res, out var tex) || tex == null)
+        {
+            tex = LoadTexture(res);
+            if (tex == null) { AtlasPlugin.Logger.LogError($"[Atlas] embedded resource missing: {res}"); return null; }
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
+            tex.Apply(false, true);                                   // nicht lesbar: kein CPU-Abbild
+            MapTextures[res] = tex;
+        }
+        var sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), pivot, ppu);
+        sprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
+        MapSprites[key] = sprite;
+        return sprite;
+    }
+
+    /// <summary>Frische, LESBARE Kopie einer Minispiel-Textur (z. B. die Staubschicht, die man wegwischt).</summary>
+    public static Texture2D TaskTextureCopy(string file) => LoadTexture($"UnknownsAtlas.Resources.{file}");
+
     /// <summary>Minimap der Karte in Kartenraum-Einheiten (Weltmeter / MapScale).</summary>
     public static Sprite MapMinimapSprite(AtlasMapDef m, float mapScale)
     {

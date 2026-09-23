@@ -133,6 +133,68 @@ internal static class AtlasMuseumBuilder
     }
 
     /// <summary>
+    /// Task-Namen der Karte ("Fix Wiring" -> "Repair Showcase Lighting"), nur waehrend einer
+    /// Atlas-Runde. Wird in AtlasPlugin.Load einzeln und abgesichert gepatcht (PatchTaskNames),
+    /// damit eine fehlende Ueberladung nicht die anderen Atlas-Patches mitreisst.
+    /// </summary>
+    internal static void TaskName_Postfix(TaskTypes task, ref string __result)
+    {
+        if (!Active) return;
+        if (D.TaskNames.TryGetValue(task, out var name)) __result = name;
+    }
+
+    /// <summary>
+    /// "Divert Power to Gallery" baut DivertPowerTask selbst aus StringNames.DivertPowerTo, nicht
+    /// ueber GetString(TaskTypes): den vanilla Satzanfang durch den Kartennamen ersetzen
+    /// ("Restore Exhibit Power - Gallery").
+    /// </summary>
+    internal static void DivertText_Postfix(Il2CppSystem.Text.StringBuilder __0)
+    {
+        if (!Active || __0 == null || !D.TaskNames.TryGetValue(TaskTypes.DivertPower, out var name)) return;
+        var fmt = TranslationController.Instance?.GetString(StringNames.DivertPowerTo, new Il2CppSystem.Object[0]) ?? "";
+        int cut = fmt.IndexOf("{0}", StringComparison.Ordinal);
+        var prefix = cut > 0 ? fmt.Substring(0, cut) : "";
+        if (prefix.Length > 0) __0.Replace(prefix, name + " - ");
+    }
+
+    /// <summary>"Download Data" (Schritt 1 von Upload Data) kommt aus StringNames, nicht aus GetString(TaskTypes).</summary>
+    internal static void UploadText_Postfix(Il2CppSystem.Text.StringBuilder __0)
+    {
+        if (!Active || __0 == null || !D.TaskNames.TryGetValue(TaskTypes.UploadData, out var name)) return;
+        var dl = TranslationController.Instance?.GetString(StringNames.DownloadData, new Il2CppSystem.Object[0]);
+        if (!string.IsNullOrEmpty(dl)) __0.Replace(dl, name);
+    }
+
+    internal static void PatchTaskNames(HarmonyLib.Harmony harmony)
+    {
+        try
+        {
+            var upload = HarmonyLib.AccessTools.Method(typeof(UploadDataTask), nameof(UploadDataTask.AppendTaskText));
+            if (upload != null)
+                harmony.Patch(upload, postfix: new HarmonyLib.HarmonyMethod(typeof(AtlasMuseumBuilder), nameof(UploadText_Postfix)));
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} upload text patch failed: {e.Message}"); }
+
+        try
+        {
+            var divert = HarmonyLib.AccessTools.Method(typeof(DivertPowerTask), nameof(DivertPowerTask.AppendTaskText));
+            if (divert != null)
+                harmony.Patch(divert, postfix: new HarmonyLib.HarmonyMethod(typeof(AtlasMuseumBuilder), nameof(DivertText_Postfix)));
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} divert text patch failed: {e.Message}"); }
+
+        try
+        {
+            var target = HarmonyLib.AccessTools.Method(typeof(TranslationController), nameof(TranslationController.GetString),
+                new[] { typeof(TaskTypes) });
+            if (target == null) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} GetString(TaskTypes) not found - task names stay vanilla"); return; }
+            harmony.Patch(target, postfix: new HarmonyLib.HarmonyMethod(typeof(AtlasMuseumBuilder), nameof(TaskName_Postfix)));
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} task names patched");
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} task name patch failed: {e.Message}"); }
+    }
+
+    /// <summary>
     /// Diagnose (Test 22.09.: ein Task-Marker lag unter der Karte): beim Oeffnen der Karte jeden
     /// Task-Marker und den Hier-Punkt in Weltmeter zurueckrechnen und mit der naechsten Konsole
     /// bzw. der Spielerposition vergleichen. Ein fester Versatz aller Marker verraet sofort, ob
@@ -439,7 +501,9 @@ internal static class AtlasMuseumBuilder
         // Bodenbloecke (Scanner-Ring) liegen UNTER dem Spieler, der darauf steht. Nach Standlinie
         // sortiert kippte die Reihenfolge beim Drueberlaufen hin und her (Test 22.09.: Flackern,
         // Spieler steckte im Ring).
-        float z = FloorBlocks.Contains(key) ? FloorZ - 1f : SortZ(p.y) - 0.0002f;
+        // An Wand/Theke stehende Bloecke (Test 23.09.: der Spieler verschwand hinter der Kasse):
+        // Standlinie = Kante des Hindernisses direkt noerdlich, dann steht jeder Spieler davor.
+        float z = FloorBlocks.Contains(key) ? FloorZ - 1f : SortZ(BackedStandLine(p)) - 0.0002f;
         go.transform.position = new Vector3(p.x, p.y, z);
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
@@ -483,6 +547,30 @@ internal static class AtlasMuseumBuilder
     private static Sprite _markerSprite;
 
     private static readonly HashSet<string> FloorBlocks = new() { "MedBay/MedScanner/0" };
+
+    /// <summary>
+    /// Standlinie eines Blocks: seine eigene y, ausser direkt noerdlich (bis 0,9 m) liegt eine Wand
+    /// oder ein Hindernis (Theke, Regal) - dann dessen Kante. Hinter diese Kante kommt kein Spieler,
+    /// der Block liegt also immer hinter jedem, der davor steht.
+    /// </summary>
+    private static float BackedStandLine(Vector2 p)
+    {
+        float best = float.MaxValue;
+        void Scan(Vector2[][] polys)
+        {
+            if (polys == null) return;
+            foreach (var poly in polys)
+                for (int i = 0; i < poly.Length; i++)
+                {
+                    var a = poly[i]; var b = poly[(i + 1) % poly.Length];
+                    if ((a.x - p.x) * (b.x - p.x) > 0f || Mathf.Abs(b.x - a.x) < 1e-4f) continue;
+                    float y = a.y + (b.y - a.y) * (p.x - a.x) / (b.x - a.x);
+                    if (y > p.y && y - p.y < 0.9f && y < best) best = y;
+                }
+        }
+        Scan(D.Walls); Scan(D.Opaque); Scan(D.Glass);
+        return best < float.MaxValue ? best + 0.05f : p.y;
+    }
 
     /// <summary>Konsolen, deren Skeld-Bild im Museum nicht lesbar ist (A2: Kabelstrang 0,34 x 0,06 m).</summary>
     private static readonly HashSet<string> ForceMarker = new() { "Reactor/LowerHandConsole/1" };

@@ -111,17 +111,11 @@ CAMERAS = [(4.0, -3.0), (17.0, 6.0), (27.5, 18.0), (-5.0, -9.0)]
 # ("rect", x0, y0, x1, y1) | ("circle", cx, cy, r) | ("ellipse", cx, cy, rx, ry)
 # OPAQUE: Weg + Sicht, GLASS: nur Weg. KINDS = Objektart fuer das Zeichnen.
 OPAQUE = [
-    (("rect", -3.5, 3.6, 3.5, 4.4), "tisch_lang"),         # Messe: langer Tisch
-    (("rect", -4.4, -1.4, -2.6, -0.3), "herd"),            # Messe: Herd
     (("rect", -16.4, 4.2, -14.4, 4.9), "regal"),           # Feldstation: Regal
-    (("rect", -29.4, 3.8, -27.6, 4.9), "laborbank"),       # Labor
     (("rect", -29.4, -2.6, -28.5, 1.0), "schrank"),
-    (("rect", -12.0, 15.0, -6.0, 16.6), "saegetisch"),     # Saegewerk
-    (("rect", -14.4, 12.6, -12.0, 14.0), "holzstapel"),
     (("rect", -5.6, -18.4, -2.4, -17.2), "kisten"),        # Lager
     (("rect", 2.4, -18.4, 5.6, -17.2), "kisten"),
     (("rect", -1.2, -16.2, 1.2, -14.8), "kisten"),
-    (("rect", 12.0, -18.4, 16.0, -16.2), "boot"),          # Bootshaus
     (("rect", -29.4, -17.4, -28.6, -13.4), "monitore"),    # Wachstube (endet unter dem Stromkasten)
     (("rect", -17.4, -17.4, -14.4, -15.8), "aggregat"),    # Generator
     (("circle", -24.5, 14.5, 1.6), "fels"),                # Aussicht: Felsen
@@ -135,11 +129,18 @@ OPAQUE = [
     (("circle", 26.8, -13.6, 0.8), "baum"),                # frei vom Stromkasten an der Nordkante
 ]
 GLASS = [
+    # niedrig: sperrt den Weg, nicht die Sicht (User 23.09.: ueber den langen Tisch muss man schauen koennen)
+    (("rect", -3.5, 3.6, 3.5, 4.4), "tisch_lang"),         # Messe: langer Tisch
+    (("rect", -4.4, -1.4, -2.6, -0.3), "herd"),            # Messe: Herd
+    (("rect", -29.4, 3.8, -27.6, 4.9), "laborbank"),       # Labor
+    (("rect", -12.0, 15.0, -6.0, 16.6), "saegetisch"),     # Saegewerk
+    (("rect", -14.4, 12.6, -12.0, 14.0), "holzstapel"),
+    (("rect", 12.0, -18.4, 16.0, -16.2), "boot"),          # Bootshaus
     (("rect", -3.8, 0.4, -2.0, 1.2), "bank"),              # Messe: Baenke
     (("rect", 2.0, 0.4, 3.8, 1.2), "bank"),
     (("rect", -14.6, 1.8, -11.4, 3.6), "kartentisch"),     # Feldstation
-    (("circle", 0.0, -6.8, 1.2), "lagerfeuer"),            # vor der Messe
-    (("rect", -2.6, -8.6, 2.6, -8.0), "baumstamm"),
+    (("circle", 0.0, -6.8, 0.55), "lagerfeuer"),           # vor der Messe; nur die Feuerstelle sperrt, der Weg bleibt beidseits frei
+    (("rect", -2.6, -8.6, -0.9, -8.0), "baumstamm"),           # Sitzstamm westlich, Weg nach Sueden bleibt frei (User 23.09.)
     (("rect", 11.0, -1.0, 16.0, -0.4), "baumstamm"),       # Hochsitz: Stamm-Sitz
 ]
 
