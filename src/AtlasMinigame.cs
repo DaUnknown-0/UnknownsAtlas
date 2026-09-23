@@ -59,6 +59,8 @@ public class AtlasMinigame : Minigame
                 Step = DiagStep >= 0 ? DiagStep : (MyNormTask != null ? MyNormTask.taskStep : 0),
                 Map = AtlasMuseumBuilder.D.Key,
             };
+            ctx.AnyTask = MyTask;
+            try { ctx.ConsoleId = Console != null ? Console.ConsoleId : 0; } catch { ctx.ConsoleId = 0; }
             var divert = MyTask != null ? MyTask.TryCast<DivertPowerTask>() : null;
             if (divert != null) ctx.Target = divert.TargetSystem;
             _mech = Create(kind, ctx.Step);
@@ -108,6 +110,15 @@ public class AtlasMinigame : Minigame
         "timecard" => new TimecardMechanic(),
         "lanterns" => new LanternsMechanic(),
         "grate" => new SortMechanic(true, grate: true),
+        "alarm" => new HoldTrackMechanic(false),
+        "fire" => new HoldTrackMechanic(true),
+        "climatefail" => new KeypadMechanic(),
+        "waterworks" => new ValvePlanMechanic(),
+        "fusebox" => new SwitchesMechanic(false),
+        "breakers" => new SwitchesMechanic(true),
+        "cctv" => new TuneMechanic(false),
+        "antenna" => new TuneMechanic(true),
+        "sawlog" => new SawMechanic(),
         _ => null,
     };
 
@@ -147,7 +158,8 @@ public class AtlasMinigame : Minigame
             {
                 _done = true;
                 AtlasPlugin.Logger.LogInfo($"[Atlas/Task] {_mech.Name} step {(MyNormTask != null ? MyNormTask.taskStep : -1)} {Time.realtimeSinceStartup - _opened:F1}s");
-                if (DiagNoComplete) AtlasPlugin.Logger.LogInfo("[Atlas/Task] diag: no matching task, nothing completed");
+                if (AtlasWorld.IsWorldRepair(_mech.Name)) AtlasWorld.RepairDone(_mech.Name);
+                else if (DiagNoComplete) AtlasPlugin.Logger.LogInfo("[Atlas/Task] diag: no matching task, nothing completed");
                 else if (MyNormTask != null) CompleteStep(MyNormTask);
                 StartCoroutine(CoStartClose(0.9f));
             }

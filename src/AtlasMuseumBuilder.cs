@@ -442,6 +442,7 @@ internal static class AtlasMuseumBuilder
 
         ship.CameraColor = D.CameraColor;
 
+        try { AtlasWorld.OnBuilt(ship); } catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} world: {e}"); }
         RebuildMinimap(ship);
         Physics2D.SyncTransforms();
 
@@ -1176,6 +1177,8 @@ internal static class AtlasMuseumBuilder
                 counters++;
             }
         }
+
+        AtlasWorld.AddMapButtons(copy, MapWorld);
 
         AtlasPlugin.Logger.LogInfo(
             $"{LogPrefix} minimap: scale {scale:F3}, {hidden} label(s) hidden, {buttons} button room(s), {counters} counter(s)");

@@ -85,6 +85,10 @@ internal sealed class AtlasMapDef
             { TaskTypes.InspectSample, "Pigment Analysis" },
             { TaskTypes.StartReactor, "Tomb Lock" },
             { TaskTypes.SubmitScan, "Authenticity X-Ray" },
+            { TaskTypes.ResetReactor, "Security Alarm" },
+            { TaskTypes.RestoreOxy, "Climate Failure" },
+            { TaskTypes.FixLights, "Replace the Fuses" },
+            { TaskTypes.FixComms, "Restore the CCTV" },
         },
         CustomTasks = new()
         {
@@ -94,6 +98,8 @@ internal sealed class AtlasMapDef
             { TaskTypes.CalibrateDistributor, "climate" }, { TaskTypes.AlignEngineOutput, "flywheel" }, { TaskTypes.FuelEngines, "steam" },
             { TaskTypes.ChartCourse, "constellation" }, { TaskTypes.ClearAsteroids, "moths" }, { TaskTypes.InspectSample, "pigment" },
             { TaskTypes.UploadData, "audio" },
+            { TaskTypes.ResetReactor, "alarm" }, { TaskTypes.RestoreOxy, "climatefail" },
+            { TaskTypes.FixLights, "fusebox" }, { TaskTypes.FixComms, "cctv" },
         },
     };
 
@@ -137,6 +143,10 @@ internal sealed class AtlasMapDef
             { TaskTypes.InspectSample, "Water Sample Analysis" },
             { TaskTypes.StartReactor, "Prime the Pump" },
             { TaskTypes.SubmitScan, "Tick Check" },
+            { TaskTypes.ResetReactor, "Forest Fire" },
+            { TaskTypes.RestoreOxy, "Water Supply Failure" },
+            { TaskTypes.FixLights, "Reset the Breakers" },
+            { TaskTypes.FixComms, "Realign the Radio Mast" },
         },
         CustomTasks = new()
         {
@@ -146,6 +156,8 @@ internal sealed class AtlasMapDef
             { TaskTypes.UnlockManifolds, "valves" }, { TaskTypes.UploadData, "trailcam" }, { TaskTypes.AlignEngineOutput, "saw" },
             { TaskTypes.ClearAsteroids, "census" }, { TaskTypes.FuelEngines, "refuel" }, { TaskTypes.InspectSample, "water" },
             { TaskTypes.PrimeShields, "lanterns" },
+            { TaskTypes.ResetReactor, "fire" }, { TaskTypes.RestoreOxy, "waterworks" },
+            { TaskTypes.FixLights, "breakers" }, { TaskTypes.FixComms, "antenna" },
         },
     };
 }

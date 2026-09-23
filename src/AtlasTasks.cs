@@ -56,7 +56,7 @@ internal static class AtlasTasks
         {
             if (Time.time >= _nextSwap)
             {
-                _nextSwap = Time.time + 0.5f;
+                _nextSwap = Time.time + 0.25f;                     // Sabotage-Tasks erscheinen mitten in der Runde
                 if (EnsurePrefabs()) Swap();
             }
             DiagTick();
@@ -79,7 +79,7 @@ internal static class AtlasTasks
 
     // ------------------------------------------------------------ Autotest (Diagnostics.TaskTest)
 
-    private static float _diagAt = -1f, _shotAt;
+    private static float _diagAt = -1f, _shotAt, _sabAt = -1f;
     private static int _diagPhase;
     private static AtlasMinigame _diagGame;
 
@@ -91,7 +91,7 @@ internal static class AtlasTasks
         if (string.IsNullOrEmpty(all)) return;
         // mehrere Minispiele nacheinander in derselben Runde: "tomb,projector,steam@1"
         var list = all.Split(',');
-        if (_diagPhase >= 4)
+        if (_diagPhase == 4 || _diagPhase == 5)
         {
             if (_diagPhase == 4 && _diagIndex + 1 < list.Length) { _diagIndex++; _diagPhase = 0; _diagAt = Time.time + 1.5f; }
             else if (_diagPhase == 4) { _diagPhase = 5; AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: all done"); }
@@ -113,8 +113,35 @@ internal static class AtlasTasks
                     _diagAt = Time.time + 1.5f;
                     return;
                 }
+                // "world:storm" usw.: Welt-System ausloesen, nach 6 s Bildschirmfoto
+                if (kind.StartsWith("world:", StringComparison.Ordinal))
+                {
+                    AtlasWorld.Diag(kind.Substring(6));
+                    _shotAt = Time.time + 6f; _diagPhase = 6;
+                    return;
+                }
                 TaskTypes? type = null;
-                foreach (var kv in AtlasMuseumBuilder.D.CustomTasks) if (kv.Value == kind) type = kv.Key;
+                // "sab:lights" usw.: echte Sabotage ausloesen, dann deren (getauschtes) Minispiel oeffnen
+                if (kind.StartsWith("sab:", StringComparison.Ordinal))
+                {
+                    if (_sabAt < 0f)
+                    {
+                        var sys = kind switch { "sab:lights" => SystemTypes.Electrical, "sab:comms" => SystemTypes.Comms,
+                                                "sab:reactor" => SystemTypes.Reactor, _ => SystemTypes.LifeSupp };
+                        ShipStatus.Instance.RpcUpdateSystem(SystemTypes.Sabotage, (byte)sys);
+                        AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: sabotage {sys} started");
+                        _sabAt = Time.time + 2.5f;
+                        return;
+                    }
+                    if (Time.time < _sabAt) return;
+                    _sabAt = -1f;
+                    Shot(kind.Replace(':', '_'), "tasklist");
+                    type = kind switch { "sab:lights" => TaskTypes.FixLights, "sab:comms" => TaskTypes.FixComms,
+                                         "sab:reactor" => TaskTypes.ResetReactor, _ => TaskTypes.RestoreOxy };
+                    Swap();
+                }
+                else
+                    foreach (var kv in AtlasMuseumBuilder.D.CustomTasks) if (kv.Value == kind) type = kv.Key;
                 if (type == null || !Prefabs.TryGetValue(type.Value, out var prefab)) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} diag: no prefab for {kind}"); _diagPhase = 4; return; }
                 PlayerTask task = null;
                 foreach (var t in PlayerControl.LocalPlayer.myTasks) { if (t != null && t.TaskType == type.Value) task = t; }
@@ -135,6 +162,12 @@ internal static class AtlasTasks
                 AtlasMinigame.DiagAuto = true;
                 _diagPhase = 2;
                 break;
+            case 6:
+                if (Time.time < _shotAt) return;
+                Shot(kind, "view");
+                AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: {kind} -> {AtlasWorld.DiagState()}");
+                AtlasMinigame.DiagAuto = false; _diagPhase = 4;
+                break;
             case 2:
                 if (AtlasMinigame.DiagProgress >= 0.5f || _diagGame == null || _diagGame.amClosing != Minigame.CloseState.None)
                 { Shot(kind, "half"); _diagPhase = 3; _shotAt = Time.time + 60f; }
@@ -154,7 +187,7 @@ internal static class AtlasTasks
     {
         string dir = System.IO.Path.Combine(BepInEx.Paths.GameRootPath, "AtlasShots");
         System.IO.Directory.CreateDirectory(dir);
-        string file = System.IO.Path.Combine(dir, $"task_{kind}_{tag}_{DateTime.Now:HHmmss}.png");
+        string file = System.IO.Path.Combine(dir, $"task_{kind.Replace(':', '_')}_{tag}_{DateTime.Now:HHmmss}.png");
         ScreenCapture.CaptureScreenshot(file);
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag shot -> {file}");
     }

@@ -1803,7 +1803,82 @@ def special_parts():
     c.save("task_jar.png")
 
 
+# ------------------------------------------------------------------ Sabotagen und Welt
+
+def sabotage_parts():
+    # Handscanner (Alarmanlage / Loeschpumpe): Stahlrahmen, leuchtende Glasplatte, Handumriss
+    c = C(300, 340)
+    c.rrect(10, 10, 290, 330, 26, STEEL, lw=7, sh=(0.18, 0.28))
+    c.rrect(34, 34, 266, 306, 16, (30, 70, 80, 255), lw=5)
+    c.glow(150, 170, 110, 120, (80, 220, 230, 90), 18)
+    hand = [(96, 280), (96, 180), (82, 120), (92, 112), (110, 160), (112, 92), (126, 88), (132, 150), (140, 76), (156, 76),
+            (158, 150), (168, 92), (182, 96), (180, 160), (196, 128), (210, 136), (196, 200), (190, 280)]
+    c.poly(hand, None, lw=5, outline=(150, 240, 245, 255))
+    for x, y in ((24, 24), (276, 24), (24, 316), (276, 316)):
+        c.screw(x, y, 7)
+    c.glint(90, 60, 50, 12, 70, rot=-10)
+    c.save("task_scanner.png")
+    # Tastenfeld-Taste und Anzeige
+    c = C(110, 100)
+    c.rrect(8, 8, 102, 92, 16, (214, 216, 222, 255), lw=6, sh=(0.25, 0.35))
+    c.glint(40, 26, 24, 7, 120)
+    c.save("task_key.png")
+    c = C(380, 100)
+    c.rrect(6, 6, 374, 94, 12, STEEL_D, lw=6)
+    c.rrect(22, 20, 358, 80, 6, (30, 60, 40, 255), lw=4)
+    c.glint(120, 30, 90, 6, 50)
+    c.save("task_display.png")
+    # Bildrauschen (Monitor) und CRT-Rahmen mit durchsichtigem Schirm
+    rnd = random.Random(21)
+    img = Image.new("RGBA", (380, 260))
+    px = img.load()
+    for y in range(260):
+        band = rnd.random() < 0.08
+        for x in range(380):
+            v = rnd.randint(40, 230) if not band else rnd.randint(170, 255)
+            px[x, y] = (v, v, v, 255)
+    img.save(OUT / "task_static.png")
+    print(OUT / "task_static.png", img.size)
+    c = C(460, 360)
+    c.rrect(8, 8, 452, 330, 34, (58, 62, 70, 255), lw=8, sh=(0.18, 0.3))
+    c.d.rounded_rectangle([40 * S, 40 * S, 420 * S, 300 * S], 20 * S, fill=(0, 0, 0, 0), outline=INK, width=6 * S)
+    c.rrect(170, 326, 290, 354, 8, STEEL_D, lw=5)
+    for x in (380, 404):
+        c.ell(x, 316, 6, 6, (120, 200, 120, 255), lw=2)
+    c.save("task_monitor.png")
+    # Funkschuessel am Mast (Seitenansicht)
+    c = C(280, 280)
+    c.rrect(126, 150, 154, 270, 6, STEEL_D, lw=5, shx=(0.2, 0.3))
+    c.poly([(60, 40), (230, 90), (200, 200), (40, 170)], (226, 230, 236, 255), lw=7, sh=(0.25, 0.35))
+    c.line([(140, 120), (200, 118)], INK, 5)
+    c.ell(204, 118, 10, 10, (220, 70, 60, 255), lw=4)
+    c.save("task_dish.png")
+    # Sturmholz: umgestuerzter Baum (Welt) und Handsaege
+    c = C(420, 140)
+    c.capsule((40, 80), (360, 70), 46, (120, 82, 50, 255), lw=6, sh=(0.2, 0.35))
+    for x in range(70, 350, 40):
+        c.line([(x, 62), (x + 18, 60)], (92, 60, 36, 255), 3)
+    c.ell(376, 70, 26, 30, (190, 150, 100, 255), lw=6)
+    c.ell(376, 70, 14, 16, (160, 120, 76, 255), lw=0)
+    for bx, by, d in ((90, 50, -1), (170, 44, 1), (250, 50, -1), (300, 92, 1), (140, 100, 1)):
+        c.line([(bx, by), (bx + 26 * d, by - 34 if by < 70 else by + 30)], (100, 70, 44, 255), 8)
+        c.ell(bx + 30 * d, by - 40 if by < 70 else by + 36, 26, 18, (54, 104, 60, 255), lw=4, sh=(0.2, 0.3))
+    c.save("task_fallen_tree.png")
+    c = C(360, 110)
+    c.poly([(20, 60), (250, 40), (250, 86), (20, 76)], (200, 206, 214, 255), lw=5, sh=(0.25, 0.3))
+    for x in range(30, 250, 12):
+        c.poly([(x, 76), (x + 6, 88), (x + 12, 76)], (200, 206, 214, 255), lw=2)
+    c.rrect(246, 26, 340, 100, 22, (170, 60, 50, 255), lw=6, sh=(0.2, 0.3))
+    c.d.rounded_rectangle([272 * S, 48 * S, 318 * S, 78 * S], 12 * S, fill=(0, 0, 0, 0))
+    c.save("task_saw.png")
+    # Regentropfen (Welt)
+    c = C(12, 64)
+    c.line([(6, 4), (6, 60)], (190, 210, 240, 200), 3)
+    c.save("task_raindrop.png")
+
+
 if __name__ == "__main__":
+    sabotage_parts()
     tomb(); cartouche(); dome(); valves(); splice(); binoculars(); band_parts(); fill_parts()
     path_parts(); click_parts(); select_parts(); special_parts()
     close_button()

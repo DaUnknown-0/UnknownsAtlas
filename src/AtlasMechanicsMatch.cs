@@ -27,6 +27,8 @@ internal sealed class AtlasTaskCtx
     public int Step;
     public string Map;                  // "museum" / "wald"
     public SystemTypes Target;          // Divert Power: Zielraum
+    public PlayerTask AnyTask;          // auch Sabotage-Tasks (kein NormalPlayerTask)
+    public int ConsoleId;               // die Konsole, an der das Minispiel geoeffnet wurde
 }
 
 /// <summary>Scripted input for Simulate: tap, drag, hold.</summary>

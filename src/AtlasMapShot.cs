@@ -77,6 +77,8 @@ internal static class AtlasMapShot
     private static int _spotIndex;
     private static int _nextSpotFrames = -1;
 
+    internal static void OpenCamerasForDiag() => OpenCameras();
+
     private static void OpenCameras()
     {
         foreach (var sc in Object.FindObjectsOfType<SystemConsole>())
