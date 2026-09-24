@@ -667,7 +667,7 @@ internal static class AtlasMuseumBuilder
         FadeProps.Clear();
         PropRenderers.Clear();
         var root = Child(world, "Atlas_Props", LayerShortObjects);
-        int n = 0;
+        int n = 0, backSorted = 0;
         foreach (var p in D.Props)
         {
             var tex = AtlasAssets.MapPropsTexture(D, p.Atlas);
@@ -675,7 +675,9 @@ internal static class AtlasMuseumBuilder
             var sprite = Sprite.Create(tex, new Rect(p.X, p.Y, p.W, p.H), Vector2.zero, D.PropPixelsPerMeter);
             sprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
             var go = Child(root, $"Prop_{p.Kind}_{n}", LayerShortObjects);
-            go.transform.position = new Vector3(p.WorldX, p.WorldY, SortZ(p.BaseY));
+            float sortLine = PropSortLine(p.BaseY, p.FootX0, p.FootX1);
+            if (sortLine > p.BaseY) backSorted++;
+            go.transform.position = new Vector3(p.WorldX, p.WorldY, SortZ(sortLine));
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite = sprite;
             Mask(sr);
@@ -686,7 +688,45 @@ internal static class AtlasMuseumBuilder
                 FadeProps.Add(new FadeProp(sr, p.FootX0, p.FootX1, p.BaseY, top));
             n++;
         }
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} props sorted at the back of their footprint: {backSorted}/{n}");
         return n;
+    }
+
+    /// <summary>
+    /// Standlinie eines Props fuer die Tiefe. Test 24.09. (Wald, Storehouse): wer seitlich an einer
+    /// Kiste stand, mit den Fuessen noerdlich ihrer Vorderkante, wurde nach der Vorderkante
+    /// einsortiert, galt als "dahinter" und verschwand halb hinter dem Bildrand der Kiste.
+    /// Hat das Prop eine rechteckige Grundflaeche (Kollider = achsenparalleles Rechteck genau unter
+    /// FootX0..FootX1 ab BaseY), kann niemand innerhalb stehen: Fuesse zwischen Vorder- und
+    /// Hinterkante heissen immer "daneben". Dann gilt die Hinterkante, und nur wer wirklich dahinter
+    /// steht, wird verdeckt. Runde Grundflaechen (Baeume, Felsen) und U-Formen (Theken) behalten die
+    /// Vorderkante: unter einer Baumkrone oder in einer Theke soll man verdeckt bleiben.
+    /// </summary>
+    private static float PropSortLine(float baseY, float footX0, float footX1)
+    {
+        const float tol = 0.02f;
+        foreach (var set in new[] { D.Opaque, D.Glass })
+        {
+            if (set == null) continue;
+            foreach (var poly in set)
+            {
+                if (poly == null || poly.Length != 4) continue;
+                float x0 = float.MaxValue, x1 = float.MinValue, y0 = float.MaxValue, y1 = float.MinValue;
+                bool axisAligned = true;
+                for (int i = 0; i < 4; i++)
+                {
+                    var a = poly[i];
+                    var b = poly[(i + 1) % 4];
+                    if (Mathf.Abs(a.x - b.x) > tol && Mathf.Abs(a.y - b.y) > tol) axisAligned = false;
+                    x0 = Mathf.Min(x0, a.x); x1 = Mathf.Max(x1, a.x);
+                    y0 = Mathf.Min(y0, a.y); y1 = Mathf.Max(y1, a.y);
+                }
+                if (!axisAligned) continue;
+                if (Mathf.Abs(y0 - baseY) < tol && Mathf.Abs(x0 - footX0) < tol && Mathf.Abs(x1 - footX1) < tol)
+                    return y1;
+            }
+        }
+        return baseY;
     }
 
     /// <summary>
