@@ -48,8 +48,37 @@ public class AtlasMinigame : Minigame
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"[Atlas/Task] logger: {e.Message}"); }
     }
 
+    // ---- Logger-Pin (Absturz 24.09.) ----
+    // Vanilla Minigame.Close() loggt ueber das private Feld Minigame.logger. Bei diesem
+    // eingeschleusten Minispiel war der Logger beim Schliessen schon eingesammelt und sein Speicher
+    // neu belegt: Close -> Logger.Info -> FormatMessageForConsole -> string.IsNullOrEmpty(Muell) ->
+    // Zugriffsverletzung (4 Abstuerze, immer "step 0 -> 1 of 2", Dumps: GameAssembly+0x10AC24E,
+    // Aufrufer Minigame.Close+0x2B8). Der il2cpp-GC verfolgt das Basisklassen-Feld in der
+    // eingeschleusten Klasse offenbar nicht; ein GC-Handle haelt den Logger fest, solange das
+    // Minispiel lebt. Feld per Name und Laufzeit-Offset, nicht fest verdrahtet.
+    private nint _loggerHandle;
+    private static IntPtr _loggerField;
+    /// <summary>Autotest-Kontrolle (TaskTest "stepmgnopin:"): Logger NICHT festhalten.</summary>
+    internal static bool DiagNoPin;
+
+    private void PinLogger()
+    {
+        try
+        {
+            if (_loggerField == IntPtr.Zero)
+                _loggerField = Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_field_from_name(
+                    Il2CppInterop.Runtime.Il2CppClassPointerStore<Minigame>.NativeClassPtr, "logger");
+            if (_loggerField == IntPtr.Zero || _loggerHandle != 0 || DiagNoPin) return;
+            uint off = Il2CppInterop.Runtime.IL2CPP.il2cpp_field_get_offset(_loggerField);
+            IntPtr logger = System.Runtime.InteropServices.Marshal.ReadIntPtr(Pointer + (int)off);
+            if (logger != IntPtr.Zero) _loggerHandle = Il2CppInterop.Runtime.IL2CPP.il2cpp_gchandle_new(logger, false);
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"[Atlas/Task] logger pin failed: {e.Message}"); }
+    }
+
     public void Start()
     {
+        PinLogger();
         try
         {
             string kind = name.Replace("(Clone)", "").Replace("AtlasTask_", "");
@@ -207,6 +236,11 @@ public class AtlasMinigame : Minigame
     {
         _mech?.Dispose();
         AtlasTaskKit.Kind = null;
+        if (_loggerHandle != 0)
+        {
+            try { Il2CppInterop.Runtime.IL2CPP.il2cpp_gchandle_free(_loggerHandle); } catch { }
+            _loggerHandle = 0;
+        }
     }
 }
 

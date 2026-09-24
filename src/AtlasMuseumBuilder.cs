@@ -351,6 +351,7 @@ internal static class AtlasMuseumBuilder
 
         // 5. Umsetzen.
         int placed = 0, unplaced = 0;
+        FootprintCount = 0;
         foreach (var c in consoles)
         {
             if (c == null) continue;
@@ -449,7 +450,7 @@ internal static class AtlasMuseumBuilder
 
         AtlasPlugin.Logger.LogInfo(
             $"{LogPrefix} BUILD DONE: consoles {placed} placed/{unplaced} parked, vents {ventCount}, " +
-            $"doors {doorCount}, cameras {camCount}, wall rings {walls}, props {props}, rooms {ship.AllRooms.Length}");
+            $"doors {doorCount}, cameras {camCount}, wall rings {walls}, props {props}, rooms {ship.AllRooms.Length}, console footprints {FootprintCount}");
     }
 
     // ------------------------------------------------------------------ Helfer
@@ -505,13 +506,35 @@ internal static class AtlasMuseumBuilder
         // Spieler steckte im Ring).
         // An Wand/Theke stehende Bloecke (Test 23.09.: der Spieler verschwand hinter der Kasse):
         // Standlinie = Kante des Hindernisses direkt noerdlich, dann steht jeder Spieler davor.
-        float z = FloorBlocks.Contains(key) ? FloorZ - 1f : SortZ(BackedStandLine(p)) - 0.0002f;
+        float standLine = BackedStandLine(p);
+        float z = FloorBlocks.Contains(key) ? FloorZ - 1f : SortZ(standLine) - 0.0002f;
         go.transform.position = new Vector3(p.x, p.y, z);
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
         if (mat != null) sr.sharedMaterial = mat;
+        if (!FloorBlocks.Contains(key) && standLine <= p.y + 0.001f) AddFootprint(go, key, e.W, e.H, e.PY);
         return sr;
     }
+
+    // Freistehende Konsolen (keine Wand direkt noerdlich) hatten keinen Kollider: man lief in den
+    // Kiosk oder das Kamerapult hinein, stand dann hinter der Standlinie und verschwand hinter dem
+    // Bild (User 24.09., Museum). Die Grundflaeche liegt NUR noerdlich der Standlinie: von vorn
+    // kommt man bis an die Konsole heran, die Linie Spieler -> Konsolenpunkt (SystemConsole prueft
+    // AnythingBetween) kreuzt die Box nicht, und die Fuesse bleiben immer vor der Standlinie.
+    // Ebene ShortObjects wie Glas: blockiert Spieler, wirft keinen Schatten.
+    private static void AddFootprint(GameObject block, string key, float wPx, float hPx, float pivotY)
+    {
+        float ppm = D.PropPixelsPerMeter;
+        float w = wPx / ppm * 0.7f;
+        float depth = Mathf.Clamp(hPx / ppm * (1f - pivotY) * 0.6f, 0.25f, 0.8f);
+        const float gap = 0.05f;                   // Abstand zur Standlinie (Spielerkreis bleibt davor)
+        var col = block.AddComponent<BoxCollider2D>();
+        col.size = new Vector2(w, depth);
+        col.offset = new Vector2(0f, gap + depth / 2f);
+        FootprintCount++;
+    }
+
+    internal static int FootprintCount;
 
     // Eigene Vent-Bilder (Key "Vent/<id>" im Konsolen-Atlas). Das Bild sitzt auf einem EIGENEN
     // Kind-Renderer, der Skeld-Renderer (myRend) wird unsichtbar: EnterVent/ExitVent spielen die

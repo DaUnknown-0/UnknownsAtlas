@@ -116,6 +116,19 @@ internal static class AtlasTasks
                 }
                 // "world:storm" usw.: Welt-System ausloesen, nach 6 s Bildschirmfoto
                 // "eject:2": Rauswurf-Szene Nr. 2 der Karte, drei Fotos im Verlauf
+                // "step:EmptyGarbage": alle Tasks zuweisen, den Task wie AtlasMinigame.CompleteStep
+                // einen Schritt weiterschalten und 20 s ueberleben (Absturz 24.09. nach "step 0 -> 1
+                // of 2" bei EmptyGarbage und AlignEngineOutput)
+                if (kind.StartsWith("step:", StringComparison.Ordinal) || kind.StartsWith("stepmg:", StringComparison.Ordinal)
+                    || kind.StartsWith("stepmgnopin:", StringComparison.Ordinal))
+                {
+                    // stepmgnopin: Kontrolllauf ohne den Logger-Pin von AtlasMinigame
+                    AtlasMinigame.DiagNoPin = kind.StartsWith("stepmgnopin:", StringComparison.Ordinal);
+                    bool viaMg = !kind.StartsWith("step:", StringComparison.Ordinal);
+                    StepRepro.Begin(kind.Substring(kind.IndexOf(':') + 1), viaMg);
+                    _diagPhase = 11;
+                    return;
+                }
                 if (kind == "extraroom")
                 {
                     AtlasRoomDiag.Begin();
@@ -200,6 +213,9 @@ internal static class AtlasTasks
             case 10:
                 if (AtlasRoomDiag.Tick()) _diagPhase = 4;
                 break;
+            case 11:
+                if (StepRepro.Tick()) _diagPhase = 4;
+                break;
             case 6:
                 if (Time.time < _shotAt) return;
                 Shot(kind, "view");
@@ -228,5 +244,125 @@ internal static class AtlasTasks
         string file = System.IO.Path.Combine(dir, $"task_{kind.Replace(':', '_')}_{tag}_{DateTime.Now:HHmmss}.png");
         ScreenCapture.CaptureScreenshot(file);
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag shot -> {file}");
+    }
+}
+
+/// <summary>Autotest "step:TaskType": einen mehrstufigen Task einen Schritt weiterschalten und
+/// beobachten (Absturzsuche 24.09.).</summary>
+internal static class StepRepro
+{
+    private static TaskTypes _type;
+    private static float _t0, _next;
+    private static int _phase;
+    private static bool _viaMinigame;
+    private static NormalPlayerTask _task;
+    private static bool _gcDone;
+
+    internal static void Begin(string typeName, bool viaMinigame = false)
+    {
+        _phase = 0;
+        _viaMinigame = viaMinigame;
+        _gcDone = false;
+        if (!Enum.TryParse(typeName, out _type)) { AtlasPlugin.Logger.LogError($"[Atlas/Step] unknown task type {typeName}"); _phase = 9; return; }
+        try
+        {
+            var ship = ShipStatus.Instance;
+            var ids = new List<byte>();
+            foreach (var arr in new[] { ship.CommonTasks, ship.LongTasks, ship.ShortTasks })
+                if (arr != null) foreach (var t in arr) if (t != null) ids.Add((byte)t.Index);
+            PlayerControl.LocalPlayer.Data.RpcSetTasks(new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<byte>(ids.ToArray()));
+            AtlasPlugin.Logger.LogInfo($"[Atlas/Step] assigned {ids.Count} task(s), target {_type}");
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogError($"[Atlas/Step] assign failed: {e}"); _phase = 9; return; }
+        _t0 = Time.time + 2f; _phase = 1;
+    }
+
+    // wie das Spiel selbst: die Konsole, deren FindTask genau diesen Task liefert
+    private static Console ConsoleFor(NormalPlayerTask task)
+    {
+        foreach (var c in Object.FindObjectsOfType<Console>())
+        {
+            if (c == null) continue;
+            PlayerTask t = null;
+            try { t = c.FindTask(PlayerControl.LocalPlayer); } catch { }
+            if (t != null && t.Pointer == task.Pointer) return c;
+        }
+        return null;
+    }
+
+    internal static bool Tick()
+    {
+        if (_phase == 9) return true;
+        if (Time.time < _t0) return false;
+        try
+        {
+            switch (_phase)
+            {
+                case 1:
+                    NormalPlayerTask task = null;
+                    foreach (var t in PlayerControl.LocalPlayer.myTasks)
+                    {
+                        var n = t != null ? t.TryCast<NormalPlayerTask>() : null;
+                        if (n != null && n.TaskType == _type) { task = n; break; }
+                    }
+                    if (task == null) { AtlasPlugin.Logger.LogError($"[Atlas/Step] no {_type} task"); return true; }
+                    if (_viaMinigame)
+                    {
+                        // wie ein Spieler: zur Konsole, Console.Use, das Minispiel spielt sich selbst
+                        var con = ConsoleFor(task);
+                        if (con == null) { AtlasPlugin.Logger.LogError($"[Atlas/Step] no console for {_type}"); return true; }
+                        PlayerControl.LocalPlayer.NetTransform.RpcSnapTo((Vector2)con.transform.position + new Vector2(0f, -0.45f));
+                        _task = task; _t0 = Time.time + 1f; _phase = 3;
+                        AtlasPlugin.Logger.LogInfo($"[Atlas/Step] walking to {con.name}");
+                        return false;
+                    }
+                    int before = task.taskStep;
+                    AtlasPlugin.Logger.LogInfo($"[Atlas/Step] {_type}: NextStep from {before} of {task.MaxStep}, showStep {task.ShowTaskStep}");
+                    task.NextStep();
+                    AtlasPlugin.Logger.LogInfo($"[Atlas/Step] {_type}: now {task.taskStep} of {task.MaxStep}, complete {task.IsComplete}, room {task.StartAt}");
+                    _next = Time.time + 1f; _t0 = Time.time; _phase = 2;
+                    return false;
+                case 3:
+                {
+                    var con = ConsoleFor(_task);
+                    float d = con.CanUse(PlayerControl.LocalPlayer.Data, out bool can, out bool could);
+                    AtlasPlugin.Logger.LogInfo($"[Atlas/Step] {con.name}: CanUse {can}, could {could}, dist {d:F2}");
+                    AtlasMinigame.DiagAuto = true;
+                    con.Use();
+                    AtlasPlugin.Logger.LogInfo($"[Atlas/Step] minigame {(Minigame.Instance != null ? Minigame.Instance.name : "none")}");
+                    _t0 = Time.time + 0.5f; _phase = 4;
+                    return false;
+                }
+                case 4:
+                    // Hypothese 24.09.: der Logger des Minispiels (Minigame.logger, +0x40) wird vom
+                    // il2cpp-GC eingesammelt, solange das Minispiel offen ist. Einmal waehrend des
+                    // Spiels hart aufraeumen lassen; stuerzt Close danach reproduzierbar ab, stimmt sie.
+                    if (!_gcDone && Minigame.Instance != null && Time.time > _t0 + 1.5f)
+                    {
+                        _gcDone = true;
+                        Il2CppSystem.GC.Collect();
+                        System.GC.Collect();
+                        Il2CppSystem.GC.Collect();
+                        AtlasPlugin.Logger.LogInfo("[Atlas/Step] forced il2cpp + managed GC while the minigame is open");
+                    }
+                    // warten, bis das Minispiel den Schritt gemacht und sich geschlossen hat
+                    if (Minigame.Instance != null && Time.time < _t0 + 60f) return false;
+                    AtlasMinigame.DiagAuto = false;
+                    AtlasPlugin.Logger.LogInfo($"[Atlas/Step] {_type}: minigame closed, now {_task.taskStep} of {_task.MaxStep}, room {_task.StartAt}");
+                    _next = Time.time + 1f; _t0 = Time.time; _phase = 2;
+                    return false;
+                case 2:
+                    if (Time.time < _next) return false;
+                    float el = Time.time - _t0;
+                    AtlasPlugin.Logger.LogInfo($"[Atlas/Step] alive {el:F0}s");
+                    if (el >= 3f && el < 4f) { HudManager.Instance.ToggleMapVisible(new MapOptions { Mode = MapOptions.Modes.Normal }); AtlasPlugin.Logger.LogInfo("[Atlas/Step] map opened"); }
+                    if (el >= 7f && el < 8f && MapBehaviour.Instance != null && MapBehaviour.Instance.IsOpen) { MapBehaviour.Instance.Close(); AtlasPlugin.Logger.LogInfo("[Atlas/Step] map closed"); }
+                    _next = Time.time + 1f;
+                    if (el >= 20f) { AtlasPlugin.Logger.LogInfo($"[Atlas/Step] {_type}: survived 20 s"); return true; }
+                    return false;
+            }
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogError($"[Atlas/Step] failed: {e}"); return true; }
+        return true;
     }
 }

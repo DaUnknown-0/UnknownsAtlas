@@ -710,11 +710,14 @@ internal static class AtlasLobbyShot
         catch (Exception e) { AtlasPlugin.Logger.LogError($"[Atlas/Select] lobby shot host failed: {e}"); }
     }
 
+    // HudManager.Update statt LobbyBehaviour.Update: dessen nativer Code ist mit einer zweiten
+    // Methode zusammengelegt (il2cpp-Dedup, Pruefung 24.09.), ein Detour traefe beide.
     [HarmonyPostfix]
-    [HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Update))]
-    internal static void LobbyBehaviour_Update_Postfix()
+    [HarmonyPatch(typeof(HudManager), nameof(HudManager.Update))]
+    internal static void HudManager_Update_LobbyShot_Postfix()
     {
         if (AtlasPlugin.CfgLobbyShot is not { Value: true } || _phase < 1 || _phase >= 6) return;
+        if (LobbyBehaviour.Instance == null) return;
         try
         {
             switch (_phase)
