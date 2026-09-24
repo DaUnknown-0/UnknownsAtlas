@@ -482,14 +482,18 @@ internal sealed class SpliceMechanic : IAtlasMechanic
         AtlasTaskKit.Sprite(root, "task_steel_panel.png", 100f, Vector2.zero, 0);
         // je Schritt andere Farben
         int off = ctx.Step % Palette.Length;
-        var cols = new[] { Palette[off], Palette[(off + 1) % Palette.Length], Palette[(off + 3) % Palette.Length] };
+        var idx = new[] { off, (off + 1) % Palette.Length, (off + 3) % Palette.Length };
+        var cols = new[] { Palette[idx[0]], Palette[idx[1]], Palette[idx[2]] };
+        // Farbenblind-Symbol je Palettenfarbe: dieselbe Farbe traegt immer dieselbe Form
+        var ink = new Color(0.08f, 0.08f, 0.1f, 0.9f);
         var order = new List<int> { 0, 1, 2 };
         for (int i = 2; i > 0; i--) { int j = Random.Range(0, i + 1); (order[i], order[j]) = (order[j], order[i]); }
         for (int i = 0; i < 3; i++)
         {
             var cp = new Vector2(2.1f, 1.3f - i * 1.3f);
             AtlasTaskKit.Sprite(root, "task_clamp.png", 100f, cp, 2);
-            MatchKit.Box(root, cp + new Vector2(0.72f, 0f), new Vector2(0.22f, 0.8f), cols[order[i]], 2);
+            MatchKit.Box(root, cp + new Vector2(0.72f, 0f), new Vector2(0.3f, 0.8f), cols[order[i]], 2);
+            MatchKit.Symbol(root, cp + new Vector2(0.72f, 0f), idx[order[i]], 0.24f, ink, 3);
             var screw = AtlasTaskKit.Sprite(root, "task_screw.png", 100f, cp + new Vector2(0f, 0f), 6).transform;
             screw.gameObject.SetActive(false);
             _clamps.Add((cp, cols[order[i]], screw, new Rotary(cp, 0f, 0.55f)));
@@ -500,6 +504,7 @@ internal sealed class SpliceMechanic : IAtlasMechanic
             var wire = MatchKit.Line(root, cols[i], 0.14f, 3);
             var end = AtlasTaskKit.Sprite(root, "task_wire_end.png", 100f, home, 5);
             end.color = cols[i];
+            MatchKit.Symbol(end.transform, Vector2.zero, idx[i], 0.26f, ink, 6);
             int clamp = _clamps.FindIndex(c => c.Col == cols[i]);
             _wires.Add((home, cols[i], end.transform, wire, clamp));
             MatchKit.Set(wire, 0, new Vector2(AnchorX, home.y), 3);

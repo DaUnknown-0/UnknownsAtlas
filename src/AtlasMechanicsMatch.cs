@@ -139,6 +139,57 @@ internal static class MatchKit
         return sr;
     }
 
+    // Farbenblind-Symbole (User 24.09.: "Kabeltasks: bitte Symbole einbauen"), wie die Formen am
+    // Vanilla-Kabeltask. 0 Dreieck, 1 Quadrat, 2 Kreis, 3 Raute, 4 Kreuz; einmal je Form als weisse
+    // 64-px-Textur mit weicher Kante gezeichnet und getoent. Keine Schrift: der HUD-Font hat keine
+    // Symbolzeichen.
+    private static readonly Sprite[] _symbols = new Sprite[5];
+
+    public static SpriteRenderer Symbol(Transform parent, Vector2 pos, int shape, float size, Color c, int order)
+    {
+        shape = ((shape % 5) + 5) % 5;
+        if (_symbols[shape] == null)
+        {
+            const int N = 64;
+            var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Bilinear };
+            var px = new Color32[N * N];
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                {
+                    // Abstand zur Formkante in Pixeln (negativ = innen), 1,5 px weiche Kante
+                    float u = (x + 0.5f) / N * 2f - 1f, v = (y + 0.5f) / N * 2f - 1f, d;
+                    switch (shape)
+                    {
+                        case 0: // Dreieck, Spitze oben
+                            d = Mathf.Max(-v - 0.78f, Mathf.Max(0.866f * u + 0.5f * v - 0.43f, -0.866f * u + 0.5f * v - 0.43f));
+                            break;
+                        case 1: d = Mathf.Max(Mathf.Abs(u), Mathf.Abs(v)) - 0.72f; break;
+                        case 2: d = Mathf.Sqrt(u * u + v * v) - 0.8f; break;
+                        case 3: d = (Mathf.Abs(u) + Mathf.Abs(v)) * 0.7071f - 0.66f; break;
+                        default: // Kreuz (X)
+                            float a1 = Mathf.Abs(u - v) * 0.7071f, a2 = Mathf.Abs(u + v) * 0.7071f;
+                            d = Mathf.Max(Mathf.Min(a1, a2) - 0.2f, Mathf.Max(Mathf.Abs(u), Mathf.Abs(v)) - 0.82f);
+                            break;
+                    }
+                    float alpha = Mathf.Clamp01(0.5f - d * N / 2f / 1.5f);
+                    px[y * N + x] = new Color32(255, 255, 255, (byte)(alpha * 255f));
+                }
+            tex.SetPixels32(px);
+            tex.Apply(false, true);
+            _symbols[shape] = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N);
+            _symbols[shape].hideFlags = HideFlags.HideAndDontSave;
+        }
+        var go = new GameObject("symbol") { layer = 5 };
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = new Vector3(pos.x, pos.y, -order * 0.01f);
+        go.transform.localScale = Vector3.one * size;
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = _symbols[shape];
+        sr.color = c;
+        sr.sortingOrder = order;
+        return sr;
+    }
+
     /// <summary>Sichtbarer Beweis fuer andere Spieler (Visual Tasks), wie die Vanilla-Minispiele.</summary>
     public static void PlayVisual(TaskTypes t)
     {
