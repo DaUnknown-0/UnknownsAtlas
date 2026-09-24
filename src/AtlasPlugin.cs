@@ -23,7 +23,7 @@ public class AtlasPlugin : BasePlugin
 {
     public const string Id = "com.daunknown0.atlas";
     public const string PluginName = "Unknown's Atlas";
-    public const string VersionString = "0.3.0.8";
+    public const string VersionString = "0.3.0.9";
     public static readonly System.Version Version = System.Version.Parse(VersionString);
 
     public static BepInEx.Logging.ManualLogSource Logger = null!;
@@ -40,6 +40,7 @@ public class AtlasPlugin : BasePlugin
     public static ConfigEntry<bool> CfgMapShot = null!;
     public static ConfigEntry<bool> CfgUiShot = null!;
     public static ConfigEntry<string> CfgUiShotClick = null!;
+    public static ConfigEntry<bool> CfgLobbyShot = null!;
     public static ConfigEntry<string> CfgTaskTest = null!;
     public static ConfigEntry<bool> CfgViewTestVanilla = null!;
 
@@ -61,6 +62,9 @@ public class AtlasPlugin : BasePlugin
             "Diagnostics only: open the Freeplay map menu once in the main menu and take a screenshot.");
         CfgUiShotClick = Config.Bind("Diagnostics", "UiShotClick", "",
             "Diagnostics only: after the UiShot screenshot, press this Atlas map button (museum, wald).");
+        CfgLobbyShot = Config.Bind("Diagnostics", "LobbyShot", false,
+            "Diagnostics only: host a local lobby from the main menu, open the game settings and photograph " +
+            "the map picker (before and after pressing the Carnival button) into AtlasShots.");
         CfgTaskTest = Config.Bind("Diagnostics", "TaskTest", "",
             "Diagnostics only: shortly after the round starts, open this custom minigame (dust, pump), " +
             "let it play itself and write screenshots to AtlasShots.");

@@ -487,9 +487,43 @@ internal static class AtlasSelection
             }));
             LobbyAtlasButtons.Add(pb);
         }
+        FitLobbyRow(picker, step);
         MarkLobby(_current);
         if (_current > 0) ShowAtlasInPicker(picker, _current);
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} lobby picker: {Maps.Length} map buttons added (step {step:F2})");
+    }
+
+    // Mit Submerged stehen 9 Symbole in der Reihe; Forest und Carnival lagen rechts ausserhalb des
+    // sichtbaren (und klickbaren) Bereichs (User 24.09.: "nicht alle Maps waehlbar"). Rueckt die
+    // ganze Reihe zusammen und verkleinert sie gleichmaessig, bis sie in ButtonClickMask passt.
+    private static void FitLobbyRow(GameOptionsMapPicker picker, float step)
+    {
+        try
+        {
+            var all = new List<MapSelectButton>(picker.GetComponentsInChildren<MapSelectButton>(true));
+            all.RemoveAll(b => b == null);
+            if (all.Count < 2 || step <= 0f) return;
+            all.Sort((a, b) => a.transform.localPosition.x.CompareTo(b.transform.localPosition.x));
+            var parent = all[0].transform.parent;
+            var mask = picker.ButtonClickMask;
+            if (mask == null || parent == null) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} lobby picker: no click mask, row not fitted"); return; }
+            float left = all[0].transform.localPosition.x;
+            float right = parent.InverseTransformPoint(mask.bounds.max).x;
+            float needed = (all.Count - 1) * step;
+            float avail = right - left - step * 0.5f;     // der letzte Knopf muss ganz hinein
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} lobby picker: {all.Count} buttons, left {left:F2}, mask right {right:F2}, needed {needed:F2}, available {avail:F2}");
+            if (avail >= needed) return;
+            float s = Mathf.Clamp(avail / needed, 0.55f, 1f);
+            for (int i = 0; i < all.Count; i++)
+            {
+                var t = all[i].transform;
+                var p = t.localPosition;
+                t.localPosition = new Vector3(left + i * step * s, p.y, p.z);
+                t.localScale *= s;
+            }
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} lobby picker: row fitted, scale {s:F2}");
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} lobby picker fit: {e.Message}"); }
     }
 
     /// <summary>Haken nur am Atlas-Knopf, Karten-Logo im Kopf des Waehlers.</summary>
@@ -643,5 +677,89 @@ internal static class AtlasUiShot
             }
         }
         catch (Exception e) { AtlasPlugin.Logger.LogError($"[Atlas/Select] ui shot failed: {e}"); _phase = 2; }
+    }
+}
+
+/// <summary>
+/// Diagnose (Config Diagnostics.LobbyShot): hostet vom Hauptmenue eine lokale Lobby, oeffnet die
+/// Spieleinstellungen und fotografiert den Kartenwaehler; danach Druck auf den Carnival-Knopf und
+/// ein zweites Foto. Abnahme der Knopfreihe mit Submerged (24.09.).
+/// </summary>
+[HarmonyPatch]
+internal static class AtlasLobbyShot
+{
+    private static int _phase;
+    private static float _t = -1f;
+
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(MainMenuManager), "LateUpdate")]
+    internal static void MainMenuManager_LateUpdate_Postfix()
+    {
+        if (AtlasPlugin.CfgLobbyShot is not { Value: true } || _phase != 0) return;
+        if (_t < 0f) _t = Time.time + 10f;
+        if (Time.time < _t) return;
+        _phase = 1;
+        try
+        {
+            var host = Object.FindObjectOfType<HostLocalGameButton>(true);
+            if (host == null) { AtlasPlugin.Logger.LogWarning("[Atlas/Select] lobby shot: no HostLocalGameButton"); return; }
+            host.NetworkMode = NetworkModes.LocalGame;
+            host.OnClick();
+            AtlasPlugin.Logger.LogInfo("[Atlas/Select] lobby shot: hosting a local lobby");
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogError($"[Atlas/Select] lobby shot host failed: {e}"); }
+    }
+
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Update))]
+    internal static void LobbyBehaviour_Update_Postfix()
+    {
+        if (AtlasPlugin.CfgLobbyShot is not { Value: true } || _phase < 1 || _phase >= 6) return;
+        try
+        {
+            switch (_phase)
+            {
+                case 1: _t = Time.time + 6f; _phase = 2; break;
+                case 2:
+                    if (Time.time < _t) return;
+                    var pane = Object.FindObjectOfType<LobbyInfoPane>(true);
+                    var edit = pane != null && pane.EditButton != null ? pane.EditButton.GetComponent<PassiveButton>() : null;
+                    AtlasPlugin.Logger.LogInfo($"[Atlas/Select] lobby shot: edit button {(edit != null ? "found" : "missing")}");
+                    edit?.OnClick.Invoke();
+                    _t = Time.time + 2f; _phase = 3;
+                    break;
+                case 3:
+                    if (Time.time < _t) return;
+                    var menu = GameSettingMenu.Instance;
+                    AtlasPlugin.Logger.LogInfo($"[Atlas/Select] lobby shot: settings menu {(menu != null ? "open" : "missing")}");
+                    menu?.GameSettingsButton?.OnClick.Invoke();
+                    _t = Time.time + 2f; _phase = 4;
+                    break;
+                case 4:
+                    if (Time.time < _t) return;
+                    Shot("before");
+                    var park = GameObject.Find("Atlas_park")?.GetComponent<MapSelectButton>();
+                    AtlasPlugin.Logger.LogInfo($"[Atlas/Select] lobby shot: Atlas_park {(park != null ? $"at local x {park.transform.localPosition.x:F2}, scale {park.transform.localScale.x:F2}" : "missing")}");
+                    park?.Button?.OnClick.Invoke();
+                    _t = Time.time + 1.5f; _phase = 5;
+                    break;
+                case 5:
+                    if (Time.time < _t) return;
+                    Shot("park");
+                    AtlasPlugin.Logger.LogInfo("[Atlas/Select] lobby shot done");
+                    _phase = 6;
+                    break;
+            }
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogError($"[Atlas/Select] lobby shot failed: {e}"); _phase = 6; }
+    }
+
+    private static void Shot(string tag)
+    {
+        string dir = System.IO.Path.Combine(BepInEx.Paths.GameRootPath, "AtlasShots");
+        System.IO.Directory.CreateDirectory(dir);
+        string file = System.IO.Path.Combine(dir, $"lobby_{tag}_{DateTime.Now:HHmmss}.png");
+        ScreenCapture.CaptureScreenshot(file);
+        AtlasPlugin.Logger.LogInfo($"[Atlas/Select] lobby shot {tag} -> {file}");
     }
 }
