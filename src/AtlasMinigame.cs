@@ -173,9 +173,19 @@ public class AtlasMinigame : Minigame
         _ => null,
     };
 
+    private Vector2 _lastMouse;
+
     public void Update()
     {
-        if (_mech == null || _done || amClosing != CloseState.None) return;
+        if (_mech == null || amClosing != CloseState.None) return;
+        if (_done)
+        {
+            // Nach "fertig" bis zum Schliessen weiterlaufen lassen, ohne Eingabe: sonst froren
+            // laufende Schlussanimationen ein (User 24.09.: "die letzte Animation wird nicht
+            // abgespielt", z. B. die letzte Motte auf dem Weg ins Glas).
+            try { _mech.Tick(Time.deltaTime, _lastMouse, false, false); } catch { }
+            return;
+        }
         try
         {
             float dt = Time.deltaTime;
@@ -190,6 +200,7 @@ public class AtlasMinigame : Minigame
             }
             bool pressed = down && !_wasDown;
             _wasDown = down;
+            _lastMouse = mouse;
 
             if (pressed && _close != null && Vector2.Distance(mouse, _close.transform.localPosition) < 0.35f)
             {
@@ -224,10 +235,15 @@ public class AtlasMinigame : Minigame
     /// blieb bei 1/2/3 stehen). Ohne sichtbaren Zaehler (ShowTaskStep = false) schliesst das eigene
     /// Minispiel deshalb alle Reststufen ab; mit Zaehler ("Divert Power (0/2)") genau eine.
     /// </summary>
+    // Tasks, deren sichtbarer Zaehler Treffer IM Minispiel zaehlt statt Konsolenbesuche: Clear
+    // Asteroids ist im Original "(0/20)", ein Schritt pro Asteroid. Das eigene Minispiel ist der ganze
+    // Task (User 24.09.: Motten zum fuenften Mal, Log "ClearAsteroids: step 0 -> 1 of 20").
+    private static readonly HashSet<TaskTypes> WholeTaskInOneGame = new() { TaskTypes.ClearAsteroids };
+
     private static void CompleteStep(NormalPlayerTask task)
     {
         int before = task.taskStep, max = task.MaxStep;
-        if (task.ShowTaskStep) task.NextStep();
+        if (task.ShowTaskStep && !WholeTaskInOneGame.Contains(task.TaskType)) task.NextStep();
         else for (int guard = 0; guard < 64 && !task.IsComplete; guard++) task.NextStep();
         AtlasPlugin.Logger.LogInfo($"[Atlas/Task] {task.TaskType}: step {before} -> {task.taskStep} of {max} (showStep={task.ShowTaskStep}, complete={task.IsComplete})");
     }
