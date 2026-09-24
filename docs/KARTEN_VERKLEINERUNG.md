@@ -1,6 +1,10 @@
 # Karten verkleinern: Analyse aller Räume (Museum, Wald, Park)
 
-Stand 2026-09-24. Reine Analyse, **noch nichts geändert**. Ziel: jede Karte bleibt in ihrem Stil
+Stand 2026-09-24. Reine Analyse, **noch nichts geändert**.
+
+**Entscheidungen des Users (24.09.):** alle drei Hebel (Räume streichen, verkleinern, Leerraum raus);
+Ghost Train und Log Flume bleiben als Durchgänge mit ihrer Mechanik; vor dem Umbau wird das Dokument
+erst besprochen. Ziel: jede Karte bleibt in ihrem Stil
 bestehen, ist aber für 10 Spieler gebaut und höchstens so groß wie **Polus**.
 
 Messwerte aus `tools/*_layout.py` (Rasterweg 0,25 m, 0,3 m Wandabstand wie `wald_plan.py`),
