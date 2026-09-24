@@ -278,7 +278,9 @@ internal static class AtlasWeatherFx
     {
         if (SoundManager.Instance == null) return;
         bool inGame = MeetingHud.Instance == null && ExileController.Instance == null;
-        EnsureLoop(ref _ambience, wald ? "wald_bed" : "museum_bed", inGame ? (wald ? 0.35f : 0.28f) : 0f, dt);
+        // Park (Graybox): noch kein eigener Raumton, und der Museumston passt nicht
+        bool museum = AtlasMuseumBuilder.D.Key == "museum";
+        EnsureLoop(ref _ambience, wald ? "wald_bed" : "museum_bed", inGame && (wald || museum) ? (wald ? 0.35f : 0.28f) : 0f, dt);
         EnsureLoop(ref _rain, "rain", inGame && raining ? (_weather == AtlasWorld.Weather.Storm ? 0.55f : 0.4f) : 0f, dt);
         bool fire = Flames.Count > 0;
         float fireVol = 0f;
@@ -294,7 +296,7 @@ internal static class AtlasWeatherFx
         {
             _nextOneShot = Time.time + Random.Range(14f, 30f);
             if (wald && _weather != AtlasWorld.Weather.Storm) Play(Random.value < 0.6f ? "owl" : "twig", 0.3f);
-            if (!wald) Play(Random.value < 0.5f ? "creak" : "clock", 0.22f);
+            if (museum) Play(Random.value < 0.5f ? "creak" : "clock", 0.22f);
         }
     }
 

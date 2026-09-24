@@ -634,6 +634,328 @@ SCENES.append({
 })
 
 
+# ============================================================================ Park (Moonlight Carnival)
+# Grafik: tools/gen_eject_park.py (task_eject_pk_*); die Kontrakt-Koordinaten kommen von dort.
+import math as _m
+import gen_eject_park as PK
+
+
+def _rot(x, y, deg):
+    a = _m.radians(deg)
+    return x * _m.cos(a) - y * _m.sin(a), x * _m.sin(a) + y * _m.cos(a)
+
+
+# ---------------------------------------------------------------------------- Park: Menschenkanone
+# Der Spieler steckt schon im Rohr, nur der Kopf schaut heraus und zappelt. Ein Streichholz, die
+# Zuendschnur brennt knisternd herunter, die Kanone zittert - BUMM: Blitz, Rauch, Konfetti, das Rohr
+# springt zurueck, der Spieler fliegt in hohem Bogen zum Mond und wird ein Punkt davor. Ein Funkeln.
+TRUN = (2.3, PK.GROUND + 1.2)                   # Zapfen (Lafette mit Pivot auf dem Zapfen)
+BARREL_ROT = -27
+MUZZLE = (TRUN[0] + _rot(-2.19, 0, BARREL_ROT)[0], TRUN[1] + _rot(-2.19, 0, BARREL_ROT)[1])
+FUSE = [(1.01, 0.25), (0.91, 0.47), (0.73, 0.59), (0.51, 0.57), (0.31, 0.43)]      # Barrel-lokal
+BREECH = (TRUN[0] + _rot(1.0, 0.45, BARREL_ROT)[0], TRUN[1] + _rot(1.0, 0.45, BARREL_ROT)[1])
+BOOM = 2.7
+SCENES.append({
+    "id": "cannon", "map": "park", "title": "Menschenkanone", "length": 7.0, "text": [1.2, 2.5],
+    "bounds": [12, 6.8],
+    "camera": [key(0, "lin", z=1.2, x=1.2, y=-0.1), key(2.5, z=1.24, x=1.1, y=0.0), key(BOOM, "hold", z=1.24, x=1.1, y=0.0),
+               key(4.3, "io", z=1.25, x=-2.3, y=1.1), key(7.0, z=1.22, x=-2.1, y=1.0)],
+    "objects": [
+        {"id": "bg", "sprite": "task_eject_pk_fair_bg.jpg", "z": -100},
+        {"id": "moonGlow", "sprite": "task_eject_glow.png", "z": -90, "x": PK.MOON_FAIR[0], "y": PK.MOON_FAIR[1], "tint": "#fff4c8",
+         "keys": [key(0, "hold", a=0, s=0.5), key(4.3, "hold", a=0, s=0.5), key(4.42, "out", a=0.95, s=1.6), key(5.4, a=0, s=1.0)]},
+        {"id": "barrel", "sprite": "task_eject_pk_cannon.png", "z": 5, "x": TRUN[0], "y": TRUN[1], "pivot": [231 / 340, 0.5], "rot": BARREL_ROT,
+         "keys": [key(0, x=TRUN[0], y=TRUN[1]), key(BOOM, "hold", x=TRUN[0], y=TRUN[1]),
+                  key(BOOM + 0.1, "out", x=TRUN[0] + 0.32, y=TRUN[1] - 0.16), key(BOOM + 0.8, x=TRUN[0], y=TRUN[1])],
+         "wobble": [{"p": "rot", "amp": 1.4, "f": 14, "t0": 2.1, "t1": BOOM}]},
+        {"id": "spark", "sprite": "task_eject_glow.png", "parent": "barrel", "z": 7, "s": 0.4, "tint": "#ffb040",
+         "keys": [key(0, "hold", a=0, x=FUSE[0][0], y=FUSE[0][1]), key(1.05, "hold", a=1)]
+                 + [key(1.05 + (i + 1) * 1.55 / (len(FUSE) - 1), "lin", x=p[0], y=p[1]) for i, p in enumerate(FUSE[1:])]
+                 + [key(BOOM - 0.02, "hold", a=0)],
+         "flicker": {"amp": 0.6, "f": 11}},
+        {"id": "cart", "sprite": "task_eject_pk_cannon_cart.png", "z": 6, "x": TRUN[0], "y": TRUN[1], "pivot": [0.5, 0.8],
+         "wobble": [{"p": "x", "amp": 0.02, "f": 13, "t0": 2.1, "t1": BOOM}, {"p": "rot", "amp": 2, "f": 9, "t0": BOOM, "t1": BOOM + 0.6}]},
+        {"id": "shot", "keys": [key(0, x=MUZZLE[0], y=MUZZLE[1], rot=BARREL_ROT, s=1), key(BOOM, "hold", x=MUZZLE[0], y=MUZZLE[1], rot=BARREL_ROT, s=1),
+                                key(4.3, "out", x=PK.MOON_FAIR[0], y=PK.MOON_FAIR[1], rot=BARREL_ROT + 1080, s=0.07, arc=0.9)]},
+    ],
+    "player": {"parent": "shot", "hide": 4.32, "keys": [
+        key(0, "lin", x=0.02, y=0, rot=90, s=0.78, sx=1, sy=1, flip=1), key(BOOM, "hold", sx=1, sy=1),
+        key(BOOM + 0.08, "out", sx=0.75, sy=1.35), key(BOOM + 0.5, sx=1, sy=1)],
+        "wobble": [{"p": "rot", "amp": 7, "f": 1.3, "t0": 0, "t1": 2.0}, {"p": "x", "amp": 0.04, "f": 2.1, "t0": 0, "t1": 2.0},
+                   {"p": "rot", "amp": 4, "f": 11, "t0": 2.0, "t1": BOOM}]},
+    "emitters": [
+        em("task_eject_mote.png", 8, t0=1.05, t1=BOOM - 0.05, rate=30, area=[BREECH[0] - 0.35, BREECH[1] - 0.1, BREECH[0] + 0.1, BREECH[1] + 0.35],
+           vel=[-0.8, 0.2, 0.8, 1.4], acc=[0, -3], life=[0.2, 0.45], size=[0.04, 0.09], tint="#ffcc60", a=1),
+        burst("task_eject_puff.png", 9, BOOM, 26, area=[MUZZLE[0] - 0.3, MUZZLE[1] - 0.3, MUZZLE[0] + 0.3, MUZZLE[1] + 0.3],
+              vel=[-2.2, -0.2, -0.3, 1.6], drag=1.4, life=[1.2, 2.4], size=[0.6, 1.3], grow=0.6, tint="#cfc6d0", a=0.7, spin=[-30, 30]),
+        burst("task_eject_glow.png", 9, BOOM, 6, area=[MUZZLE[0] - 0.2, MUZZLE[1] - 0.2, MUZZLE[0] + 0.2, MUZZLE[1] + 0.2],
+              vel=[-1, -0.3, 0, 0.8], life=[0.2, 0.35], size=[1.0, 1.6], tint="#ffb050", a=0.9),
+    ] + [
+        burst("task_eject_pk_confetti.png", 10, BOOM + 0.02, 22, area=[MUZZLE[0] - 0.2, MUZZLE[1] - 0.2, MUZZLE[0] + 0.2, MUZZLE[1] + 0.2],
+              vel=[-3.4, 0.4, -0.4, 3.6], acc=[0, -2.2], drag=0.9, life=[2.2, 3.4], size=[0.08, 0.14], spin=[-500, 500], rot=[0, 360], tint=t, a=1)
+        for t in ("#e8404a", "#f0c040", "#40c0c0", "#f0f0e8")
+    ],
+    "events": [ev(1.0, sound="click", vol=0.5), ev(1.05, sound="sizzle", vol=0.45), ev(2.1, sound="creak", vol=0.3),
+               ev(BOOM, sound="boom", vol=1.0), ev(BOOM, shake=[0.5, 0.13]), ev(BOOM, flash=["#fff0c0", 0.6, 0.3]),
+               ev(BOOM + 0.15, sound="whoosh", vol=0.7), ev(4.35, sound="chime", vol=0.6)],
+})
+
+# ---------------------------------------------------------------------------- Park: Riesenrad
+# Ganz oben, das Rad steht. Die Gondel schaukelt sanft im Wind. Ein Knarzen, ein Bolzen springt mit
+# Funken ab, die Gondel sackt schief - der Spieler schaut nach unten. Der zweite Bolzen: die Gondel
+# stuerzt aus dem Bild, die Kamera faehrt zurueck, unten staubt es. Oben baumelt nichts mehr.
+TOP = (PK.FERRIS_HUB[0], PK.FERRIS_HUB[1] + PK.FERRIS_R)
+SCENES.append({
+    "id": "ferris", "map": "park", "title": "Riesenrad", "length": 7.2, "text": [1.0, 2.4],
+    "bounds": [12, 6.8],
+    "camera": [key(0, "lin", z=1.55, x=TOP[0], y=0.95), key(2.3, z=1.6, x=TOP[0], y=0.95), key(3.3, "hold", z=1.6, x=TOP[0], y=0.95),
+               key(4.3, "io", z=1.1, x=-0.4, y=-0.2), key(7.2, z=1.08, x=-0.3, y=-0.2)],
+    "objects": [
+        {"id": "bg", "sprite": "task_eject_pk_ferris_bg.jpg", "z": -100},
+        {"id": "gon", "keys": [key(0, x=TOP[0], y=TOP[1], rot=0), key(2.3, "hold", x=TOP[0], y=TOP[1], rot=0),
+                               key(2.45, "out", y=TOP[1] - 0.1, rot=-15), key(2.9, rot=-8), key(3.3, "hold", x=TOP[0], y=TOP[1] - 0.1, rot=-8),
+                               key(4.2, "in", x=TOP[0] + 0.5, y=-5.4, rot=-40)],
+         "wobble": [{"p": "rot", "amp": 5, "f": 0.55, "t0": 0, "t1": 2.3}, {"p": "rot", "amp": 3, "f": 1.6, "t0": 2.45, "t1": 3.3}]},
+        {"id": "gback", "sprite": "task_eject_pk_gondola_back.png", "parent": "gon", "z": -3, "pivot": [0.5, 1.0]},
+        {"id": "gfront", "sprite": "task_eject_pk_gondola_front.png", "parent": "gon", "z": 4, "pivot": [0.5, 1.0]},
+        {"id": "pin", "sprite": "task_eject_glow.png", "z": 5, "x": TOP[0], "y": TOP[1], "s": 0.5, "tint": "#ffd080",
+         "keys": [key(0, "hold", a=0), key(2.35, "hold", a=0.9), key(2.6, a=0), key(3.25, "hold", a=0.9), key(3.5, a=0)]},
+    ],
+    "player": {"parent": "gon", "hide": 4.15, "keys": [
+        key(0, "lin", x=0, y=-0.62, rot=0, s=0.55, sx=1, sy=1, flip=1), key(1.2, "hold", flip=-1), key(1.9, "hold", flip=1),
+        key(2.45, "hold", sx=1, sy=1), key(2.55, "out", sx=1.1, sy=0.9), key(2.7, sx=1, sy=1),
+        key(3.3, "hold", y=-0.62), key(3.6, "out", y=-0.4, sx=0.9, sy=1.15)],
+        "wobble": [{"p": "x", "amp": 0.02, "f": 13, "t0": 2.9, "t1": 3.3}]},
+    "emitters": [
+        burst("task_eject_mote.png", 6, 2.35, 16, area=[TOP[0] - 0.1, TOP[1] - 0.1, TOP[0] + 0.1, TOP[1] + 0.1], vel=[-1.6, -0.5, 1.6, 1.8],
+              acc=[0, -6], life=[0.4, 0.8], size=[0.05, 0.1], tint="#ffd080", a=1),
+        burst("task_eject_mote.png", 6, 3.25, 20, area=[TOP[0] - 0.1, TOP[1] - 0.1, TOP[0] + 0.1, TOP[1] + 0.1], vel=[-1.8, -0.5, 1.8, 2.0],
+              acc=[0, -6], life=[0.4, 0.8], size=[0.05, 0.1], tint="#ffd080", a=1),
+        burst("task_eject_puff.png", 10, 4.25, 18, area=[-1.3, -3.6, 0.9, -3.3], vel=[-1.0, 0.4, 1.0, 1.6], drag=1.2,
+              life=[1.2, 2.0], size=[0.6, 1.2], grow=0.6, tint="#9c8aa8", a=0.5),
+    ],
+    "events": [ev(0, sound="rush", vol=0.2), ev(1.5, sound="creak", vol=0.5), ev(2.35, sound="click", vol=0.8), ev(2.35, sound="slam", vol=0.35),
+               ev(2.4, shake=[0.3, 0.05]), ev(2.9, sound="creak", vol=0.7), ev(3.25, sound="click", vol=0.9), ev(3.3, sound="whoosh", vol=0.8),
+               ev(4.25, sound="thud", vol=0.6), ev(4.25, shake=[0.35, 0.08]), ev(5.6, sound="creak", vol=0.25)],
+})
+
+# ---------------------------------------------------------------------------- Park: Wildwasserbahn
+# Das Baumstammboot gleitet die Rinne entlang, das Wasser rauscht. An der Kante kippt es, haengt einen
+# Moment - der Spieler hebt vom Sitz ab - und rauscht die Rutsche hinab. Riesige Gischt. Das Boot taucht
+# wieder auf und schaukelt - leer.
+WL = PK.FLUME_Y + 0.14
+SCENES.append({
+    "id": "flume", "map": "park", "title": "Wildwasserbahn", "length": 7.2, "text": [1.2, 2.5],
+    "bounds": [12, 6.8],
+    "camera": [key(0, "lin", z=1.15, x=-1.2, y=0.0), key(2.7, z=1.18, x=0.6, y=-0.15), key(3.7, "out", z=1.14, x=2.1, y=-0.9),
+               key(7.2, z=1.12, x=2.3, y=-0.9)],
+    "objects": [
+        {"id": "bg", "sprite": "task_eject_pk_flume_bg.jpg", "z": -100},
+        {"id": "boat", "keys": [key(0, "lin", x=-7, y=WL, rot=0), key(2.7, "lin", x=1.2, y=WL, rot=0), key(3.0, "out", x=1.55, y=WL, rot=-14),
+                                key(3.3, "hold", x=1.55, y=WL, rot=-14), key(3.45, "in", x=2.05, y=-0.15, rot=-40),
+                                key(3.62, "lin", x=2.75, y=-1.3, rot=-58), key(3.8, "lin", x=3.35, y=-2.15, rot=-28),
+                                key(4.0, "out", x=3.7, y=-3.0, rot=-12), key(4.9, "hold", x=3.9, y=-3.0, rot=0),
+                                key(5.4, "out", x=3.95, y=PK.POOL_Y + 0.12, rot=6)],
+         "wobble": [{"p": "y", "amp": 0.04, "f": 1.5, "t0": 0, "t1": 2.7}, {"p": "rot", "amp": 2.5, "f": 1.1, "t0": 0, "t1": 2.7},
+                    {"p": "y", "amp": 0.05, "f": 0.8, "t0": 5.4, "t1": 7.2}, {"p": "rot", "amp": 4, "f": 0.6, "t0": 5.4, "t1": 7.2}]},
+        {"id": "log", "sprite": "task_eject_pk_log.png", "parent": "boat", "z": 6},
+        {"id": "poolFg", "sprite": "task_eject_pk_pool_fg.png", "z": 20, "x": 5.2, "y": PK.POOL_Y - 0.45,
+         "wobble": [{"p": "x", "amp": 0.08, "f": 0.3}]},
+    ],
+    "player": {"parent": "boat", "hide": 3.82, "keys": [
+        key(0, "lin", x=-0.15, y=0.3, rot=0, s=0.6, sx=1, sy=1, flip=1), key(3.0, "hold", flip=-1), key(3.25, "hold", flip=1),
+        key(3.3, "hold", y=0.3, rot=0, sx=1, sy=1), key(3.5, "out", y=0.8, rot=20, sx=0.88, sy=1.15)],
+        "wobble": [{"p": "rot", "amp": 4, "f": 0.8, "t0": 0, "t1": 2.7}]},
+    "emitters": [
+        em("task_eject_streak.png", -30, t0=0, t1=7.2, rate=24, area=[-6.5, PK.FLUME_Y - 0.02, PK.FLUME_EDGE, PK.FLUME_Y + 0.04],
+           vel=[2.0, 0, 3.0, 0], life=[0.6, 1.2], size=[0.2, 0.35], tint="#bfe4f6", a=0.5, stretch=True),
+        burst("task_eject_droplet.png", 22, 3.82, 34, area=[3.0, -2.3, 3.8, -2.1], vel=[-2.4, 2.5, 2.4, 6.5], acc=[0, -9],
+              life=[0.6, 1.0], size=[0.06, 0.13], tint="#dff2ff", a=0.9, stretch=True),
+        burst("task_eject_puff.png", 23, 3.82, 26, area=[2.8, -2.4, 4.0, -2.0], vel=[-1.4, 0.8, 1.4, 3.2], drag=1.2,
+              life=[1.2, 2.2], size=[0.7, 1.4], grow=0.6, tint="#eaf4fa", a=0.6),
+        burst("task_eject_ripple.png", 21, 5.4, 3, area=[3.8, PK.POOL_Y - 0.05, 4.1, PK.POOL_Y + 0.05], life=[0.9, 1.4], size=[0.4, 0.6],
+              grow=2.0, tint="#cfe6f6", a=0.6),
+    ],
+    "events": [ev(0, sound="rush", vol=0.4), ev(2.9, sound="creak", vol=0.6), ev(3.3, sound="whoosh", vol=0.8),
+               ev(3.82, sound="splash", vol=1.0), ev(3.82, shake=[0.45, 0.1]), ev(5.4, sound="splash", vol=0.3)],
+})
+
+# ---------------------------------------------------------------------------- Park: Geisterbahn
+# Der Wagen rattert zum Tunnelende. Das Pappmache-Maul steht halb offen. Die Augen gluehen auf, das Maul
+# reisst weit auf, Fledermaeuse flattern heraus - der Wagen ruckt hinein, das Maul klappt zu. Kauen.
+# Ein Ruelpser - und der leere Wagen rollt rueckwaerts wieder heraus.
+HINGE = (6.5, -0.2)
+CARY = PK.TRACK_Y + 0.55
+EYES = [((150 - 460) / 100, (214.5 - 130) / 100), ((300 - 460) / 100, (214.5 - 110) / 100)]
+SCENES.append({
+    "id": "ghosttrain", "map": "park", "title": "Geisterbahn", "length": 7.0, "text": [1.0, 2.4],
+    "bounds": [12, 6.8],
+    "camera": [key(0, "lin", z=1.12, x=-1.5, y=-0.4), key(2.4, z=1.15, x=0.6, y=-0.5), key(3.75, "out", z=1.3, x=2.0, y=-0.6),
+               key(5.0, z=1.2, x=1.4, y=-0.5), key(7.0, z=1.15, x=1.0, y=-0.4)],
+    "objects": [
+        {"id": "bg", "sprite": "task_eject_pk_ghost_bg.jpg", "z": -100},
+        {"id": "throat", "sprite": "task_eject_glow.png", "z": -60, "x": 4.2, "y": -0.9, "sx": 4, "sy": 2.2, "tint": "#ff2a3a",
+         "keys": [key(0, a=0.15), key(2.6, "hold", a=0.15), key(2.8, a=0.45), key(3.75, "hold", a=0.45), key(3.8, a=0.1)],
+         "flicker": {"amp": 0.4, "f": 3}},
+        {"id": "car", "keys": [key(0, "lin", x=-7, y=CARY, a=1), key(2.4, "out", x=-0.2), key(3.1, "hold", x=-0.2), key(3.65, "in", x=3.2),
+                               key(3.76, "hold", a=1), key(3.77, "hold", a=0), key(5.15, "hold", a=0, x=3.0), key(5.16, "hold", a=1),
+                               key(6.3, "out", x=-0.6)],
+         "wobble": [{"p": "y", "amp": 0.03, "f": 7, "t0": 0, "t1": 2.4}, {"p": "y", "amp": 0.03, "f": 8, "t0": 5.2, "t1": 6.3}]},
+        {"id": "gcar", "sprite": "task_eject_pk_ghostcar.png", "parent": "car", "z": 6},
+        {"id": "jaw", "sprite": "task_eject_pk_maw_jaw.png", "z": 10, "x": PK.MAW_X + 2.1, "y": -1.55},
+        {"id": "maw", "sprite": "task_eject_pk_maw_top.png", "z": 12, "x": HINGE[0], "y": HINGE[1], "pivot": [0.92, 0.35],
+         "keys": [key(0, rot=-9), key(2.75, "hold", rot=-9), key(2.95, "out", rot=-17), key(3.62, "hold", rot=-17), key(3.75, "in", rot=0),
+                  key(3.85, "out", rot=-1.5), key(3.95, rot=0), key(4.95, "hold", rot=0), key(5.15, "out", rot=-13), key(6.2, "hold", rot=-13),
+                  key(6.45, "in", rot=-6)],
+         "wobble": [{"p": "rot", "amp": 1.6, "f": 3.2, "t0": 4.0, "t1": 4.9}]},
+    ] + [
+        {"id": f"eye{i}", "sprite": "task_eject_glow.png", "parent": "maw", "z": 13, "x": ex, "y": ey, "s": 0.9, "tint": "#ff3030",
+         "keys": [key(0, "hold", a=0), key(2.55, "hold", a=0), key(2.75, a=0.9), key(6.4, a=0.9), key(7.0, a=0.3)],
+         "flicker": {"amp": 0.3, "f": 5 + i}} for i, (ex, ey) in enumerate(EYES)
+    ],
+    "player": {"parent": "car", "hide": 3.77, "keys": [
+        key(0, "lin", x=-0.2, y=0.3, s=0.62, sx=1, sy=1, flip=1), key(2.6, "hold", flip=-1), key(2.95, "hold", flip=1),
+        key(3.05, sx=1, sy=1), key(3.15, "out", sx=1.12, sy=0.88), key(3.3, sx=1, sy=1)],
+        "wobble": [{"p": "y", "amp": 0.03, "f": 7, "t0": 0, "t1": 2.4}, {"p": "x", "amp": 0.025, "f": 14, "t0": 2.75, "t1": 3.1}]},
+    "emitters": [
+        burst("task_eject_pk_bat.png", 14, 2.85, 10, area=[2.6, -1.0, 3.6, 0.0], vel=[-4.2, 0.4, -2.0, 2.6], life=[1.2, 1.9],
+              size=[0.3, 0.5], spin=[-60, 60], a=1),
+        burst("task_eject_puff.png", 14, 5.1, 14, area=[2.2, -1.2, 2.8, -0.6], vel=[-1.6, -0.2, -0.4, 0.8], drag=1.4,
+              life=[1.0, 1.8], size=[0.5, 1.0], grow=0.7, tint="#86b07a", a=0.5),
+    ],
+    "events": [ev(t, sound="clack", vol=0.35) for t in (0.2, 0.6, 1.0, 1.4, 1.8, 2.2, 5.3, 5.7, 6.1)]
+              + [ev(2.6, sound="growl", vol=0.5), ev(2.85, sound="whoosh", vol=0.4), ev(3.1, sound="roar", vol=0.7),
+                 ev(3.75, sound="slam", vol=1.0), ev(3.75, shake=[0.4, 0.12]), ev(4.0, sound="grind", vol=0.5),
+                 ev(5.05, sound="growl", vol=0.35), ev(6.45, sound="slam", vol=0.4)],
+})
+
+# ---------------------------------------------------------------------------- Park: Looping
+# Die Kette klackert, der Wagen schiesst in den Looping - und hebt oben ab: kopfueber verlaesst er die
+# Schiene, trudelt ueber den Park davon und wird ein funkelnder Punkt am Himmel.
+LCX, LCY = PK.LOOP_C
+LR = PK.LOOP_R - 0.4
+loop_keys = [key(0, "lin", x=-7, y=PK.LOOP_BASE + 0.4, rot=0, s=1), key(2.0, "in", x=LCX, y=PK.LOOP_BASE + 0.4, rot=0)]
+for i in range(1, 9):
+    ph = -90 + i * 22.5
+    loop_keys.append(key(2.0 + i * 0.125, "lin", x=round(LCX + LR * _m.cos(_m.radians(ph)), 3),
+                         y=round(LCY + LR * _m.sin(_m.radians(ph)), 3), rot=ph + 90, **({"s": 1} if i == 8 else {})))
+FLY = (-4.2, 1.7)
+loop_keys.append(key(4.6, "out", x=FLY[0], y=FLY[1], rot=180 + 720, s=0.1))
+SCENES.append({
+    "id": "loop", "map": "park", "title": "Looping", "length": 7.0, "text": [1.0, 2.4],
+    "bounds": [12, 6.8],
+    "camera": [key(0, "lin", z=1.1, x=-1.5, y=-0.4), key(2.0, z=1.1, x=0.2, y=0.0), key(3.0, z=1.1, x=0.2, y=0.3),
+               key(4.6, "io", z=1.08, x=-2.3, y=1.1), key(7.0, z=1.06, x=-2.2, y=1.0)],
+    "objects": [
+        {"id": "bg", "sprite": "task_eject_pk_loop_bg.jpg", "z": -100},
+        {"id": "car", "keys": loop_keys},
+        {"id": "coaster", "sprite": "task_eject_pk_coaster.png", "parent": "car", "z": 6},
+        {"id": "twinkle", "sprite": "task_eject_glow.png", "z": -50, "x": FLY[0], "y": FLY[1], "tint": "#fff4c8",
+         "keys": [key(0, "hold", a=0, s=0.4), key(4.6, "hold", a=0, s=0.4), key(4.72, "out", a=0.95, s=1.2), key(5.6, a=0, s=0.8)]},
+    ],
+    "player": {"parent": "car", "hide": 4.6, "keys": [
+        key(0, "lin", x=-0.25, y=0.32, s=0.6, sx=1, sy=1, flip=1), key(2.0, sx=1, sy=1), key(2.5, "out", sx=0.9, sy=1.1),
+        key(3.0, y=0.32, sx=1, sy=1), key(3.2, "out", y=0.45, sx=0.85, sy=1.2)],
+        "wobble": [{"p": "y", "amp": 0.02, "f": 6, "t0": 0, "t1": 2.0}]},
+    "emitters": [
+        em("task_eject_streak.png", 4, t0=2.0, t1=3.0, rate=40, area=[LCX - 1.6, LCY - 1.6, LCX + 1.6, LCY + 1.6], vel=[-0.5, -0.5, 0.5, 0.5],
+           life=[0.2, 0.35], size=[0.2, 0.35], tint="#ffe0c0", a=0.4, stretch=True),
+        burst("task_eject_mote.png", 7, 3.0, 18, area=[LCX - 0.3, LCY + 1.4, LCX + 0.3, LCY + 1.7], vel=[-1.8, -0.4, 0.8, 1.6], acc=[0, -5],
+              life=[0.5, 0.9], size=[0.05, 0.1], tint="#ffd080", a=1),
+    ],
+    "events": [ev(t, sound="clack", vol=0.3) for t in (0.2, 0.5, 0.8, 1.1, 1.4, 1.7)]
+              + [ev(2.0, sound="rush", vol=0.6), ev(3.0, sound="click", vol=0.8), ev(3.05, sound="whoosh", vol=0.9),
+                 ev(4.65, sound="chime", vol=0.55)],
+})
+
+
+# ---------------------------------------------------------------------------- SKIP: Park - Leeres Karussell
+# Niemand fliegt. Das Karussell dreht sich allein, die Orgel spielt, die Pferde heben und senken sich.
+# Kein Mensch weit und breit. Am Ende verstummt die Orgel, die Lichter gehen aus.
+def _passes(z, x0, x1, dur, gap, length, extra):
+    out = []
+    t0 = -dur
+    i = 0
+    while t0 < length:
+        keys = []
+        def at(t):
+            return x0 + (x1 - x0) * (t - t0) / dur
+        ts = max(0.0, t0)
+        te = min(length, t0 + dur)
+        if te <= 0:
+            t0 += gap
+            continue
+        fade = 0.45
+        a0 = min(1.0, (ts - t0) / fade)
+        keys.append(key(round(ts, 3), "lin", x=round(at(ts), 3), a=round(a0, 3)))
+        if t0 + fade > ts:
+            keys.append(key(round(t0 + fade, 3), "lin", x=round(at(t0 + fade), 3), a=1))
+        if t0 + dur - fade < te:
+            keys.append(key(round(t0 + dur - fade, 3), "lin", x=round(at(t0 + dur - fade), 3), a=1))
+        keys.append(key(round(te, 3), "lin", x=round(at(te), 3), a=round(min(1.0, (t0 + dur - te) / fade), 3)))
+        o = {"id": f"horse{z}_{i}", "sprite": "task_eject_pk_horse.png", "z": z, "pivot": [0.5, 0.15], "keys": keys,
+             "wobble": [{"p": "y", "amp": 0.13, "f": 0.9, "ph": i * 1.7}]}
+        o.update(extra)
+        out.append(o)
+        t0 += gap
+        i += 1
+    return out
+
+
+SCENES.append({
+    "id": "skip_carousel", "map": "park", "skip": True, "title": "Leeres Karussell", "length": 6.6, "text": [1.0, 2.8],
+    "bounds": [12, 6.8],
+    "camera": [key(0, "lin", z=1.02, x=0, y=0.15), key(6.6, z=1.12, x=0, y=0.15)],
+    "objects": [
+        {"id": "bg", "sprite": "task_eject_pk_fair_bg.jpg", "z": -100},
+        {"id": "glow", "sprite": "task_eject_glow.png", "z": -20, "x": 0, "y": 0.2, "sx": 7, "sy": 4, "tint": "#ffc880",
+         "keys": [key(0, a=0.35), key(5.8, "hold", a=0.35), key(5.85, a=0.05)], "flicker": {"amp": 0.8, "f": 7, "t0": 5.4, "t1": 5.8}},
+        {"id": "base", "sprite": "task_eject_pk_carousel_base.png", "z": -12, "x": 0, "y": -1.25},
+        {"id": "core", "sprite": "task_eject_pk_carousel_core.png", "z": -4, "x": 0, "y": -0.1},
+        {"id": "top", "sprite": "task_eject_pk_carousel_top.png", "z": 30, "x": 0, "y": 1.95},
+        {"id": "dark", "sprite": "task_eject_px.png", "z": 40, "s": 100, "tint": "#000000",
+         "keys": [key(0, "hold", a=0), key(5.8, "hold", a=0), key(5.9, "in", a=0.5)]},
+    ] + _passes(2, -3.1, 3.1, 3.4, 1.1, 6.6, {"y": -0.95, "s": 0.95})
+      + _passes(-8, 2.6, -2.6, 3.4, 1.1, 6.6, {"y": -0.6, "s": 0.75, "sx": -1, "b": 0.55}),
+    "player": {"keys": [key(0, "lin", x=0, y=0, s=1)]},
+    "emitters": [],
+    "events": [ev(0, sound="organ", vol=0.5), ev(5.85, sound="click", vol=0.6)],
+})
+
+# ---------------------------------------------------------------------------- SKIP: Park - Popcorn und Pappclown
+# Niemand fliegt. Die Popcornmaschine ploppt munter vor sich hin, keiner steht an der Bude. Daneben der
+# Pappclown mit der winkenden Hand. Ganz langsam dreht er den Kopf - und schaut dich an. Plopp.
+CLOWN = (-3.6, -2.2)
+SCENES.append({
+    "id": "skip_popcorn", "map": "park", "skip": True, "title": "Popcorn und Pappclown", "length": 6.4, "text": [1.0, 2.8],
+    "bounds": [12, 6.8],
+    "camera": [key(0, "lin", z=1.08, x=-0.4, y=-0.6), key(3.9, z=1.14, x=-0.8, y=-0.5), key(4.6, "io", z=1.32, x=-2.6, y=-0.3),
+               key(6.4, z=1.34, x=-2.7, y=-0.3)],
+    "objects": [
+        {"id": "bg", "sprite": "task_eject_pk_fair_bg.jpg", "z": -100},
+        {"id": "lamp", "sprite": "task_eject_glow.png", "z": -30, "x": 1.3, "y": 0.1, "s": 4, "tint": "#ffd090", "a": 0.4,
+         "flicker": {"amp": 0.15, "f": 4}},
+        {"id": "popper", "sprite": "task_eject_pk_popper.png", "z": 4, "x": 1.3, "y": -0.2},
+        {"id": "counter", "sprite": "task_eject_pk_counter.png", "z": 10, "x": 0.4, "y": -2.2},
+        {"id": "kernel", "sprite": "task_eject_pk_kernel.png", "z": 12, "s": 1.2,
+         "keys": [key(0, "hold", a=0, x=1.3, y=0.3, rot=0), key(5.0, "hold", a=1, x=1.3, y=0.3), key(5.55, "lin", x=-0.5, y=-1.25, rot=420, arc=1.3),
+                  key(5.7, "out", x=-0.7, y=-1.2, rot=450), key(5.85, "in", x=-0.8, y=-1.25, rot=470)]},
+        {"id": "clown", "sprite": "task_eject_pk_clown_body.png", "z": 2, "x": CLOWN[0], "y": CLOWN[1], "pivot": [0.5, 0], "s": 1.1},
+        {"id": "head", "sprite": "task_eject_pk_clown_head.png", "z": 3, "x": CLOWN[0] - 0.05, "y": CLOWN[1] + 1.6, "pivot": [0.5, 0.05], "s": 1.1,
+         "keys": [key(0, rot=4), key(3.6, "hold", rot=4), key(4.6, "io", rot=-12), key(4.75, "out", rot=-10)]},
+        {"id": "eyes", "sprite": "task_eject_pk_clown_eyes.png", "parent": "head", "z": 4, "y": 0.67,
+         "keys": [key(0, x=0.1, s=1), key(3.6, "hold", x=0.1, s=1), key(4.6, "io", x=-0.02, s=1.18), key(6.4, x=-0.02, s=1.18)]},
+    ],
+    "player": {"keys": [key(0, "lin", x=0, y=0, s=1)]},
+    "emitters": [
+        em("task_eject_pk_kernel.png", 5, t0=0, t1=6.2, rate=10, area=[1.2, 0.25, 1.4, 0.32], vel=[-1.1, 0.6, 1.1, 2.0], acc=[0, -6],
+           life=[0.45, 0.7], size=[0.12, 0.18], spin=[-300, 300], rot=[0, 360], a=1),
+    ],
+    "events": [ev(t, sound="pop", vol=0.3) for t in (0.3, 0.7, 0.9, 1.4, 1.6, 2.1, 2.5, 2.6, 3.0, 3.5, 3.9, 4.4, 5.8)]
+              + [ev(3.7, sound="creak", vol=0.45), ev(5.0, sound="pop", vol=0.8)],
+})
+
+
 # ============================================================================ Unknown's Collection: Void
 # Eigene Datei fuer UC (UnknownsCollection/Resources/eject_void.json), spielt auf jeder Karte.
 # Der Rauswurf faellt durch den Void: der Spieler treibt ins violette Nichts, hinter ihm oeffnet sich ein

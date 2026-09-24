@@ -116,6 +116,12 @@ internal static class AtlasTasks
                 }
                 // "world:storm" usw.: Welt-System ausloesen, nach 6 s Bildschirmfoto
                 // "eject:2": Rauswurf-Szene Nr. 2 der Karte, drei Fotos im Verlauf
+                if (kind == "extraroom")
+                {
+                    AtlasRoomDiag.Begin();
+                    _diagPhase = 10;
+                    return;
+                }
                 if (kind == "voidscene")
                 {
                     AtlasEject.DiagVoid();
@@ -191,6 +197,9 @@ internal static class AtlasTasks
                 AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: {kind} finished");
                 _diagPhase = 4;
                 break;
+            case 10:
+                if (AtlasRoomDiag.Tick()) _diagPhase = 4;
+                break;
             case 6:
                 if (Time.time < _shotAt) return;
                 Shot(kind, "view");
@@ -212,7 +221,7 @@ internal static class AtlasTasks
         }
     }
 
-    private static void Shot(string kind, string tag)
+    internal static void Shot(string kind, string tag)
     {
         string dir = System.IO.Path.Combine(BepInEx.Paths.GameRootPath, "AtlasShots");
         System.IO.Directory.CreateDirectory(dir);

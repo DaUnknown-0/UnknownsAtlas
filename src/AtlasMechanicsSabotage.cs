@@ -144,7 +144,7 @@ internal sealed class HoldTrackMechanic : IAtlasMechanic
         SetEngaged(_grace > 0f);
         if (AtlasMinigame.DiagStep >= 0) { _diagHeld = _engaged ? _diagHeld + dt : _diagHeld; if (_diagHeld > 2.5f) Done = true; }
         int users = r != null ? r.UserCount : 0;
-        _msg.text = _engaged ? (users >= 2 ? "HOLDING..." : "WAITING FOR PARTNER") : (_fire ? "HIT THE FLAMES" : "TRACK THE PRINT");
+        _msg.text = _engaged ? (users >= 2 ? "HOLDING..." : "WAITING FOR PARTNER") : AtlasTaskKit.T(_fire ? "HIT THE FLAMES" : "TRACK THE PRINT");
     }
 
     public void Simulate(float dt, out Vector2 mouse, out bool down)
@@ -493,7 +493,7 @@ internal sealed class TuneMechanic : IAtlasMechanic
         {
             _dish.localEulerAngles = new Vector3(0, 0, _ea * 60f);
             int bars = Mathf.Clamp(Mathf.RoundToInt(q * 5f), 0, 5);
-            _bars.text = "SIGNAL " + new string('|', bars) + new string('.', 5 - bars);
+            _bars.text = AtlasTaskKit.T("SIGNAL") + " " + new string('|', bars) + new string('.', 5 - bars);
         }
         else
         {

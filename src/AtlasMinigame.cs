@@ -63,6 +63,7 @@ public class AtlasMinigame : Minigame
             try { ctx.ConsoleId = Console != null ? Console.ConsoleId : 0; } catch { ctx.ConsoleId = 0; }
             var divert = MyTask != null ? MyTask.TryCast<DivertPowerTask>() : null;
             if (divert != null) ctx.Target = divert.TargetSystem;
+            AtlasTaskKit.Kind = kind;                                   // fuer "art:datei" in TaskArt/TaskText
             _mech = Create(kind, ctx.Step);
             if (_mech == null) { AtlasPlugin.Logger.LogError($"[Atlas/Task] unknown kind '{kind}'"); Close(); return; }
             gameObject.layer = 5;
@@ -119,6 +120,27 @@ public class AtlasMinigame : Minigame
         "cctv" => new TuneMechanic(false),
         "antenna" => new TuneMechanic(true),
         "sawlog" => new SawMechanic(),
+        // Moonlight Carnival: bekannte Bausteine, eigene Grafik und Texte ueber AtlasMapDef.TaskArt/TaskText
+        "lightstring" => new SpliceMechanic(),
+        "motors" => new ClimateMechanic(),
+        "parade" => new PatrolMechanic(),
+        "candy" => new DustMechanic(),
+        "ridepower" => step == 0 ? new RouteMechanic() : new SwitchMechanic(false),
+        "spotlights" => new VaultMechanic(),
+        "balloon" => new BinocularsMechanic(),
+        "ridekeys" => new HieroMechanic(),
+        "photos" => new TransferMechanic(true),
+        "ridemotors" => step == 0 ? new AlignMechanic("task_park_panel.png", "task_park_gear.png", "CAROUSEL")
+                                  : new AlignMechanic("task_park_panel.png", "task_park_bumper.png", "BUMPER CARS"),
+        "gallery" => new TargetsMechanic(true),
+        "popcorn" => step == 0 ? new SortMechanic(false, park: true) : new HoldLeverMechanic(false),
+        "ridefuel" => new FillMechanic(step % 2 == 1, true),
+        "allergen" => new SampleMechanic(false),
+        "brakes" => new PumpMechanic(),
+        "brakefail" => new HoldTrackMechanic(false),
+        "ammonia" => new ValvePlanMechanic(),
+        "blackout" => new SwitchesMechanic(false),
+        "feedback" => new TuneMechanic(true),
         _ => null,
     };
 
@@ -181,7 +203,11 @@ public class AtlasMinigame : Minigame
         AtlasPlugin.Logger.LogInfo($"[Atlas/Task] {task.TaskType}: step {before} -> {task.taskStep} of {max} (showStep={task.ShowTaskStep}, complete={task.IsComplete})");
     }
 
-    public void OnDestroy() => _mech?.Dispose();
+    public void OnDestroy()
+    {
+        _mech?.Dispose();
+        AtlasTaskKit.Kind = null;
+    }
 }
 
 /// <summary>Eine Minispiel-Mechanik (Baustein).</summary>
@@ -201,6 +227,22 @@ internal interface IAtlasMechanic
 
 internal static class AtlasTaskKit
 {
+    /// <summary>Baustein-Art des offenen Minispiels ("gallery"); es ist immer nur eins offen.</summary>
+    internal static string Kind;
+
+    /// <summary>Grafikdatei dieser Karte (AtlasMapDef.TaskArt): erst "art:datei", dann "datei".</summary>
+    public static string Art(string file) => Lookup(AtlasMuseumBuilder.D?.TaskArt, file);
+
+    /// <summary>Minispiel-Text dieser Karte (AtlasMapDef.TaskText), gleiche Regel wie Art.</summary>
+    public static string T(string text) => Lookup(AtlasMuseumBuilder.D?.TaskText, text);
+
+    private static string Lookup(Dictionary<string, string> map, string key)
+    {
+        if (map == null || map.Count == 0 || string.IsNullOrEmpty(key) || !AtlasMuseumBuilder.Active) return key;
+        if (Kind != null && map.TryGetValue(Kind + ":" + key, out var own)) return own;
+        return map.TryGetValue(key, out var all) ? all : key;
+    }
+
     public static SpriteRenderer Sprite(Transform parent, string file, float ppu, Vector2 pos, int order, Vector2? pivot = null)
     {
         var go = new GameObject(file) { layer = 5 };

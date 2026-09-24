@@ -225,6 +225,12 @@ internal static class AtlasMapShot
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} view shot -> {file}");
     }
 
+    /// <summary>Park-Diagnose: Gesamtbild waehrend eines Fahrgeschaefts (Zug, Boot, Karussell sichtbar).</summary>
+    internal static void DiagCapture()
+    {
+        try { Capture(); } catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} diag capture: {e.Message}"); }
+    }
+
     private static void Capture()
     {
         float w = AtlasMuseumBuilder.D.MaxX - AtlasMuseumBuilder.D.MinX;

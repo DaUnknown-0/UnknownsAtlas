@@ -275,7 +275,9 @@ internal sealed class VaultMechanic : IAtlasMechanic
             t.localScale = Vector3.one * 0.8f;
             _mirrorT[kv.Key] = t;
         }
-        _beam = MatchKit.Line(root, new Color(1f, 0.2f, 0.2f, 0.9f), 0.07f, 5, 16);
+        // Museum: roter Laser; Park: warmer Scheinwerferstrahl
+        _beam = MatchKit.Line(root, ctx.Map == "park" ? new Color(1f, 0.88f, 0.45f, 0.9f) : new Color(1f, 0.2f, 0.2f, 0.9f),
+                              ctx.Map == "park" ? 0.11f : 0.07f, 5, 16);
         Trace();
     }
 

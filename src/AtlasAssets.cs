@@ -96,6 +96,7 @@ internal static class AtlasAssets
     /// <summary>Grafik eines eigenen Minispiels (assets/task_*.png), gecacht.</summary>
     public static Sprite TaskSprite(string file, float ppu, Vector2 pivot)
     {
+        file = AtlasTaskKit.Art(file);                                // Kartengrafik (AtlasMapDef.TaskArt)
         string res = $"UnknownsAtlas.Resources.{file}";
         string key = $"{res}@{ppu:F1}@{pivot.x:F3},{pivot.y:F3}";
         if (MapSprites.TryGetValue(key, out var cached) && cached != null) return cached;
@@ -115,7 +116,7 @@ internal static class AtlasAssets
     }
 
     /// <summary>Frische, LESBARE Kopie einer Minispiel-Textur (z. B. die Staubschicht, die man wegwischt).</summary>
-    public static Texture2D TaskTextureCopy(string file) => LoadTexture($"UnknownsAtlas.Resources.{file}");
+    public static Texture2D TaskTextureCopy(string file) => LoadTexture($"UnknownsAtlas.Resources.{AtlasTaskKit.Art(file)}");
 
     /// <summary>Minimap der Karte in Kartenraum-Einheiten (Weltmeter / MapScale).</summary>
     public static Sprite MapMinimapSprite(AtlasMapDef m, float mapScale)

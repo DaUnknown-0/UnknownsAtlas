@@ -91,7 +91,7 @@ internal static class MatchKit
         try { src = HudManager.Instance != null ? HudManager.Instance.GetComponentInChildren<TextMeshPro>(true) : null; } catch { }
         if (src == null) src = Object.FindObjectOfType<TextMeshPro>();
         if (src != null) { t.font = src.font; t.fontSharedMaterial = src.fontSharedMaterial; }
-        t.text = text;
+        t.text = AtlasTaskKit.T(text);
         t.fontSize = size;
         t.color = color;
         t.alignment = TextAlignmentOptions.Center;
@@ -286,12 +286,14 @@ internal sealed class SortMechanic : IAtlasMechanic
 
     private readonly bool _grate;
 
-    public SortMechanic(bool wald, bool grate = false)
+    public SortMechanic(bool wald, bool grate = false, bool park = false)
     {
         _grate = grate;
         _panel = wald ? "task_wald_panel.png" : "task_museum_panel.png";
         _bins = grate
             ? new[] { ("compost", "BUCKET", new[] { "leaves", "twig" }) }
+            : park
+            ? new[] { ("food", "FOOD", new[] { "popcorn", "candy", "hotdog" }), ("recycle", "RECYCLING", new[] { "cup", "can", "bottle" }), ("paper", "PAPER", new[] { "ticket", "brochure" }) }
             : wald
             ? new[] { ("compost", "COMPOST", new[] { "apple", "peel", "egg", "leaves" }), ("sack", "PACKAGING", new[] { "can", "carton", "wrapper" }) }
             : new[] { ("paper", "PAPER", new[] { "brochure", "ticket" }), ("glass", "GLASS", new[] { "bottle", "jar" }), ("rest", "OTHER", new[] { "wrapper", "apple" }) };

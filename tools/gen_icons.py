@@ -137,6 +137,48 @@ def forest():
     c.save("icon_wald.png")
 
 
+def carnival():
+    c = Icon()
+    wheel, wheel_d = (236, 232, 246, 255), (170, 160, 196, 255)
+    red, white, gold = (214, 46, 64, 255), (246, 238, 226, 255), (255, 214, 96, 255)
+    gond = [(236, 76, 92, 255), (72, 176, 226, 255), (250, 196, 64, 255), (120, 206, 110, 255), (186, 110, 226, 255)]
+    cx, cy, R = 150, 104, 70
+    # Stuetzen
+    c.poly([(cx - 6, cy), (cx + 6, cy), (cx + 52, 214), (cx + 38, 214)], wheel_d, sh=(0.1, 0.2))
+    c.poly([(cx - 6, cy), (cx + 6, cy), (cx - 38, 214), (cx - 52, 214)], wheel_d, sh=(0.1, 0.2))
+    # Lichtkranz
+    c.glow(cx, cy, R + 4, (255, 214, 120, 90), 7)
+    c.d.ellipse([(cx - R) * S, (cy - R) * S, (cx + R) * S, (cy + R) * S], outline=INK, width=16 * S)
+    c.d.ellipse([(cx - R) * S, (cy - R) * S, (cx + R) * S, (cy + R) * S], outline=wheel, width=8 * S)
+    for k in range(10):
+        a = 2 * math.pi * k / 10
+        c.d.line([(cx * S, cy * S), ((cx + R * math.cos(a)) * S, (cy + R * math.sin(a)) * S)], fill=wheel_d, width=4 * S)
+    for k in range(20):
+        a = 2 * math.pi * k / 20 + 0.16
+        bx, by = cx + R * math.cos(a), cy + R * math.sin(a)
+        c.d.ellipse([(bx - 3.2) * S, (by - 3.2) * S, (bx + 3.2) * S, (by + 3.2) * S], fill=gold)
+    for k in range(5):
+        a = 2 * math.pi * k / 5 - math.pi / 2 + 0.3
+        gx, gy = cx + R * math.cos(a), cy + R * math.sin(a)
+        c.rect(gx - 11, gy + 4, gx + 11, gy + 22, gond[k], lw=6 * S)
+    c.d.ellipse([(cx - 11) * S, (cy - 11) * S, (cx + 11) * S, (cy + 11) * S], fill=wheel, outline=INK, width=6 * S)
+    # Zelt vorne links
+    tx, tb = 82, 222
+    c.poly([(tx, 108), (tx - 64, 168), (tx + 64, 168)], red, sh=(0.18, 0.2))
+    for k in (-1, 1):
+        c.d.polygon([(tx * S, 112 * S), ((tx + k * 18) * S, 166 * S), ((tx + k * 34) * S, 166 * S)], fill=white)
+    c.line([(tx, 108), (tx - 64, 168), (tx + 64, 168), (tx, 108)], INK, 9)
+    c.rect(tx - 58, 168, tx + 58, tb, white)
+    for x in (tx - 58, tx - 30, tx + 2, tx + 30):
+        c.d.rectangle([x * S, 170 * S, (x + 14) * S, (tb - 4) * S], fill=red)
+    c.poly([(tx - 16, tb), (tx, 182), (tx + 16, tb)], (48, 18, 36, 255), lw=6 * S, sh=None)
+    c.glow(tx, 206, 12, (255, 190, 90, 120), 5)
+    c.line([(tx, 108), (tx, 88)], INK, 6)
+    c.poly([(tx, 88), (tx + 22, 94), (tx, 100)], gold, lw=5 * S, sh=None)
+    c.save("icon_park.png")
+
+
 if __name__ == "__main__":
     museum()
     forest()
+    carnival()

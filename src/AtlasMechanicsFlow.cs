@@ -799,7 +799,7 @@ internal sealed class TransferMechanic : IAtlasMechanic
         {
             if (_wald)
             {
-                _msg.text = "FIND THE ANIMAL";
+                _msg.text = AtlasTaskKit.T("FIND THE ANIMAL");
                 _answer = Random.Range(0, 6);
                 for (int i = 0; i < 6; i++)
                 {
@@ -839,7 +839,7 @@ internal sealed class TransferMechanic : IAtlasMechanic
             _slot = _wald ? new Vector2(1.6f, -0.15f) : new Vector2(1.6f, -0.5f);
             AtlasTaskKit.Sprite(root, _wald ? "task_pc.png" : "task_dock.png", 100f, _wald ? new Vector2(1.6f, 0.6f) : _slot, 1);
             _item = AtlasTaskKit.Sprite(root, _wald ? "task_sdcard.png" : "task_audioguide.png", 100f, _itemHome, 4).transform;
-            _msg.text = _wald ? "INSERT THE SD CARD" : "DOCK THE AUDIO GUIDE";
+            _msg.text = AtlasTaskKit.T(_wald ? "INSERT THE SD CARD" : "DOCK THE AUDIO GUIDE");
         }
     }
 
@@ -862,7 +862,7 @@ internal sealed class TransferMechanic : IAtlasMechanic
             foreach (var c in _choices)
                 if (MatchKit.In(mouse, c.P, new Vector2(0.9f, 0.7f)))
                 {
-                    if (c.Ok) { _running = true; _msg.text = _wald ? "COPYING" : "DOWNLOADING"; }
+                    if (c.Ok) { _running = true; _msg.text = AtlasTaskKit.T(_wald ? "COPYING" : "DOWNLOADING"); }
                     else _red = 1f;
                 }
             return;

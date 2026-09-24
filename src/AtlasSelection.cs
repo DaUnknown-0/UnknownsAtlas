@@ -12,7 +12,7 @@
 //     also vor dem Spawn des ShipStatus).
 // Ein Vanilla-Kartenknopf setzt die Auswahl zurueck. Spieler ohne Atlas sehen die Skeld.
 //
-// RPC 236 (ID-Registry): [236][Karten-Index] 0 = keine, 1 = Museum, 2 = Wald. Nur vom Host.
+// RPC 236 (ID-Registry): [236][Karten-Index] 0 = keine, 1 = Museum, 2 = Wald, 3 = Park. Nur vom Host.
 
 using System;
 using System.Collections.Generic;
@@ -38,6 +38,7 @@ internal static class AtlasSelection
     {
         ("museum", "Museum", AtlasMapDef.Museum, "button_museum.png", "icon_museum.png"),
         ("wald", "Forest", AtlasMapDef.Wald, "button_wald.png", "icon_wald.png"),
+        ("park", "Carnival", AtlasMapDef.Park, "button_park.png", "icon_park.png"),
     };
 
     private static int _current;   // 0 = keine
@@ -314,12 +315,35 @@ internal static class AtlasSelection
 
     // ------------------------------------------------------------ Freeplay-Menue
 
-    [HarmonyPostfix]
+    // Wie Submerged (MapSelectButtonPatches, 24.09.): VOR dem Vanilla-Show klonen und die Klone in
+    // popover.buttons eintragen. Show meldet genau dieses Array per OpenOverlayMenu als Menue-Elemente
+    // an; nur diese bekommen Hover (gruener Hintergrund) und Controller-Auswahl. Niedrige Prioritaet,
+    // damit der Submerged-Prefix zuerst laeuft und sein Knopf im Raster schon steht.
+    [HarmonyPrefix]
+    [HarmonyPriority(Priority.Low)]
     [HarmonyPatch(typeof(FreeplayPopover), nameof(FreeplayPopover.Show))]
-    internal static void FreeplayPopover_Show_Postfix(FreeplayPopover __instance)
+    internal static void FreeplayPopover_Show_Prefix(FreeplayPopover __instance)
     {
         try { AddFreeplayButtons(__instance); }
         catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} freeplay buttons failed: {e}"); }
+    }
+
+    // Jeder Kartenknopf (Vanilla, Submerged, Atlas) landet hier; die Atlas-Klone tragen map = Skeld
+    // und waehlen vorher ihre Atlas-Karte, alle anderen setzen die Auswahl zurueck.
+    [HarmonyPrefix]
+    [HarmonyPatch(typeof(FreeplayPopover), nameof(FreeplayPopover.OnMapButtonPressed))]
+    internal static void FreeplayPopover_OnMapButtonPressed_Prefix(FreeplayPopoverButton button)
+    {
+        try
+        {
+            int idx = 0;
+            string n = button != null ? button.name : null;
+            if (n != null && n.StartsWith("Atlas_", StringComparison.Ordinal))
+                for (int i = 0; i < Maps.Length; i++)
+                    if (n == $"Atlas_{Maps[i].Key}") { idx = i + 1; break; }
+            Set(idx, false);
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} freeplay map press: {e.Message}"); }
     }
 
     private static void AddFreeplayButtons(FreeplayPopover popover)
@@ -331,6 +355,7 @@ internal static class AtlasSelection
 
         var mapField = AccessTools.Property(typeof(FreeplayPopoverButton), "map");
         FreeplayPopoverButton skeld = null;
+        var added = new List<FreeplayPopoverButton>();
         float minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue;
         var xs = new List<float>();
         foreach (var b in all)
@@ -338,9 +363,6 @@ internal static class AtlasSelection
             var p = b.transform.localPosition;
             xs.Add(p.x);
             minX = Mathf.Min(minX, p.x); maxX = Mathf.Max(maxX, p.x); minY = Mathf.Min(minY, p.y);
-            // Vanilla-Knoepfe setzen die Auswahl zurueck
-            var pb = b.GetComponent<PassiveButton>();
-            if (pb != null) pb.OnClick.AddListener((Action)(() => Set(0, false)));
             var map = mapField != null ? (MapNames)mapField.GetValue(b) : MapNames.Skeld;
             if (map == MapNames.Skeld) skeld = b;
         }
@@ -361,32 +383,38 @@ internal static class AtlasSelection
 
         for (int i = 0; i < Maps.Length; i++)
         {
-            int idx = i + 1;
             var clone = Object.Instantiate(skeld.gameObject, skeld.transform.parent);
             clone.name = $"Atlas_{Maps[i].Key}";
-            // linke und rechte Spalte (die Mitte gehoert dem einzelnen Fungle-Knopf)
-            float x = cols.Count >= 2 ? (i == 0 ? cols[0] : cols[cols.Count - 1]) : cols[0] + (i - 0.5f) * 2.6f;
-            clone.transform.localPosition = new Vector3(x, rowY, skeld.transform.localPosition.z);
+            // Zeile 1: links Museum, rechts Wald. Zeile 2: der Park allein in der Mitte, wie der
+            // Fungle-Knopf im Vanilla-Raster (in der Mitte von Zeile 1 ueberlappte er beide, Test 23.09.)
+            float x = cols.Count >= 2
+                ? (i == 0 ? cols[0] : i == 1 ? cols[cols.Count - 1] : (cols[0] + cols[cols.Count - 1]) / 2f)
+                : cols[0] + (i - 1f) * 2.6f;
+            float y = i < 2 ? rowY : rowY - rowStep;
+            clone.transform.localPosition = new Vector3(x, y, skeld.transform.localPosition.z);
             // Skeld-Logo abdunkeln, Kartenname als Schrift darueber (keine eigene Grafik)
             if (!ApplyButtonArt(clone, Maps[i].Button))
             {
                 Tint(clone, i == 0 ? new Color(0.22f, 0.17f, 0.10f) : new Color(0.09f, 0.20f, 0.12f));
                 AddLabel(clone, Maps[i].Label, popover.gameObject);
             }
-            // Der Vanilla-Knopf meldet den Klick ueber OnPressEvent, das FreeplayPopover.Show zur
-            // Laufzeit abonniert; beim Klonen geht das Abo verloren (Test 23.09.: Karte gewaehlt,
-            // aber nichts gestartet). Deshalb startet der Klon die Skeld selbst.
+            // Der Klick laeuft ueber OnPressEvent -> FreeplayPopover.OnMapButtonPressed; das Abo
+            // haelt nur der Vanilla-Knopf (Instantiate kopiert es nicht, Test 23.09.), also wie
+            // Submerged den Delegate uebernehmen. Die Kartenwahl macht der OnMapButtonPressed-Prefix.
             var fpb = clone.GetComponent<FreeplayPopoverButton>();
-            if (fpb != null) fpb.OnPressEvent = null;
-            var pb = clone.GetComponent<PassiveButton>();
-            if (pb != null) pb.OnClick.AddListener((Action)(() =>
+            if (fpb != null)
             {
-                Set(idx, false);
-                try { popover.PlayMap(MapNames.Skeld); }
-                catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} freeplay start failed: {e.Message}"); }
-            }));
+                fpb.OnPressEvent = skeld.OnPressEvent;
+                added.Add(fpb);
+            }
         }
-        AtlasPlugin.Logger.LogInfo($"{LogPrefix} freeplay: {Maps.Length} map buttons added");
+        if (popover.buttons != null && added.Count > 0)
+        {
+            var list = new List<FreeplayPopoverButton>(popover.buttons);
+            list.AddRange(added);
+            popover.buttons = list.ToArray();
+        }
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} freeplay: {Maps.Length} map buttons added ({popover.buttons?.Length ?? 0} in the menu)");
     }
 
     // ------------------------------------------------------------- Lobby-Picker
@@ -579,6 +607,20 @@ internal static class AtlasUiShot
                 if (pop == null) { AtlasPlugin.Logger.LogWarning("[Atlas/Select] ui shot: no FreeplayPopover"); _phase = 2; return; }
                 pop.gameObject.SetActive(true);
                 pop.Show();
+                // Abnahme Menue-Anmeldung: ist der Park-Knopf ein waehlbares Menue-Element? Dann
+                // markieren, damit das Foto den Hover-Hintergrund zeigt.
+                try
+                {
+                    var park = GameObject.Find("Atlas_park")?.GetComponent<FreeplayPopoverButton>();
+                    var cm = ControllerManager.Instance;
+                    bool listed = false;
+                    var sel = cm?.CurrentUiState?.SelectableUiElements;
+                    if (sel != null && park != null)
+                        foreach (var e in sel) if (e != null && e.Pointer == park.Button.Pointer) { listed = true; break; }
+                    AtlasPlugin.Logger.LogInfo($"[Atlas/Select] ui shot: menu has {pop.buttons?.Length ?? 0} buttons, park selectable {listed}");
+                    if (park != null) cm?.SetCurrentSelected(park.Button);
+                }
+                catch (Exception e) { AtlasPlugin.Logger.LogWarning($"[Atlas/Select] ui shot select: {e.Message}"); }
                 _phase = 1; _t = Time.time + 1.5f;
             }
             else

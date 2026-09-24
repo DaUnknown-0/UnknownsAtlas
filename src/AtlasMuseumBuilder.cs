@@ -57,13 +57,18 @@ internal static class AtlasMuseumBuilder
     private static Material _defaultSpriteMaterial;
 
     /// <summary>Sprite dem Sichtsystem unterwerfen (hinter Waenden abgedunkelt wie die Skeld).</summary>
-    private static void Mask(SpriteRenderer sr)
+    internal static void Mask(SpriteRenderer sr)
     {
         if (sr != null && _maskingMaterial != null) sr.sharedMaterial = _maskingMaterial;
     }
 
     /// <summary>true, solange eine Museumsrunde laeuft (fuer die Raumnamen).</summary>
     internal static bool Active => _builtFor != null;
+
+    /// <summary>Name und Flaechenmitte je Raum-Typ der gebauten Karte, auch fuer Raum-Typen, die die
+    /// Skeld nicht kennt (Park-Konzept: zusaetzliche Raeume). Gefuellt in BuildRooms.</summary>
+    internal static readonly Dictionary<SystemTypes, string> RoomNames = new();
+    internal static readonly Dictionary<SystemTypes, Vector2> RoomCenters = new();
 
     internal static bool ShouldBuild(ShipStatus ship) =>
         AtlasPlugin.CfgEnabled is { Value: true } &&
@@ -125,12 +130,7 @@ internal static class AtlasMuseumBuilder
     internal static void TranslationController_GetString_Postfix(SystemTypes room, ref string __result)
     {
         if (!Active) return;
-        foreach (var r in D.Rooms)
-        {
-            if (r.Room != room) continue;
-            __result = r.Name;
-            return;
-        }
+        if (RoomNames.TryGetValue(room, out var name)) __result = name;
     }
 
     /// <summary>
@@ -628,7 +628,7 @@ internal static class AtlasMuseumBuilder
         return _feetOffset;
     }
 
-    private static float SortZ(float baseY) => (baseY + FeetOffset()) / 1000f;
+    internal static float SortZ(float baseY) => (baseY + FeetOffset()) / 1000f;
 
     /// <summary>Konsole wie ein Objekt mit Standlinie an ihrer Position einsortieren (statt der
     /// Skeld-Tiefe ~6,8, die sie hinter jedes Museumsmoebel legen wuerde).</summary>
@@ -858,6 +858,15 @@ internal static class AtlasMuseumBuilder
         var root = Child(world, "Atlas_Rooms", LayerIgnoreRaycast);
         var all = new List<PlainShipRoom>();
         var fast = new Il2CppSystem.Collections.Generic.Dictionary<SystemTypes, PlainShipRoom>();
+        RoomNames.Clear();
+        RoomCenters.Clear();
+
+        static Vector2 Mid(Vector2[] area)
+        {
+            Vector2 m = Vector2.zero;
+            foreach (var q in area) m += q;
+            return m / area.Length;
+        }
 
         PlainShipRoom Make(string name, SystemTypes type, Vector2[] area)
         {
@@ -885,9 +894,36 @@ internal static class AtlasMuseumBuilder
             var room = Make($"Room_{r.Key}", r.Room, r.Area);
             all.Add(room);
             if (!fast.ContainsKey(r.Room)) fast.Add(r.Room, room);
+            if (!RoomNames.ContainsKey(r.Room)) { RoomNames[r.Room] = r.Name; RoomCenters[r.Room] = Mid(r.Area); }
+        }
+
+        // Autotest "extraroom" (Park-Konzept, AtlasRoomDiag): der Gang am naechsten zum Spawn wird ein
+        // eigener Raum eines Typs, den die Skeld nicht kennt.
+        int diagHall = -1;
+        if (AtlasRoomDiag.Wanted && !fast.ContainsKey(AtlasRoomDiag.RoomType))
+        {
+            float best = float.MaxValue;
+            for (int i = 0; i < D.Hallways.Length; i++)
+            {
+                if (D.Hallways[i] == null || D.Hallways[i].Length < 3) continue;
+                float d = Vector2.Distance(Mid(D.Hallways[i]), D.Spawn);
+                if (d < best) { best = d; diagHall = i; }
+            }
         }
         for (int i = 0; i < D.Hallways.Length; i++)
+        {
+            if (i == diagHall)
+            {
+                var room = Make("Room_diag", AtlasRoomDiag.RoomType, D.Hallways[i]);
+                all.Add(room);
+                fast.Add(AtlasRoomDiag.RoomType, room);
+                RoomNames[AtlasRoomDiag.RoomType] = AtlasRoomDiag.RoomName;
+                RoomCenters[AtlasRoomDiag.RoomType] = Mid(D.Hallways[i]);
+                AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: hallway {i} is now the extra room {AtlasRoomDiag.RoomType} '{AtlasRoomDiag.RoomName}'");
+                continue;
+            }
             all.Add(Make($"Hallway_{i}", SystemTypes.Hallway, D.Hallways[i]));
+        }
 
         ship.AllRooms = new Il2CppReferenceArray<PlainShipRoom>(all.ToArray());
         ship.FastRooms = fast;
@@ -918,6 +954,16 @@ internal static class AtlasMuseumBuilder
                 v.Center = null;
             }
         }
+
+        // Querverbindungen ueber den dritten Nachbarn (Park: zwischen den Ringen)
+        foreach (var br in D.VentBridges)
+        {
+            if (br == null || br.Length < 2 || !byId.TryGetValue(br[0], out var va) || !byId.TryGetValue(br[1], out var vb)) continue;
+            va.Center = vb;
+            vb.Center = va;
+        }
+        foreach (var v in byId.Values)
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} vent {v.Id}: L={(v.Left != null ? v.Left.Id : -1)} R={(v.Right != null ? v.Right.Id : -1)} C={(v.Center != null ? v.Center.Id : -1)}");
 
         // AllVents: alles, was noch lebt (auch Vents, die andere Mods schon angemeldet haben).
         ship.AllVents = new Il2CppReferenceArray<Vent>(ship.AllVents.Where(v => v != null).ToArray());
@@ -1187,6 +1233,33 @@ internal static class AtlasMuseumBuilder
                 area.transform.position = new Vector3(p.x, p.y, area.transform.position.z);
                 counters++;
             }
+
+            // Raeume, die die Skeld nicht kennt (Park-Konzept): je ein geklonter Zaehler. TORs
+            // MapCountOverlay-Prefix liest FastRooms[RoomType] fuer JEDEN Zaehler (ein fehlender Eintrag
+            // wirft bei jedem Update), deshalb nur fuer Raeume, die BuildRooms in FastRooms eingetragen hat.
+            var list = new List<CounterArea>();
+            foreach (var a in copy.countOverlay.CountAreas) if (a != null) list.Add(a);
+            var template = list.Count > 0 ? list[0] : null;
+            int added = 0;
+            foreach (var kv in RoomCenters)
+            {
+                if (template == null || list.Exists(a => a.RoomType == kv.Key) || !ship.FastRooms.ContainsKey(kv.Key)) continue;
+                var go = Object.Instantiate(template.gameObject, template.transform.parent);
+                go.name = $"Atlas_Counter_{kv.Key}";
+                var clone = go.GetComponent<CounterArea>();
+                clone.RoomType = kv.Key;
+                var p = MapWorld(kv.Value);
+                go.transform.position = new Vector3(p.x, p.y, template.transform.position.z);
+                go.SetActive(true);
+                list.Add(clone);
+                added++;
+            }
+            if (added > 0)
+            {
+                copy.countOverlay.CountAreas = new Il2CppReferenceArray<CounterArea>(list.ToArray());
+                counters += added;
+                AtlasPlugin.Logger.LogInfo($"{LogPrefix} minimap: {added} extra counter(s) for rooms the Skeld does not have");
+            }
         }
 
         AtlasWorld.AddMapButtons(copy, MapWorld);
@@ -1203,19 +1276,7 @@ internal static class AtlasMuseumBuilder
         return false;
     }
 
-    private static bool RoomCenter(SystemTypes type, out Vector2 center)
-    {
-        foreach (var r in D.Rooms)
-        {
-            if (r.Room != type) continue;
-            Vector2 sum = Vector2.zero;
-            foreach (var p in r.Area) sum += p;
-            center = sum / r.Area.Length;
-            return true;
-        }
-        center = default;
-        return false;
-    }
+    private static bool RoomCenter(SystemTypes type, out Vector2 center) => RoomCenters.TryGetValue(type, out center);
 
     private static string Path(Transform t, Transform stop)
     {

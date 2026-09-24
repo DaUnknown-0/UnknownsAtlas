@@ -46,6 +46,19 @@ ROOF = (86, 54, 34)
 GROUND = (52, 92, 52)
 GROUND_DARK = (36, 68, 40)
 
+# Farben (Rummel-Schema fuer Moonlight Carnival): Kirschrot bis Magenta, Messing-Glanz
+CARN_TOP = (255, 214, 226)
+CARN_MID = (236, 56, 104)
+CARN_BOT = (140, 18, 72)
+CARN_OUTLINE = (58, 8, 34)
+WHEEL = (238, 232, 244)
+WHEEL_DARK = (176, 166, 196)
+BULB = (255, 226, 120)
+TENT_RED = (214, 46, 64)
+TENT_WHITE = (246, 238, 226)
+FLAG = (255, 196, 60)
+GONDOLAS = [(236, 76, 92), (72, 176, 226), (250, 196, 64), (120, 206, 110), (186, 110, 226), (250, 140, 60)]
+
 
 def s(v):
     """Skaliert einen Zielpixelwert auf Supersampling-Koordinaten."""
@@ -315,6 +328,99 @@ def draw_wald_icon(box):
     return img
 
 
+def draw_park_icon(box):
+    """Rummel bei Nacht: Nachthimmel-Scheibe, Mond, Riesenrad mit bunten Gondeln und Lichtkranz,
+    davor ein rot-weiss gestreiftes Zelt mit Wimpel.
+
+    box = Zielgroesse (Breite, Hoehe) in Zielpixeln; Rueckgabe RGBA in SS-Aufloesung.
+    """
+    import math
+    w, h = s(box[0]), s(box[1])
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    line = max(2, int(0.016 * w))
+    ol = CARN_OUTLINE + (255,)
+
+    grad = gradient_v((w, h), [(0.0, NIGHT), (0.55, NIGHT), (1.0, (86, 40, 110))])
+    sky_mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(sky_mask).ellipse((0, 0, w - 1, h - 1), fill=255)
+    img.paste(grad, (0, 0), sky_mask)
+    d = ImageDraw.Draw(img)
+
+    # Sterne und Mond oben links (das Rad steht rechts)
+    for (fx, fy, r) in [(0.4, 0.1, 0.011), (0.12, 0.44, 0.011), (0.55, 0.06, 0.009), (0.9, 0.62, 0.01)]:
+        cx, cy, rr = fx * w, fy * h, r * w
+        d.ellipse((cx - rr, cy - rr, cx + rr, cy + rr), fill=(255, 250, 220, 255))
+    mx, my, mr = 0.24 * w, 0.24 * h, 0.1 * w
+    d.ellipse((mx - mr, my - mr, mx + mr, my + mr), fill=(255, 238, 170, 255))
+    d.ellipse((mx - mr * 0.35, my - mr, mx + mr * 1.25, my + mr * 0.9), fill=NIGHT + (255,))   # Sichel
+
+    # Riesenrad: Stuetzen, Kranz, Speichen, Gondeln, Gluehbirnen
+    cx, cy, R = 0.62 * w, 0.44 * h, 0.3 * w
+    base_y = 0.9 * h
+    for fx in (-0.2, 0.2):
+        d.line([(cx, cy), (cx + fx * w, base_y)], fill=WHEEL_DARK + (255,), width=line * 3)
+        d.line([(cx, cy), (cx + fx * w, base_y)], fill=ol, width=max(1, line // 2))
+    glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    ImageDraw.Draw(glow).ellipse((cx - R * 1.08, cy - R * 1.08, cx + R * 1.08, cy + R * 1.08), outline=BULB + (110,), width=line * 4)
+    img.alpha_composite(glow.filter(ImageFilter.GaussianBlur(line * 2)))
+    d = ImageDraw.Draw(img)
+    d.ellipse((cx - R, cy - R, cx + R, cy + R), outline=ol, width=line * 3)
+    d.ellipse((cx - R, cy - R, cx + R, cy + R), outline=WHEEL + (255,), width=line * 2)
+    d.ellipse((cx - R * 0.55, cy - R * 0.55, cx + R * 0.55, cy + R * 0.55), outline=WHEEL_DARK + (255,), width=line)
+    n = 12
+    for k in range(n):
+        a = 2 * math.pi * k / n
+        d.line([(cx, cy), (cx + R * math.cos(a), cy + R * math.sin(a))], fill=WHEEL_DARK + (255,), width=line)
+    for k in range(24):
+        a = 2 * math.pi * k / 24 + 0.13
+        bx, by, br = cx + R * math.cos(a), cy + R * math.sin(a), line * 0.9
+        d.ellipse((bx - br, by - br, bx + br, by + br), fill=BULB + (255,))
+    for k in range(6):
+        a = 2 * math.pi * k / 6 + 0.26
+        gx, gy = cx + R * math.cos(a), cy + R * math.sin(a)
+        gw, gh = 0.07 * w, 0.075 * h
+        col = GONDOLAS[k % len(GONDOLAS)] + (255,)
+        d.line([(gx, gy), (gx, gy + gh * 0.35)], fill=ol, width=line)
+        d.rounded_rectangle((gx - gw / 2, gy + gh * 0.3, gx + gw / 2, gy + gh * 1.1), radius=line * 2, fill=col, outline=ol, width=line)
+    hr = 0.05 * w
+    d.ellipse((cx - hr, cy - hr, cx + hr, cy + hr), fill=WHEEL + (255,), outline=ol, width=line)
+
+    # Boden
+    ground = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(ground)
+    gd.ellipse((-0.2 * w, 0.84 * h, 1.2 * w, 1.6 * h), fill=(52, 38, 74, 255), outline=ol, width=line)
+    ground.putalpha(Image.composite(ground.split()[3], Image.new("L", (w, h), 0), sky_mask))
+    img.alpha_composite(ground)
+    d = ImageDraw.Draw(img)
+
+    # Zelt vorne links: Streifen, Spitze, Wimpel, dunkler Eingang mit warmem Schein
+    tx, tb, tw, th = 0.3 * w, 0.93 * h, 0.44 * w, 0.4 * h
+    top = (tx, tb - th)
+    left, right = (tx - tw / 2, tb - th * 0.42), (tx + tw / 2, tb - th * 0.42)
+    stripes = 6
+    for k in range(stripes):
+        x0 = left[0] + (right[0] - left[0]) * k / stripes
+        x1 = left[0] + (right[0] - left[0]) * (k + 1) / stripes
+        col = (TENT_RED if k % 2 == 0 else TENT_WHITE) + (255,)
+        d.polygon([top, (x0, left[1]), (x1, left[1])], fill=col)
+        d.polygon([(x0, left[1]), (x1, left[1]), (x1 + (x1 - tx) * 0.12, tb), (x0 + (x0 - tx) * 0.12, tb)], fill=col)
+    d.polygon([top, left, right], outline=ol, width=line)
+    d.polygon([left, right, (right[0] + (right[0] - tx) * 0.12, tb), (left[0] + (left[0] - tx) * 0.12, tb)], outline=ol, width=line)
+    # Bogenkante (Volant)
+    for k in range(stripes):
+        x0 = left[0] + (right[0] - left[0]) * k / stripes
+        x1 = left[0] + (right[0] - left[0]) * (k + 1) / stripes
+        d.pieslice((x0, left[1] - (x1 - x0) * 0.35, x1, left[1] + (x1 - x0) * 0.35), 0, 180,
+                   fill=((TENT_WHITE if k % 2 == 0 else TENT_RED) + (255,)), outline=ol, width=max(1, line // 2))
+    d.line([top, (top[0], top[1] - 0.1 * h)], fill=ol, width=line)
+    d.polygon([(top[0], top[1] - 0.1 * h), (top[0] + 0.08 * w, top[1] - 0.075 * h), (top[0], top[1] - 0.05 * h)],
+              fill=FLAG + (255,), outline=ol, width=max(1, line // 2))
+    ex0, ex1 = tx - 0.06 * w, tx + 0.06 * w
+    d.polygon([(ex0, tb), (tx, tb - th * 0.34), (ex1, tb)], fill=(40, 16, 30, 255), outline=ol, width=line)
+    d.polygon([(ex0 + 0.01 * w, tb), (tx, tb - th * 0.26), (ex1 - 0.01 * w, tb)], fill=(255, 190, 90, 150))
+    return img
+
+
 def render_button(big_text, icon_fn, stops, the_col, hi_col=(255, 250, 220), dark_col=OUTLINE_DARK):
     """Pille + Icon links + Schriftzug "the BIG_TEXT" mit Verlauf und doppelter Kontur.
 
@@ -412,6 +518,13 @@ def render_wald():
                          FOREST_MID, hi_col=(226, 250, 190), dark_col=FOREST_OUTLINE)
 
 
+def render_park():
+    """"the CARNIVAL": Kirschrot bis Magenta, Icon mit Riesenrad und Zelt unter Nachthimmel."""
+    return render_button("CARNIVAL", draw_park_icon,
+                         [(0.0, CARN_TOP), (0.30, CARN_MID), (0.72, CARN_MID), (1.0, CARN_BOT)],
+                         CARN_MID, hi_col=(255, 230, 240), dark_col=CARN_OUTLINE)
+
+
 def make_preview(button_paths, out_path):
     """Vergleichsbild: Vanilla-Buttons aus dem Screenshot neben den neuen Buttons (Museum, Wald)."""
     shot = r"C:\Users\moritz\Downloads\Among Us - 4.7.0\Among Us - 4.7.0\AtlasShots\ui_20260922_235515.png"
@@ -443,7 +556,8 @@ def make_preview(button_paths, out_path):
 def main():
     os.makedirs(ASSETS, exist_ok=True)
     outs = []
-    for name, fn in (("button_museum.png", render_museum), ("button_wald.png", render_wald)):
+    for name, fn in (("button_museum.png", render_museum), ("button_wald.png", render_wald),
+                     ("button_park.png", render_park)):
         out = os.path.join(ASSETS, name)
         fn().save(out)
         print("Geschrieben:", out)

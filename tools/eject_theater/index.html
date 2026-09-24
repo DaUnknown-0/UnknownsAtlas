@@ -70,7 +70,7 @@
 <div class="wrap">
   <header>
     <h1>Rauswurf-Kino</h1>
-    <div class="sub"><b>Unknown's Atlas</b> · sieben Rauswürfe, vier Skip-Szenen und der Void, abgespielt aus <code style="font:500 12px var(--mono)">eject_scenes.json</code>, derselben Datei wie im Spiel</div>
+    <div class="sub"><b>Unknown's Atlas</b> · zwölf Rauswürfe auf drei Karten, sechs Skip-Szenen und der Void, abgespielt aus <code style="font:500 12px var(--mono)">eject_scenes.json</code>, derselben Datei wie im Spiel</div>
   </header>
 
   <div class="layout">
@@ -92,6 +92,7 @@
     <aside>
       <div class="group" id="museum"><h2>Vesper Museum</h2></div>
       <div class="group" id="wald"><h2>Forest Station</h2></div>
+      <div class="group" id="park"><h2>Moonlight Carnival</h2></div>
       <div class="group" id="any"><h2>Unknown's Collection</h2></div>
       <div class="group opts">
         <h2>Einstellungen</h2>
@@ -423,6 +424,25 @@ function synth(name) {
     case "step": { const n = SR * 0.18 | 0; s = new Float32Array(n); for (let i = 0; i < n; i++) { const t = i / SR; s[i] = (Math.sin(2 * PI * (90 - 60 * t) * t) * Math.exp(-t * 28) + N() * 0.25 * Math.exp(-t * 60)) * 0.8; } break; }
     case "zap": { const n = SR * 0.22 | 0; s = new Float32Array(n); let f = 300; for (let i = 0; i < n; i++) { const t = i / SR; if (i % 441 === 0) f = 180 + (N() + 1) / 2 * 900; const sq = Math.sin(2 * PI * f * t) > 0 ? 1 : -1; s[i] = (sq * 0.28 + N() * 0.18) * Math.exp(-t * 9) * ((i >> 6) % 3 === 0 ? 0.2 : 1); } break; }
     case "click": { const n = SR * 0.12 | 0; s = new Float32Array(n); for (let i = 0; i < n; i++) { const t = i / SR; s[i] = (i < 90 ? N() * 0.8 * (1 - i / 90) : 0) + sin(2 * PI * 1800 * t) * 0.35 * Math.exp(-t * 60); } break; }
+    // Park (Moonlight Carnival)
+    case "boom": { const n = SR * 1.8 | 0; s = brown(n, 0.04, 2.4); for (let i = 0; i < n; i++) { const t = i / SR, crack = i < 600 ? N() * (1 - i / 600) : 0; s[i] = clamp((s[i] * 0.8 + sin(2 * PI * (55 - 25 * t) * t) * 1.1) * Math.exp(-t * 2.6) + crack * 0.9, -1, 1); } break; }
+    case "pop": { const n = SR * 0.09 | 0; s = new Float32Array(n); for (let i = 0; i < n; i++) { const t = i / SR; s[i] = (sin(2 * PI * (1100 - 3500 * t) * t) * 0.5 + (i < 60 ? N() * 0.6 * (1 - i / 60) : 0)) * Math.exp(-t * 45); } break; }
+    case "sizzle": { const n = SR * 1.7 | 0; s = new Float32Array(n); let prev = 0; for (let i = 0; i < n; i++) { const t = i / SR, w = N(), hp = w - prev; prev = w; s[i] = hp * 0.22 * (0.7 + 0.3 * sin(t * 40)) * clamp((1.7 - t) / 0.2, 0, 1); } break; }
+    case "clack": { const n = SR * 0.1 | 0; s = new Float32Array(n); for (let i = 0; i < n; i++) { const t = i / SR; s[i] = (i < 50 ? N() * 0.7 * (1 - i / 50) : 0) + (i >= 900 && i < 950 ? N() * 0.5 * (1 - (i - 900) / 50) : 0) + sin(2 * PI * 210 * t) * 0.3 * Math.exp(-t * 40); } break; }
+    case "chime": { const n = SR * 1.3 | 0; s = new Float32Array(n); for (let i = 0; i < n; i++) { const t = i / SR; s[i] = sin(2 * PI * 1568 * t) * 0.3 * Math.exp(-t * 3) + (t > 0.12 ? sin(2 * PI * 2093 * (t - 0.12)) * 0.25 * Math.exp(-(t - 0.12) * 3) : 0) + (t > 0.24 ? sin(2 * PI * 2637 * (t - 0.24)) * 0.2 * Math.exp(-(t - 0.24) * 3) : 0); } break; }
+    case "organ": {
+      const mel = [67, 72, 76, 79, 76, 72, 69, 74, 77, 81, 77, 74, 67, 71, 74, 79, 74, 71, 72, 76, 79, 84, 79, 76], roots = [48, 50, 43, 48], step = 0.24;
+      const n = (mel.length * step + 0.3) * SR | 0; s = new Float32Array(n);
+      for (let k = 0; k < mel.length; k++) {
+        const f = 440 * Math.pow(2, (mel[k] - 69) / 12), len = step * 0.95, i0 = k * step * SR | 0;
+        for (let j = 0; j < (len * SR | 0) && i0 + j < n; j++) { const tt = j / SR, vib = 1 + 0.006 * sin(2 * PI * 6 * tt), env = Math.min(1, tt / 0.02) * Math.min(1, (len - tt) / 0.05); s[i0 + j] += (sin(2 * PI * f * vib * tt) + 0.45 * sin(4 * PI * f * tt) + 0.2 * sin(6 * PI * f * tt)) * 0.16 * env; }
+        if (k % 3 !== 0) continue;
+        const fb = 440 * Math.pow(2, (roots[k / 6 | 0] - 69) / 12);
+        for (let j = 0; j < (0.22 * SR | 0) && i0 + j < n; j++) { const tt = j / SR; s[i0 + j] += sin(2 * PI * fb * tt) * 0.3 * Math.exp(-tt * 9); }
+      }
+      for (let i = 0; i < n; i++) s[i] = clamp(s[i], -1, 1);
+      break;
+    }
     default: s = new Float32Array(1);
   }
   return s;
@@ -488,7 +508,7 @@ function frame(now) {
 }
 
 function buildUi() {
-  for (const map of ["museum", "wald", "any"]) for (const skip of [false, true]) {
+  for (const map of ["museum", "wald", "park", "any"]) for (const skip of [false, true]) {
     const box = $(map);
     if (skip && map === "any") continue;
     if (skip) { const h = document.createElement("h3"); h.textContent = "Niemand fliegt (Skip, Gleichstand)"; box.appendChild(h); }
@@ -543,7 +563,7 @@ function renderSheet(mode) {
 async function boot() {
   DATA = await (await fetch("scenes.json")).json();
   try { const v = await (await fetch("void.json")).json(); DATA.scenes.push(...v.scenes); } catch { }
-  const order = s => (s.map === "museum" ? 0 : s.map === "wald" ? 2 : 4) + (s.skip ? 1 : 0);
+  const order = s => (s.map === "museum" ? 0 : s.map === "wald" ? 2 : s.map === "park" ? 4 : 6) + (s.skip ? 1 : 0);
   DATA.scenes.sort((a, b) => order(a) - order(b));
   const names = new Set(["task_eject_vignette.png"]);
   for (const s of DATA.scenes) { for (const o of s.objects) if (o.sprite) names.add(o.sprite); for (const e of s.emitters) names.add(e.sprite); }

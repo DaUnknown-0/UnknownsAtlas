@@ -34,6 +34,9 @@ internal sealed class AtlasMapDef
     public float SpawnRadius;
     public Dictionary<int, Vector2> Vents;
     public int[][] VentNetworks;
+    /// <summary>Zusaetzliche Verbindung zweier Vents ueber den dritten Nachbarn (Vent.Center), z. B. zwischen
+    /// zwei Ringen. Museum und Wald nutzen sie nicht.</summary>
+    public int[][] VentBridges = System.Array.Empty<int[]>();
     public AtlasMuseumLayout.DoorSlot[] VerticalDoors, HorizontalDoors;
     public Vector2[] Cameras;
     public Dictionary<SystemTypes, Vector2> MapButtons;
@@ -45,6 +48,14 @@ internal sealed class AtlasMapDef
     public Dictionary<TaskTypes, string> TaskNames = new();
     /// <summary>Eigene Minispiele (Stufe B): TaskType -> Baustein-Art (AtlasMinigame).</summary>
     public Dictionary<TaskTypes, string> CustomTasks = new();
+    /// <summary>
+    /// Minispiel-Grafik dieser Karte: "task_x.png" (in jedem Minispiel) oder "art:task_x.png" (nur im
+    /// Minispiel dieser Baustein-Art) -> eigene Datei. So nutzt der Park die Bausteine von Museum und
+    /// Wald mit eigener Grafik, ohne dass die Mechaniken die Karte kennen muessen (AtlasTaskKit.Art).
+    /// </summary>
+    public Dictionary<string, string> TaskArt = new();
+    /// <summary>Minispiel-Texte dieser Karte, gleiche Schluesselregel wie TaskArt (AtlasTaskKit.T).</summary>
+    public Dictionary<string, string> TaskText = new();
 
     public static AtlasMapDef Museum() => new()
     {
@@ -102,6 +113,107 @@ internal sealed class AtlasMapDef
             { TaskTypes.FixLights, "fusebox" }, { TaskTypes.FixComms, "cctv" },
         },
     };
+
+    /// <summary>Moonlight Carnival (docs/PARK_KONZEPT.md), Karte aus tools/gen_park.py, Minispiel-Grafik aus
+    /// tools/gen_park_tasks.py. Die Minispiele sind Bausteine von Museum und Wald (TaskArt/TaskText).</summary>
+    public static AtlasMapDef Park() => new()
+    {
+        Key = "park", DisplayName = "Moonlight Carnival", ResourcePrefix = "park",
+        MinX = AtlasParkData.MinX, MinY = AtlasParkData.MinY, MaxX = AtlasParkData.MaxX, MaxY = AtlasParkData.MaxY,
+        Walls = AtlasParkData.Walls, ShadowWalls = AtlasParkData.ShadowWalls,
+        Opaque = AtlasParkData.Opaque, OpaqueCastsShadow = AtlasParkData.OpaqueCastsShadow,
+        Glass = AtlasParkData.Glass, Rooms = AtlasParkData.Rooms, Hallways = AtlasParkData.Hallways,
+        FloorPixelsPerMeter = AtlasParkData.FloorPixelsPerMeter, FloorTiles = AtlasParkData.FloorTiles,
+        PropPixelsPerMeter = AtlasParkData.PropPixelsPerMeter, Props = AtlasParkData.Props,
+        ConsoleSprites = AtlasParkData.ConsoleSprites,
+        Consoles = AtlasParkLayout.Consoles,
+        EmergencyButton = AtlasParkLayout.EmergencyButton, SurveillanceConsole = AtlasParkLayout.SurveillanceConsole,
+        AdminTable = AtlasParkLayout.AdminTable, FreeplayLaptop = AtlasParkLayout.FreeplayLaptop,
+        Spawn = AtlasParkLayout.Spawn, SpawnRadius = AtlasParkLayout.SpawnRadius,
+        Vents = AtlasParkLayout.Vents, VentNetworks = AtlasParkLayout.VentNetworks, VentBridges = AtlasParkLayout.VentBridges,
+        VerticalDoors = AtlasParkLayout.VerticalDoors, HorizontalDoors = AtlasParkLayout.HorizontalDoors,
+        Cameras = AtlasParkLayout.Cameras, MapButtons = AtlasParkLayout.MapButtons,
+        CameraColor = new Color(0x12 / 255f, 0x14 / 255f, 0x20 / 255f),
+        // Festplatz (Spawn), Karussell, Lichtturm, Haupteingang, Security Booth mit Kameras (Stilblatt-Abnahme)
+        ViewSpots = new Vector2[] { new(0f, 3.5f), new(-18.5f, -3.9f), new(17f, 14.2f), new(0f, -20.6f), new(12.5f, -12.5f) },
+        TaskNames = new()
+        {
+            { TaskTypes.FixWiring, "Fix the Light Strings" },
+            { TaskTypes.SwipeCard, "Badge Through the Turnstile" },
+            { TaskTypes.CalibrateDistributor, "Balance the Carousel Motors" },
+            { TaskTypes.ChartCourse, "Plan the Parade Route" },
+            { TaskTypes.CleanO2Filter, "Clean the Cotton Candy Machine" },
+            { TaskTypes.DivertPower, "Power a Ride" },
+            { TaskTypes.PrimeShields, "Aim the Tower Spotlights" },
+            { TaskTypes.StabilizeSteering, "Spot the Runaway Balloon" },
+            { TaskTypes.UnlockManifolds, "Unlock the Ride Keys" },
+            { TaskTypes.UploadData, "Collect the Ride Photos" },
+            // zwei Motive (Karussell, Autoscooter) auf einem TaskType, wie Saege/Aussenborder im Wald
+            { TaskTypes.AlignEngineOutput, "Tune the Ride Motors" },
+            { TaskTypes.ClearAsteroids, "Shooting Gallery" },
+            { TaskTypes.EmptyGarbage, "Clear the Popcorn Bins" },
+            { TaskTypes.FuelEngines, "Refuel the Ride Generators" },
+            { TaskTypes.InspectSample, "Allergen Test" },
+            { TaskTypes.StartReactor, "Pump the Coaster Brakes" },
+            { TaskTypes.SubmitScan, "Height Check" },
+            { TaskTypes.ResetReactor, "Coaster Brake Failure" },
+            { TaskTypes.RestoreOxy, "Ammonia Leak" },
+            { TaskTypes.FixLights, "Park Blackout" },
+            { TaskTypes.FixComms, "Speaker Feedback" },
+        },
+        // Swipe Card und Submit Scan bleiben vanilla (Drehkreuz-Ausweis, Messlatte)
+        CustomTasks = new()
+        {
+            { TaskTypes.FixWiring, "lightstring" }, { TaskTypes.CalibrateDistributor, "motors" }, { TaskTypes.ChartCourse, "parade" },
+            { TaskTypes.CleanO2Filter, "candy" }, { TaskTypes.DivertPower, "ridepower" }, { TaskTypes.PrimeShields, "spotlights" },
+            { TaskTypes.StabilizeSteering, "balloon" }, { TaskTypes.UnlockManifolds, "ridekeys" }, { TaskTypes.UploadData, "photos" },
+            { TaskTypes.AlignEngineOutput, "ridemotors" }, { TaskTypes.ClearAsteroids, "gallery" }, { TaskTypes.EmptyGarbage, "popcorn" },
+            { TaskTypes.FuelEngines, "ridefuel" }, { TaskTypes.InspectSample, "allergen" }, { TaskTypes.StartReactor, "brakes" },
+            { TaskTypes.ResetReactor, "brakefail" }, { TaskTypes.RestoreOxy, "ammonia" },
+            { TaskTypes.FixLights, "blackout" }, { TaskTypes.FixComms, "feedback" },
+        },
+        TaskArt = ParkTaskArt(),
+        TaskText = new()
+        {
+            { "motors:TEMP", "SPEED" }, { "motors:HUMIDITY", "ORGAN" }, { "motors:LIGHT", "LIGHTS" },
+            { "parade:PATROL ROUTE", "PARADE ROUTE" },
+            { "photos:FIND THE ANIMAL", "FIND THE SCREAMER" }, { "photos:COPYING", "PRINTING" },
+            { "photos:INSERT THE SD CARD", "INSERT THE PHOTO CARD" },
+            { "brakefail:TRACK THE PRINT", "FOLLOW THE BRAKE" },
+            { "blackout:REPLACE THE BLOWN FUSES", "REPLACE THE BLOWN BULBS" },
+            { "feedback:AZIMUTH", "AIM" }, { "feedback:FREQ", "GAIN" }, { "feedback:SIGNAL", "SOUND" },
+        },
+    };
+
+    private static Dictionary<string, string> ParkTaskArt()
+    {
+        var a = new Dictionary<string, string>
+        {
+            // Tafeln: gestreifte Budenwand statt Holz/Museum, dunkles Fahrgeschaeft-Blech statt Stahl
+            { "task_museum_panel.png", "task_park_panel.png" }, { "task_wald_panel.png", "task_park_panel.png" },
+            { "task_shop_panel.png", "task_park_panel.png" }, { "task_steel_panel.png", "task_park_machine.png" },
+            { "candy:task_museum_dino.png", "task_park_candy.png" }, { "candy:task_museum_dust.png", "task_park_sugar.png" },
+            { "parade:task_trailmap.png", "task_park_parademap.png" }, { "parade:task_flag.png", "task_park_pennant.png" },
+            { "parade:task_marker.png", "task_park_float.png" },
+            { "spotlights:task_emitter.png", "task_park_spotlight.png" },
+            { "balloon:task_panorama.png", "task_park_panorama.png" }, { "balloon:task_deer.png", "task_park_balloon.png" },
+            { "ridekeys:task_cartouche.png", "task_park_keytag.png" },
+            { "photos:task_photo.png", "task_park_photo.png" }, { "photos:task_deer.png", "task_park_rider.png" },
+            { "photos:task_pc.png", "task_park_kiosk.png" },
+            { "gallery:task_clearing.png", "task_park_booth.png" }, { "gallery:task_deer.png", "task_park_duck.png" },
+            { "gallery:task_boar.png", "task_park_duck2.png" }, { "gallery:task_owl.png", "task_park_clown.png" },
+            { "popcorn:task_container.png", "task_park_container.png" },
+            { "ridefuel:task_boiler.png", "task_park_tank.png" },
+            { "brakes:task_pump_body.png", "task_park_pump.png" }, { "brakes:task_water.png", "task_park_oil.png" },
+            // Sabotagen
+            { "brakefail:task_scanner.png", "task_park_brakepad.png" }, { "brakefail:task_marker.png", "task_park_brakeknob.png" },
+            { "blackout:task_fuse_ok.png", "task_park_bulb_ok.png" }, { "blackout:task_fuse_dead.png", "task_park_bulb_dead.png" },
+            { "blackout:task_fuse_new.png", "task_park_bulb_new.png" },
+            { "feedback:task_dish.png", "task_park_speaker.png" },
+        };
+        for (int k = 0; k < 10; k++) a[$"ridekeys:task_glyph{k}.png"] = $"task_park_glyph{k}.png";
+        return a;
+    }
 
     public static AtlasMapDef Wald() => new()
     {

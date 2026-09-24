@@ -37,8 +37,21 @@ internal static class AtlasWorldFx
             if (!VisualTasksOn()) return;
             var type = (TaskTypes)__0;
             bool wald = AtlasMuseumBuilder.D.Key == "wald";
+            bool park = AtlasMuseumBuilder.D.Key == "park";
             switch (type)
             {
+                case TaskTypes.ClearAsteroids when park:
+                    // Schiessbude: ein Treffer-Stern ueber dem Stand
+                    if (Find(SystemTypes.Weapons, type, out var wp))
+                        Flash(wp + new Vector2(UnityEngine.Random.Range(-0.4f, 0.4f), 0.9f), "task_park_pop.png", Color.white, 0.8f, 0.45f);
+                    break;
+                case TaskTypes.PrimeShields when park:
+                    if (Find(SystemTypes.Shields, type, out var sp)) ShipStatus.Instance.StartCoroutine(CoSpotlights(sp));
+                    break;
+                case TaskTypes.EmptyGarbage when park:
+                    if (Find(SystemTypes.Storage, type, out var gp))
+                        Flash(gp + new Vector2(0f, 0.7f), "task_park_puff.png", Color.white, 1.1f, 1.4f, rise: true);
+                    break;
                 case TaskTypes.ClearAsteroids:
                     if (Find(SystemTypes.Weapons, type, out var w))
                         Flash(w + new Vector2(0f, 0.9f), wald ? "task_lamp_on.png" : "task_torch.png",
@@ -146,6 +159,37 @@ internal static class AtlasWorldFx
             yield return null;
         }
         foreach (var b in bars) if (b != null) Object.Destroy(b.gameObject);
+    }
+
+    /// <summary>Park: zwei Scheinwerferkegel am Lichtturm schwenken kurz ueber den Himmel.</summary>
+    private static IEnumerator CoSpotlights(Vector2 p)
+    {
+        var beams = new List<SpriteRenderer>();
+        for (int i = 0; i < 2; i++)
+        {
+            var b = WorldSprite("task_park_beam.png", p + new Vector2(i == 0 ? -0.35f : 0.35f, 0.4f), 1f, new Color(1f, 0.95f, 0.75f, 0f));
+            // Sprite-Pivot ist die Mitte: den Kegel um seinen Fuss drehen, deshalb ein Halter
+            var holder = new GameObject("Atlas_FxBeam") { layer = 11 };
+            holder.transform.SetParent(ShipStatus.Instance.transform, true);
+            holder.transform.position = b.transform.position;
+            b.transform.SetParent(holder.transform, true);
+            b.transform.localPosition = new Vector3(0f, 1.1f, 0f);
+            beams.Add(b);
+        }
+        float t = 0f;
+        while (t < 2.8f)
+        {
+            t += Time.deltaTime;
+            float a = Mathf.Clamp01(t * 3f) * Mathf.Clamp01((2.8f - t) * 1.5f) * 0.75f;
+            for (int i = 0; i < beams.Count; i++)
+            {
+                if (beams[i] == null) continue;
+                beams[i].color = new Color(1f, 0.95f, 0.75f, a);
+                beams[i].transform.parent.localEulerAngles = new Vector3(0, 0, (i == 0 ? 1f : -1f) * (18f + 22f * Mathf.Sin(t * 2.2f + i)));
+            }
+            yield return null;
+        }
+        foreach (var b in beams) if (b != null) Object.Destroy(b.transform.parent.gameObject);
     }
 
     /// <summary>Wald: die Steglaternen glimmen auf und bleiben an (bis Rundenende).</summary>
