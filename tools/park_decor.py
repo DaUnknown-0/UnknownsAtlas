@@ -208,7 +208,8 @@ def rooms(F, walk, rooms_):
     obst = unary_union([G.shape(s).buffer(0.2) for s, _k in L.OPAQUE + L.GLASS])
 
     # Festplatz: gemalte Manege in der Mitte, Saegemehl-Wege, Konfetti und Popcorn
-    cx, cy = 0.0, 1.0
+    fx0, fy0, fx1, fy1 = R("fairground")
+    cx, cy = (fx0 + fx1) / 2, (fy0 + fy1) / 2
     pen.ell(cx, cy, 4.6, 3.6, (150, 110, 70, 90))
     pen.d.ellipse([pen.P(cx - 4.6, cy + 3.6), pen.P(cx + 4.6, cy - 3.6)], outline=(170, 50, 60, 255), width=pen.w(0.32))
     for k in range(36):                                               # Manegenrand rot-creme
@@ -244,9 +245,11 @@ def rooms(F, walk, rooms_):
 
     # Autoscooter: Reifenspuren um die Bahn, Warnstreifen am Rand, Stromschild
     x0, y0, x1, y1 = R("bumpercars")
+    ax0, ay0, ax1, ay1 = G.shape(L.ARENA).bounds
+    acx, acy = (ax0 + ax1) / 2, (ay0 + ay1) / 2
     for k in range(5):
         r = 3.2 + k * 0.25
-        pen.d.arc([pen.P(-16.0 - r, -19.0 + r), pen.P(-16.0 + r, -19.0 - r)], 200 + k * 20, 320 + k * 15, fill=(8, 8, 12, 80), width=pen.w(0.15))
+        pen.d.arc([pen.P(acx - r, acy + r), pen.P(acx + r, acy - r)], 200 + k * 20, 320 + k * 15, fill=(8, 8, 12, 80), width=pen.w(0.15))
     for xx in (x0 + 0.4, x1 - 0.4):
         y = y0 + 0.5
         while y < y1 - 0.5:
@@ -310,27 +313,25 @@ def rooms(F, walk, rooms_):
     x0, y0, x1, y1 = R("musicbooth")
     pen.ell((x0 + x1) / 2, (y0 + y1) / 2, 2.6, 1.8, (40, 30, 50, 220), (150, 90, 160, 255), 0.06)
     for k in range(2):                                                # Kabel vom Lautsprecher zum Mischpult
-        pen.line([(26.2 + k * 0.25, 13.7), (26.6 + k * 0.25, 14.6), (28.0, 14.8 + k * 0.2), (29.6, 13.5 + k * 0.1)], (18, 16, 20, 200), 0.06)
-    for k, (nx, ny) in enumerate(((27.0, 17.2), (28.2, 17.8), (30.6, 17.0))):
+        pen.line([(x0 + 1.2 + k * 0.25, y0 + 1.7), (x0 + 1.6 + k * 0.25, y0 + 2.6), (x0 + 3.0, y0 + 2.8 + k * 0.2),
+                  (x0 + 4.6, y0 + 1.5 + k * 0.1)], (18, 16, 20, 200), 0.06)
+    for k, (nx, ny) in enumerate(((x0 + 1.5, y1 - 1.4), (x0 + 2.8, y1 - 0.9), (x1 - 1.4, y1 - 1.5))):
         pen.ell(nx, ny, 0.12, 0.09, (200, 160, 220, 150))
         pen.line([(nx + 0.1, ny), (nx + 0.1, ny + 0.4)], (200, 160, 220, 150), 0.03)
 
     # Schiessbude: Buehne hinter der Theke (Preisregal), Huelsen und Popcorn davor
     x0, y0, x1, y1 = R("shooting")
-    pen.rect(x0 + 0.5, 19.3, x1 - 0.5, y1 - 0.1, (90, 40, 40, 255), INK, 0.04)
+    th = next(G.shape(s_) for s_, k_ in L.GLASS if k_ == "theke").bounds    # Theke: Buehne dahinter, Kunden davor
+    pen.rect(x0 + 0.5, th[3] + 0.1, x1 - 0.5, y1 - 0.1, (90, 40, 40, 255), INK, 0.04)
     for k in range(int((x1 - x0 - 1.0) / 0.6)):
         px = x0 + 0.8 + k * 0.6
         col = ((230, 120, 170), (120, 190, 230), (240, 210, 90), (160, 230, 140))[k % 4]
         pen.ell(px, y1 - 0.8, 0.2, 0.22, col + (255,), INK, 0.025)          # Plueschtiere
         pen.ell(px - 0.08, y1 - 0.62, 0.07, 0.07, col + (255,), INK, 0.02)
         pen.ell(px + 0.08, y1 - 0.62, 0.07, 0.07, col + (255,), INK, 0.02)
-    scatter(pen, area["shooting"].intersection(box(x0, y0, x1, 18.2)), 30, 51,
+    scatter(pen, area["shooting"].intersection(box(x0, y0, x1, th[1] - 0.2)), 30, 51,
             lambda p, x, y, r: p.ell(x, y, 0.03, 0.015, (210, 170, 70, 220)))
-    scatter(pen, area["shooting"].intersection(box(x0, y0, x1, 18.2)), 14, 52, popcorn)
-
-    # Spiegelkabinett: Glanzfunken im Rautenboden
-    x0, y0, x1, y1 = R("mirrors")
-    scatter(pen, area["mirrors"], 40, 61, lambda p, x, y, r: p.star(x, y, 0.1, 0.03, (255, 255, 255, 170), None, 4))
+    scatter(pen, area["shooting"].intersection(box(x0, y0, x1, th[1] - 0.2)), 14, 52, popcorn)
 
     # Geisterbahn: Schiene entlang der Fahrt, Spinnweben in den Ecken, Knochenhand
     ride = L.GHOST_RIDE
@@ -351,12 +352,12 @@ def rooms(F, walk, rooms_):
         for r in (0.4, 0.75, 1.1):
             pts = [(wx + sx * math.cos(math.radians(k * 22.5)) * r, wy + sy * math.sin(math.radians(k * 22.5)) * r) for k in range(5)]
             pen.line(pts, (200, 200, 210, 100), 0.012)
-    for (ex, ey) in ((-35.0, -1.0), (-30.0, 6.2), (-33.8, 0.5)):
+    for (ex, ey) in ((x0 + 0.5, y0 + 2.4), (x1 - 0.5, y1 - 0.8), (x0 + 0.6, y1 - 3.2)):
         for dx in (-0.09, 0.09):
             pen.ell(ex + dx, ey, 0.06, 0.04, (140, 255, 140, 200))
 
     # Riesenrad-Lichtung: gepflasterter Kreis unter dem Rad, Blumenbeete, Trittsteine
-    wx, wy = -0.5, 18.6
+    wx, wy = L.WHEEL
     pen.ell(wx, wy, 3.9, 3.9, (120, 112, 104, 255), INK, 0.05)
     for k in range(24):
         a0 = k * 15
@@ -364,7 +365,7 @@ def rooms(F, walk, rooms_):
     beds(pen, R("ferriswheel"), 71)
 
     # Lichtturm-Lichtung: Pflasterkreis, Blumenring, Kabel
-    tx, ty = 17.0, 16.4
+    tx, ty = L.TOWER
     pen.ell(tx, ty, 2.2, 2.2, (120, 112, 104, 255), INK, 0.05)
     for k in range(16):
         a = math.radians(k * 22.5)
@@ -385,28 +386,22 @@ def rooms(F, walk, rooms_):
         for px in (x0 + 1.5, x0 + 3.5, x0 + 5.5):
             pen.ell(px, yy, 0.09, 0.09, GOLD, INK, 0.02)
 
-    # Haupteingang: Mosaikstern, WELCOME, Ticketschnipsel
-    x0, y0, x1, y1 = R("maingate")
-    mx, my = (x0 + x1) / 2, y0 + 2.6
-    pen.star(mx, my, 1.4, 0.6, (236, 196, 80, 255), INK)
-    pen.star(mx, my, 0.8, 0.35, (200, 60, 70, 255))
-    pen.text(mx, my + 1.95, "WELCOME", 0.55, (240, 225, 190, 220))
-    scatter(pen, area["maingate"], 18, 91, ticket)
-
     # Wildwasserbahn: Pfuetzen und Spritzer am Kanal, Seilpfosten
     x0, y0, x1, y1 = R("logflume")
+    wx0, wy0, wx1, wy1 = unary_union([G.shape(w_) for w_ in L.WATER]).bounds
+    br = [G.shape(b_).bounds for b_ in L.BRIDGES]
     rnd2 = random.Random(101)
 
     def puddles(d):
         for _ in range(10):
-            x, y = rnd2.uniform(x0 + 1, x1 - 1), rnd2.choice((rnd2.uniform(-11.5, -9.8), rnd2.uniform(-7.2, -6.5)))
+            x, y = rnd2.uniform(x0 + 1, x1 - 1), rnd2.choice((rnd2.uniform(wy0 - 1.7, wy0 - 0.2), rnd2.uniform(wy1 + 0.1, wy1 + 0.8)))
             r = rnd2.uniform(0.3, 0.8)
             d.ellipse([pen.P(x - r, y + r * 0.5), pen.P(x + r, y - r * 0.5)], fill=(90, 150, 200, 80))
     pen.soft(puddles, 0.06)
-    for yy in (-9.75, -7.25):
-        x = 21.8
-        while x < 36.8:
-            if not (24.0 < x < 26.5 or 31.5 < x < 34.0):
+    for yy in (wy0 - 0.15, wy1 + 0.15):
+        x = max(wx0, x0) + 0.3
+        while x < min(wx1, x1) - 0.3:
+            if not any(b_[0] < x < b_[2] for b_ in br):
                 pen.ell(x, yy, 0.08, 0.08, (120, 80, 50, 255), INK, 0.02)
             x += 1.0
 
@@ -461,16 +456,17 @@ def walls(F, walk):
 
     # Festplatz: Wimpel ueber den Nordwand-Stuecken, Banner in der Mitte fehlt (Durchgang)
     x0, y0, x1, y1 = R("fairground")
-    for a, b in ((x0 + 0.2, -3.2), (3.2, x1 - 0.2)):
+    for a, b in ((x0 + 0.2, -1.6), (1.6, x1 - 0.2)):                    # Nordtor x -1,25..1,25
         pennants(a, b, y1, (RED, CREAM, GOLD, (90, 190, 190, 255)))
     # Karussell
     x0, y0, x1, y1 = R("carousel")
-    pennants(x0 + 0.2, -19.7, y1, (GOLD, (120, 60, 110, 255)))
-    pennants(-16.8, x1 - 0.2, y1, (GOLD, (120, 60, 110, 255)))
+    ng = next(d_ for d_ in next(b_ for b_ in L.BUILDINGS if b_[0] == "carousel")[4] if d_[0] == "N")
+    pennants(x0 + 0.2, ng[1] - 0.3, y1, (GOLD, (120, 60, 110, 255)))
+    pennants(ng[2] + 0.3, x1 - 0.2, y1, (GOLD, (120, 60, 110, 255)))
     # Schiessbude: Leuchtschild und Zielscheiben
     x0, y0, x1, y1 = R("shooting")
-    sign(-21.0, y1, 2.6, "3 SHOTS 1$", (30, 20, 30, 255), (255, 120, 190, 255), neon=True)
-    for k, tx in enumerate((-17.0, -15.8, -14.6)):
+    sign(x0 + 2.0, y1, 2.6, "3 SHOTS 1$", (30, 20, 30, 255), (255, 120, 190, 255), neon=True)
+    for k, tx in enumerate((x0 + 6.0, x0 + 7.2, x0 + 8.4)):
         for r, c in ((0.28, (240, 240, 230, 255)), (0.19, RED), (0.09, (240, 240, 230, 255))):
             pen.ell(tx, y1 + 0.45, r, r, c, INK if r == 0.28 else None, 0.02)
     # Werkstatt: Werkzeugwand

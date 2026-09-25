@@ -1,6 +1,6 @@
 # Karten verkleinern: Analyse aller Räume (Museum, Wald, Park)
 
-Stand 2026-09-24. Reine Analyse, **noch nichts geändert**.
+Stand 2026-09-24. Analyse (Abschnitte 1-6) und Umsetzung (Abschnitt 7, Branch `kartenumbau`).
 
 **Entscheidungen des Users (24.09.):** alle drei Hebel (Räume streichen, verkleinern, Leerraum raus);
 Ghost Train und Log Flume bleiben als Durchgänge mit ihrer Mechanik; vor dem Umbau wird das Dokument
@@ -65,6 +65,40 @@ Die Karten sitzen per Relocate-in-Place auf der Skeld. Daraus folgt für jede St
   einzelne Räume mehr Türen. Ob sich Türen parken lassen (statt verteilen), ist ungetestet.
 - **Sabotage-Paare** (Reaktor-Hände, O2-Tastenfelder) brauchen weiterhin zwei getrennte Orte.
 - Vents, Kameras, Minimap, Raumnamen und Boden werden ohnehin je Karte neu erzeugt.
+
+### Umsetzungsregeln (ergänzt 24.09. nach Abgleich mit dem Code)
+
+**Zusammengelegte Räume = eine Teilfläche je Skeld-System, gleicher Name.** Ein Raum-Eintrag trägt
+genau ein System (`Rooms`: Schlüssel, Name, SystemTypes, Fläche). Der Builder registriert den Namen
+je System (`AtlasMuseumBuilder.RoomNames`, erster Eintrag gewinnt). Fehlt für ein System jede
+Fläche, zeigen Taskliste, Aufgabenpfeile und "ROUTE POWER TO ..." wieder das Vanilla-Wort (z. B.
+"Shields"), und TORs Admin-Prefix wirft, weil `FastRooms[System]` fehlt. Deshalb:
+
+- Jeder zusammengelegte Raum wird in zwei (oder mehr) **aneinandergrenzende, nicht überlappende**
+  Teilflächen geteilt, eine je System, alle mit demselben Anzeigenamen. Die Konsolen eines Systems
+  stehen in seiner Teilfläche. Der Boden ist die Vereinigung, eine Wand zwischen den Teilen gibt es
+  nicht.
+- Admin zeigt dann je Teilfläche einen Zähler, beide innerhalb des Raums. Das ist gewollt (ehrlicher
+  als ein ausgeblendeter Zähler, der Spieler verschluckt).
+- Die Minimap beschriftet Räume mit gleichem Namen nur einmal, in der Mitte der Vereinigung.
+- Beispiele: Foyer = Cafeteria + Admin (Shop-Ecke); Depot & Loading Dock = Storage + LowerEngine;
+  Water Works = LifeSupp + Reactor; Boathouse = LowerEngine + Shields; Show Control = Comms +
+  Shields; Park Office = Admin + Security. Die Rotunde nimmt Shields als Nordnische auf.
+
+**Weg und Sicht getrennt = GLASS-Hülle plus kleiner OPAQUE-Kern.** Ein OPAQUE-Polygon erzeugt Weg-
+UND Schattenkollider aus derselben Form. Wo beides verschieden groß sein soll (Einzelbäume: Weg
+Ø 1,6 m, Sicht nur am Stamm; Karussell: Weg über die ganze Scheibe, Sicht am Mittelgehäuse), steht
+die Wegform in GLASS (trägt das Sprite) und darin ein kleiner OPAQUE-Kern ohne eigenes Sprite
+(`kind = None`). Der Kern sperrt Sicht, die Hülle den Weg.
+
+- Dafür ordnet der Builder Schattenhindernis und Sprite **über die Geometrie** zu (Sprite, dessen
+  Grundfläche das Hindernis enthält), nicht mehr über die Listenposition. Die alte Regel
+  "Props-Reihenfolge = OPAQUE-Reihenfolge" bricht sonst, sobald ein OPAQUE-Eintrag kein Sprite hat.
+- Das Sprite eines Objekts mit Kern bleibt unmaskiert (sonst verdunkelt der Kernschatten das eigene
+  Bild), Spieler dahinter bleiben wie bisher maskiert.
+- Hohe Objekte, die auf GLASS wechseln (Turm, Hochsitz, Tank): Spieler dahinter sind für das
+  Sichtsystem sichtbar, ihr Sprite liegt aber weiter hinter dem hohen Bild; oft ragen nur Kopf und
+  Name heraus. Das ist in Ordnung, im Test aber gezielt ansehen.
 
 ## 3. Vesper Museum (14 → 11 Räume)
 
@@ -280,3 +314,50 @@ Cold Store und First Aid Tent (beide im Südosten).
 Reihenfolge für den Umbau (Vorschlag): Museum zuerst (am nächsten am Ziel, einfachster
 Grundriss), dann Wald (vor allem Wege/Höfe), dann Park (größter Umbau). Je Karte zuerst Graybox mit
 `*_plan.py` nachrechnen und erst dann die Grafik neu erzeugen.
+
+## 7. Umsetzung (24.09., Branch `kartenumbau`)
+
+Alle drei Karten sind umgebaut, neu erzeugt und im Freeplay-Autotest gebaut worden (je 46 Konsolen
+platziert, 0 geparkt; 13 Türen 7 senkrecht / 6 waagerecht; 4 Kameras; keine Exceptions). Nachgemessen
+mit demselben Raster wie in Abschnitt 1 (0,25 m, 0,3 m Wandabstand, 2,5 m/s):
+
+| | Polus | Museum | Wald | Park |
+|---|---|---|---|---|
+| Ausdehnung (m) | ≈ 40 × 26 | 61 × 43 → **51 × 30** | 64 × 44 → **52 × 34** | 74 × 50 → **44 × 39** |
+| begehbar (m²) | – | 1719 → **1089** | 2024 → **1291** | 2279 → **1155** |
+| Ø Raumabstand Luftlinie (m) | 17,5 | 28,0 → **21,5** | 29,3 → **21,9** | 35,0 → **22,7** |
+| Ø Raumabstand Laufweg (m) | – | 30,0 → **22,0** | 32,8 → **23,7** | 39,8 → **25,4** |
+| weitester Punkt ab Spawn | ≈ 16 s | 17 s → **14 s** | 19 s → **15 s** | 21 s → **14 s** |
+| größter Raumabstand, Laufweg | – | 25 s → **18 s** | 26 s → **19 s** | 33 s → **21 s** |
+
+Erreicht: weitester Punkt ab Spawn unter 16 s auf allen Karten, größter Raumabstand ≈ 20 s (Park
+knapp darüber). Nicht ganz erreicht: die Ausdehnung von ≈ 44 × 30 m und der mittlere Raumabstand
+≤ 19 m; dafür hätten Räume noch kleiner werden müssen, als ihre Grafik es hergibt.
+
+### Wie umgesetzt
+
+- **Museum:** jeder Raum bleibt in seinen alten Entwurfskoordinaten beschrieben, wird zugeschnitten
+  und verschoben (`museum_layout.ROOM_DEFS`); `museum_art.OpList.begin_room/end_room` verschiebt die
+  Raumgrafik mit und beschneidet sie auf die neue Fläche. So blieb die gesamte Gestaltung erhalten.
+  Shop → Südwestecke des Foyers (Admin, Name "Foyer"), Mineralienkabinett → Nordnische der Rotunde
+  (Shields, Name "Rotunda"), Laderampe + Depot → "Depot & Loading Dock", Oldtimer entfällt, Sphinx,
+  Deko-Treppe, Cafébereich und die Höfe entfallen. Das Gebäude folgt dem Grundriss (keine
+  Rechteckhülle mehr).
+- **Wald:** Raster 4 × 3, Höfe 1,5 m (1 m war nach Abzug des Spielerabstands stellenweise nur
+  0,25 m breit und schnitt das Ranger Office ab), Lücken unter 1,2 m zwischen Höfen werden
+  geschlossen. Lichtungsgruppen (`CLEARING_GROUPS`) für Water Works; Sturmholz-Stellen kommen jetzt
+  als Daten (`AtlasWaldData.TreeSpots`), weil die zusammengewachsenen Höfe keine schmalen Flure mehr
+  bilden. Die Konsolen-Wandseiten schreibt `gen_wald.update_brief` nach der Platzierung neu.
+- **Park:** siehe Abschnitt 5, mit zwei Bahnübergängen; Türen dürfen ihre Gruppe selbst angeben
+  (Kühlhaus-Westtor = Storage), Laternen alle 5 m bzw. eine je kurzem Weg (14 statt 3).
+- **Rotunde (User 24.09.):** Sockel 8,4 x 3,2 m -> 5 x 2 m, das 8,7 m lange Skelett ragt mit Hals/Kopf
+  (1,7 m) und Schwanz (2,2 m) in den Raum; die Rotunden-Kamera zeigt per `AtlasMapDef.CameraViews`
+  die Suedhaelfte (Sockelfront + Laufring vom Foyer) statt der Sockelmitte (vorher nur Sand/Knochen).
+- **Builder:** Schattenhindernis → Sprite über die Geometrie (`OccluderProp`), siehe Umsetzungsregeln
+  in Abschnitt 2.
+
+### Offen
+
+- Echter Playtest (Laufgefühl, Engstellen an Türen, Sichtlinien der neuen GLASS-Objekte).
+- Park: Wege sind jetzt kurz; Vorplatz und Gasse sind die einzigen längeren Verbindungen.
+- Die Wiki-Seite (`website/atlas.html`) zeigt noch die alten Grundrisse.

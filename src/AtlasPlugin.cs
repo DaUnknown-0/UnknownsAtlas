@@ -23,7 +23,7 @@ public class AtlasPlugin : BasePlugin
 {
     public const string Id = "com.daunknown0.atlas";
     public const string PluginName = "Unknown's Atlas";
-    public const string VersionString = "0.3.0.13";
+    public const string VersionString = "0.3.0.14";
     public static readonly System.Version Version = System.Version.Parse(VersionString);
 
     public static BepInEx.Logging.ManualLogSource Logger = null!;

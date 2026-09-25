@@ -39,9 +39,15 @@ internal sealed class AtlasMapDef
     public int[][] VentBridges = System.Array.Empty<int[]>();
     public AtlasMuseumLayout.DoorSlot[] VerticalDoors, HorizontalDoors;
     public Vector2[] Cameras;
+    /// <summary>Eigener Blickpunkt je Kamera-Index (sonst die Mitte des Raums, in dem die Kamera haengt).</summary>
+    public Dictionary<int, Vector2> CameraViews = new();
     public Dictionary<SystemTypes, Vector2> MapButtons;
+    /// <summary>Raumnamen auf der Minimap (Weltmeter: Mitte, halbe Breite/Hoehe); Knoepfe weichen ihnen aus.</summary>
+    public (float X, float Y, float HalfW, float HalfH)[] MapLabels = System.Array.Empty<(float, float, float, float)>();
     public Color CameraColor;
     public float MinLight = 1f, MaxLight = 5f;
+    /// <summary>Sturmholz-Stellen (Wald): Wegmitte, Weg waagerecht?, Stammlaenge. null = keine.</summary>
+    public (float X, float Y, bool Horizontal, float Len)[] TreeSpots;
     /// <summary>Diagnose (AtlasMapShot): Teststellen fuer Bildschirmfotos; die letzte oeffnet die Kameras.</summary>
     public Vector2[] ViewSpots = System.Array.Empty<Vector2>();
     /// <summary>Task-Namen der Karte (docs/TASK_KONZEPT.md): jeder Karten-Task reitet auf einem Skeld-TaskType.</summary>
@@ -67,16 +73,19 @@ internal sealed class AtlasMapDef
         FloorPixelsPerMeter = AtlasMuseumData.FloorPixelsPerMeter, FloorTiles = AtlasMuseumData.FloorTiles,
         PropPixelsPerMeter = AtlasMuseumData.PropPixelsPerMeter, Props = AtlasMuseumData.Props,
         ConsoleSprites = AtlasMuseumData.ConsoleSprites,
-        NoFadeKinds = new() { "dino" },
+        NoFadeKinds = new() { "dino", "dino_rex" },
         Consoles = AtlasMuseumLayout.Consoles,
         EmergencyButton = AtlasMuseumLayout.EmergencyButton, SurveillanceConsole = AtlasMuseumLayout.SurveillanceConsole,
         AdminTable = AtlasMuseumLayout.AdminTable, FreeplayLaptop = AtlasMuseumLayout.FreeplayLaptop,
         Spawn = AtlasMuseumLayout.Spawn, SpawnRadius = AtlasMuseumLayout.SpawnRadius,
         Vents = AtlasMuseumLayout.Vents, VentNetworks = AtlasMuseumLayout.VentNetworks,
         VerticalDoors = AtlasMuseumLayout.VerticalDoors, HorizontalDoors = AtlasMuseumLayout.HorizontalDoors,
-        Cameras = AtlasMuseumLayout.Cameras, MapButtons = AtlasMuseumLayout.MapButtons,
+        Cameras = AtlasMuseumLayout.Cameras, MapButtons = AtlasMuseumLayout.MapButtons, MapLabels = AtlasMuseumData.MapLabels,
+        // K1 Rotunde: der T. rex ragt seit 25.09. mit dem Kopf nach Westen ueber den Sockel hinaus
+        // (Schaedel etwa x -6..-4, y 6..7,5). Blick auf Kopf, Hals und Vorderbeine samt dem Laufweg darunter.
+        CameraViews = new() { [0] = new Vector2(-2.8f, 5.6f) },
         CameraColor = new Color(0x14 / 255f, 0x17 / 255f, 0x1c / 255f),
-        ViewSpots = new Vector2[] { new(-6.9f, -7.2f), new(24.5f, -11.4f), new(22.8f, -4.3f), new(-9f, 7.65f), new(-27.4f, -16.8f) },
+        ViewSpots = new Vector2[] { new(-6.9f, -7.2f), new(23.5f, -4.6f), new(-2.5f, 4.6f), new(-9f, 7.0f), new(-13.4f, -2.7f) },
         TaskNames = new()
         {
             { TaskTypes.FixWiring, "Repair Showcase Lighting" },
@@ -132,10 +141,10 @@ internal sealed class AtlasMapDef
         Spawn = AtlasParkLayout.Spawn, SpawnRadius = AtlasParkLayout.SpawnRadius,
         Vents = AtlasParkLayout.Vents, VentNetworks = AtlasParkLayout.VentNetworks, VentBridges = AtlasParkLayout.VentBridges,
         VerticalDoors = AtlasParkLayout.VerticalDoors, HorizontalDoors = AtlasParkLayout.HorizontalDoors,
-        Cameras = AtlasParkLayout.Cameras, MapButtons = AtlasParkLayout.MapButtons,
+        Cameras = AtlasParkLayout.Cameras, MapButtons = AtlasParkLayout.MapButtons, MapLabels = AtlasParkData.MapLabels,
         CameraColor = new Color(0x12 / 255f, 0x14 / 255f, 0x20 / 255f),
-        // Festplatz (Spawn), Karussell, Lichtturm, Haupteingang, Security Booth mit Kameras (Stilblatt-Abnahme)
-        ViewSpots = new Vector2[] { new(0f, 3.5f), new(-18.5f, -3.9f), new(17f, 14.2f), new(0f, -20.6f), new(12.5f, -12.5f) },
+        // Festplatz (Spawn), Karussell, Lichtturm-Hof, Vorplatz der Drehkreuze, Security-Nebenraum mit Kameras
+        ViewSpots = new Vector2[] { new(0f, 2.5f), new(-11.8f, -1.8f), new(13.4f, 15.6f), new(0f, -4.8f), new(4.5f, -9.5f) },
         TaskNames = new()
         {
             { TaskTypes.FixWiring, "Fix the Light Strings" },
@@ -222,6 +231,7 @@ internal sealed class AtlasMapDef
         Walls = AtlasWaldData.Walls, ShadowWalls = AtlasWaldData.ShadowWalls,
         Opaque = AtlasWaldData.Opaque, OpaqueCastsShadow = AtlasWaldData.OpaqueCastsShadow,
         Glass = AtlasWaldData.Glass, Rooms = AtlasWaldData.Rooms, Hallways = AtlasWaldData.Hallways,
+        TreeSpots = AtlasWaldData.TreeSpots,
         FloorPixelsPerMeter = AtlasWaldData.FloorPixelsPerMeter, FloorTiles = AtlasWaldData.FloorTiles,
         PropPixelsPerMeter = AtlasWaldData.PropPixelsPerMeter, Props = AtlasWaldData.Props,
         ConsoleSprites = AtlasWaldData.ConsoleSprites,
@@ -231,10 +241,10 @@ internal sealed class AtlasMapDef
         Spawn = AtlasWaldLayout.Spawn, SpawnRadius = AtlasWaldLayout.SpawnRadius,
         Vents = AtlasWaldLayout.Vents, VentNetworks = AtlasWaldLayout.VentNetworks,
         VerticalDoors = AtlasWaldLayout.VerticalDoors, HorizontalDoors = AtlasWaldLayout.HorizontalDoors,
-        Cameras = AtlasWaldLayout.Cameras, MapButtons = AtlasWaldLayout.MapButtons,
+        Cameras = AtlasWaldLayout.Cameras, MapButtons = AtlasWaldLayout.MapButtons, MapLabels = AtlasWaldData.MapLabels,
         CameraColor = new Color(0x16 / 255f, 0x30 / 255f, 0x1f / 255f),
         // Messe (Spawn), Funkmast-Vent, Generator-Vent, Steg, Wachstube mit Kameras
-        ViewSpots = new Vector2[] { new(0f, 1f), new(10.2f, 12.2f), new(-16.8f, -13.4f), new(28.5f, -14.4f), new(-27f, -14.5f) },
+        ViewSpots = new Vector2[] { new(0f, 1f), new(3.0f, 12.0f), new(-10.5f, -7.5f), new(18.5f, -10.0f), new(-24.5f, -9.0f) },
         TaskNames = new()
         {
             { TaskTypes.FixWiring, "Splice Field Cable" },

@@ -390,27 +390,28 @@ def render(walk, water, shells, doors, rooms, ppm):
 
 
 def lamp_points(walk, rooms):
-    """Laternen am Wegrand, etwa alle 7 m, abwechselnd links und rechts (nur auf Wegen, nicht in Bereichen)."""
+    """Laternen am Wegrand, etwa alle 5 m, abwechselnd links und rechts (nur auf Wegen, nicht in Bereichen).
+    Seit der Kartenverkleinerung sind viele Wege nur 2-4 m lang: jeder bekommt dann eine Laterne in der Mitte."""
     hall = walk.difference(unary_union([g for _n, _s, g in rooms.values()]))
     inner = walk.buffer(-0.3)
     out = []
     side = 1
     for pts in L.PATHS:
         ls = LineString(pts)
-        k = 2.0
-        while k <= ls.length - 1.0:
+        k = min(2.0, ls.length / 2)
+        while k <= max(ls.length - 1.0, ls.length / 2):
             a, b = ls.interpolate(max(0.0, k - 0.1)), ls.interpolate(min(ls.length, k + 0.1))
             dx, dy = b.x - a.x, b.y - a.y
             n = math.hypot(dx, dy) or 1.0
             nx, ny = -dy / n, dx / n
             c = ls.interpolate(k)
             for sgn in (side, -side):
-                p = Point(c.x + nx * 1.3 * sgn, c.y + ny * 1.3 * sgn)
+                p = Point(c.x + nx * 1.0 * sgn, c.y + ny * 1.0 * sgn)   # Wege 2,8 m breit (Innenstreifen bis 1,1 m)
                 if inner.contains(p) and hall.buffer(0.2).contains(p) and all(p.distance(Point(q)) > 3.5 for q in out):
                     out.append((round(p.x, 2), round(p.y, 2)))
                     break
             side = -side
-            k += 7.0
+            k += 5.0
     return out
 
 

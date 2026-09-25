@@ -215,7 +215,7 @@ internal static class AtlasParkWorld
 
     /// <summary>Auf der Strecke zwischen Parkbuero und Bahnhof: dort liegt kein anderer Kartenknopf (am
     /// Bahnhof verdeckte ihn das Reaktor-Symbol, Test 23.09.).</summary>
-    public static Vector2 RideButtonSpot() => new(22.4f, 8.6f);
+    public static Vector2 RideButtonSpot() => new(16.8f, 3.2f);   // Bahnhof, abseits des Reaktor-Knopfs
 
     // ------------------------------------------------------------------ Ablauf (alle Clients)
 
@@ -451,7 +451,7 @@ internal static class AtlasParkWorld
         {
             var pc = d != null ? d.GetComponent<PlayerControl>() : null;
             if (pc == null || pc.NetTransform == null) continue;
-            pc.NetTransform.SnapTo(new Vector2(-29.3f, 0.5f));
+            pc.NetTransform.SnapTo(new Vector2(-15.2f, -7.0f));   // im Tunnel zwischen den Zickzack-Waenden
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: dummy placed in the ghost train");
             return;
         }
@@ -466,7 +466,7 @@ internal static class AtlasParkWorld
     {
         _diagOneWay = 1;
         _diagOneWayLog = "";
-        PlayerControl.LocalPlayer.NetTransform.SnapTo(new Vector2(0f, -16.4f));
+        PlayerControl.LocalPlayer.NetTransform.SnapTo(new Vector2(0f, -1.2f));    // Festplatz, noerdlich zwischen beiden Drehkreuzen (je 3 m Reichweite)
     }
 
     private static void DiagOneWayTick()
@@ -478,7 +478,7 @@ internal static class AtlasParkWorld
         {
             bool ok = Turnstiles[0].Closed && !Turnstiles[1].Closed;
             _diagOneWayLog = $"north: {state} ({(ok ? "ok" : "WRONG")})";
-            PlayerControl.LocalPlayer.NetTransform.SnapTo(new Vector2(0f, -20.4f));
+            PlayerControl.LocalPlayer.NetTransform.SnapTo(new Vector2(0f, -4.8f));
             _diagOneWay = 3;
             return;
         }

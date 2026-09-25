@@ -185,6 +185,14 @@ def render_props():
     for i, (kind, shape) in enumerate(A.all_props()):
         im, wx, wy, base = A.draw_prop(kind, shape, i, PROP_PX_PER_M)
         im = im.filter(ImageFilter.GaussianBlur(PROP_SOFTEN_PX))
+        if kind in A.CROP_KINDS:
+            # auf den Inhalt zuschneiden (2 px Rand fuer die Weichzeichnung), Ecke links unten mitziehen
+            l_, t_, r_, b_ = im.getchannel("A").getbbox()
+            l_, t_ = max(0, l_ - 2), max(0, t_ - 2)
+            r_, b_ = min(im.width, r_ + 2), min(im.height, b_ + 2)
+            wx += l_ / PROP_PX_PER_M
+            wy += (im.height - b_) / PROP_PX_PER_M
+            im = im.crop((l_, t_, r_, b_))
         images.append((i, im))
         fx0, _fy0, fx1, _fy1 = A.shape_bounds(shape)
         meta.append((kind, wx, wy, base, fx0, fx1))
@@ -223,7 +231,11 @@ def render_consoles():
     return out
 
 
+MAP_LABELS = []   # (x, y, halbe Breite, halbe Hoehe) in Weltmetern, fuer AvoidLabels im Builder
+
+
 def render_minimap(walk):
+    MAP_LABELS.clear()
     s = MAP_PX_PER_M
     w, h = int((BX1 - BX0) * s), int((BY1 - BY0) * s)
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
@@ -240,15 +252,18 @@ def render_minimap(walk):
         font = ImageFont.truetype("arialbd.ttf", 22)
     except OSError:
         font = ImageFont.load_default()
+    # Teilflaechen eines Raums (gleicher Name, je Skeld-System eine) nur einmal beschriften.
+    by_name = {}
     for key, name, _sys, poly, _c in L.ROOMS:
-        c = Polygon(poly).centroid
-        label_y = c.y
-        if key == "rotunde":
-            label_y = 8.3
-        if key == "foyer":
-            label_y = -11.0
-        x, y = px(c.x, label_y, s)
-        d.text((x, y), name, font=font, fill=(20, 28, 40, 255), anchor="mm")
+        by_name.setdefault(name, []).append(Polygon(poly))
+    for name, polys in by_name.items():
+        c = unary_union(polys).centroid
+        lx, ly = L.LABEL_AT.get(name, (c.x, c.y))
+        x, y = px(lx, ly, s)
+        text = L.LABEL_TEXT.get(name, name)   # zu breite Namen zweizeilig (schmaler Raum)
+        d.multiline_text((x, y), text, font=font, fill=(20, 28, 40, 255), anchor="mm", align="center", spacing=2)
+        l_, t_, r_, b_ = d.multiline_textbbox((0, 0), text, font=font, anchor="mm", align="center", spacing=2)
+        MAP_LABELS.append((lx + (l_ + r_) / 2 / s, ly - (t_ + b_) / 2 / s, (r_ - l_) / 2 / s, (b_ - t_) / 2 / s))
     img.save(OUT_MINIMAP, optimize=True)
     print(f"minimap {OUT_MINIMAP.name} {w}x{h}")
 
@@ -363,6 +378,18 @@ def emit_cs(walk, props=None, tiles=None, consoles=None):
         a(f"        (\"{key}\", {page}, {x}, {y}, {w}, {h}, {px_:.4f}f, {py_:.4f}f),")
     a("    };")
     a("")
+    a("    /// <summary>Beschriftungen der Minimap (Weltmeter): Mitte, halbe Breite/Hoehe. Die Sabotage- und")
+    a("    /// Tuerknoepfe weichen ihnen aus (AtlasMuseumBuilder.AvoidLabels).</summary>")
+    a("    public static readonly (float X, float Y, float HalfW, float HalfH)[] MapLabels =\n    {")
+    for lx, ly, hw, hh in MAP_LABELS:
+        a(f"        ({lx:.3f}f, {ly:.3f}f, {hw:.3f}f, {hh:.3f}f),")
+    a("    };")
+    rig = A.REX_RIG
+    if rig:
+        a("    /// <summary>Gelenke des T. rex in Weltmetern (AtlasRex): Halsgelenk = Drehpunkt des Kopfes,")
+        a("    /// Kiefergelenk, Augenhoehle.</summary>")
+        a("    public static readonly Vector2 RexNeck = new(%.3ff, %.3ff), RexJaw = new(%.3ff, %.3ff), RexEye = new(%.3ff, %.3ff);"
+          % (rig["neck"] + rig["jaw"] + rig["eye"]))
     a("    /// <summary>Gaenge als Hallway-Raeume (nur AllRooms, nicht FastRooms).</summary>")
     a("    public static readonly Vector2[][] Hallways =")
     a("    {")

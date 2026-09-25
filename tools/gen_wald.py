@@ -22,6 +22,7 @@ from shapely.ops import unary_union
 import museum_art as A
 import wald_layout as W
 import wald_geo as G
+import map_labels
 
 HERE = Path(__file__).resolve().parent
 PROJECT = HERE.parent
@@ -164,7 +165,7 @@ def build_floor_ops(walk, water, shells, doors, rooms):
     # Uferzone: flaches helles Wasser am Westufer, tiefes dunkles Wasser im Osten, Mondspiegelung
     fill(ops, water.intersection(box(wx0, wy0, wx0 + 0.6, wy1)), alpha(C["wasser_licht"], 70))
     fill(ops, water.intersection(box(wx1 - 1.4, wy0, wx1, wy1)), alpha(hexc("#1b3f5c"), 90))
-    ops.glow(wx0 + 1.6, -14.0, 2.6, A.MOON, 0.22)
+    ops.glow(wx0 + 1.6, (W.DOCK[2] + W.DOCK[4]) / 2, 2.6, A.MOON, 0.22)
     ops.line(list(water.exterior.coords), fill=alpha(hexc("#1b3f5c"), 255), width=0.12)
 
     # 3. Aussenflaechen: Gras (Lichtungen), Kies (Hoefe), Erde (Wege)
@@ -321,10 +322,12 @@ def build_floor_ops(walk, water, shells, doors, rooms):
                 ops.line([(-3.85, fy), (-4.0, fy)], fill=alpha(hexc("#d9b25c"), 200), width=0.03)
                 ops.line([(3.85, fy), (4.0, fy)], fill=alpha(hexc("#d9b25c"), 200), width=0.03)
         if key == "wachstube":
-            ops.rect(-27.5, -17.0, -24.0, -12.5, fill=alpha(hexc("#3d5a6e"), 200), outline=alpha(hexc("#8fb0c8"), 160), width=0.04)
-            for fx in [-27.4 + i * 0.2 for i in range(17)]:
-                ops.line([(fx, -17.05), (fx, -17.2)], fill=alpha(hexc("#8fb0c8"), 180), width=0.03)
-                ops.line([(fx, -12.45), (fx, -12.3)], fill=alpha(hexc("#8fb0c8"), 180), width=0.03)
+            # relativ zum Innenraum (seit der Verkleinerung wandert die Wachstube)
+            rx0, ry0, rx1, ry1 = x0 + 2.5, y0 + 1.0, x0 + 6.0, y0 + 5.5
+            ops.rect(rx0, ry0, rx1, ry1, fill=alpha(hexc("#3d5a6e"), 200), outline=alpha(hexc("#8fb0c8"), 160), width=0.04)
+            for fx in [rx0 + 0.1 + i * 0.2 for i in range(17)]:
+                ops.line([(fx, ry0 - 0.05), (fx, ry0 - 0.2)], fill=alpha(hexc("#8fb0c8"), 180), width=0.03)
+                ops.line([(fx, ry1 + 0.05), (fx, ry1 + 0.2)], fill=alpha(hexc("#8fb0c8"), 180), width=0.03)
     # Tuerschwellen
     for key, side, a, b, kind, o in doors:
         fill(ops, o, shade(C["diele"][0], 0.8))
@@ -899,7 +902,8 @@ def draw_prop(kind, s, idx, ppm):
 
 
 def render_props():
-    items = [(s, k) for s, k in W.OPAQUE] + [(s, k) for s, k in W.GLASS]
+    # kind None = Sichtkern ohne eigenes Sprite (Baumstamm; die Krone kommt aus dem GLASS-Eintrag)
+    items = [(s, k) for s, k in W.OPAQUE if k] + [(s, k) for s, k in W.GLASS if k]
     images, meta = [], []
     for i, (s, kind) in enumerate(items):
         im, wx, wy, base = draw_prop(kind, s, i, PROP_PPM)
@@ -999,6 +1003,40 @@ def place_consoles(walk, rooms, doors, obstacles):
     return placed
 
 
+def update_brief(consoles, rooms):
+    """wald_console_brief.json an die platzierten Konsolen anpassen (Kartenverkleinerung 24.09.):
+    Position, Raum, Gebaeude/Lichtung und die Wandseite, an der der Block steht. Die Wandseite folgt
+    der naechsten Raumkante (unter 0,9 m), sonst "-". Freistehende Bloecke ("-") bleiben freistehend."""
+    import json
+    path = HERE / "wald_console_brief.json"
+    brief = json.loads(path.read_text(encoding="utf-8"))
+    special = {"EmergencyButton": W.EMERGENCY, "SurveillanceConsole": W.SURVEILLANCE,
+               "AdminTable": W.ADMIN_TABLE, "FreeplayLaptop": W.FREEPLAY}
+    buildings = {b[0] for b in W.BUILDINGS}
+    for row in brief:
+        key = row[0]
+        p = consoles.get(key) or special.get(key)
+        if p is None:
+            continue
+        row[1], row[2] = round(p[0], 2), round(p[1], 2)
+        pt = Point(p)
+        owner = min(rooms, key=lambda k: rooms[k][2].distance(pt))
+        row[3] = owner
+        row[4] = "building" if owner in buildings else "clearing"
+        if row[5] == "-" or key in special:
+            continue
+        g = rooms[owner][2]
+        q = g.exterior.interpolate(g.exterior.project(pt))
+        dx, dy = q.x - pt.x, q.y - pt.y
+        if math.hypot(dx, dy) > 0.9:
+            row[5] = "-"
+        elif abs(dx) > abs(dy):
+            row[5] = "E" if dx > 0 else "W"
+        else:
+            row[5] = "N" if dy > 0 else "S"
+    path.write_text(json.dumps(brief, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
 # ------------------------------------------------------------------ Task-Bloecke
 
 def render_consoles():
@@ -1034,6 +1072,9 @@ def render_consoles():
 
 # ------------------------------------------------------------------ Minimap
 
+MAP_LABELS = []   # (x, y, halbe Breite, halbe Hoehe) in Weltmetern, fuer AvoidLabels im Builder
+
+
 def minimap(walk, rooms):
     s = 24
     ww, hh = int((BX1 - BX0) * s), int((BY1 - BY0) * s)
@@ -1052,9 +1093,15 @@ def minimap(walk, rooms):
         font = ImageFont.truetype("arialbd.ttf", 20)
     except OSError:
         font = ImageFont.load_default()
+    # Teilflaechen eines Raums (gleicher Name) nur einmal beschriften
+    by_name = {}
     for key, (name, _s, g) in rooms.items():
-        c = g.representative_point()
-        d.text(P(c.x, c.y), name, font=font, fill=(18, 36, 28, 255), anchor="mm")
+        by_name.setdefault(name, []).append(g)
+    MAP_LABELS.clear()
+    area = walk.buffer(0.15)
+    for name, gs in by_name.items():
+        c = unary_union(gs).representative_point()
+        map_labels.place(d, font, name, c.x, c.y, area, s, P, (18, 36, 28, 255), MAP_LABELS)
     img.save(ASSETS / "wald_minimap.png", optimize=True)
 
 
@@ -1103,6 +1150,15 @@ def emit(walk, water, rooms, doors, tiles, props, consoles, blocks=()):
     room_u = unary_union([g for _n, _s, g in rooms.values()])
     rest = walk.difference(room_u).buffer(0)
     halls = [g for g in geom_parts(rest) if g.area > 1.0]
+    # Sturmholz-Stellen quer ueber jeden Weg. Frueher leitete AtlasWorld sie aus schmalen Flur-
+    # flaechen ab; seit den 1-m-Hoefen der Verkleinerung verschmelzen Wege und Hoefe zu wenigen
+    # grossen Flaechen (Autotest 24.09.: 0 statt 5 Stellen). Deshalb stehen sie jetzt als Daten hier.
+    trees = []
+    for pts in W.PATHS:
+        ls = LineString(pts)
+        c = ls.interpolate(0.5, normalized=True)
+        (ax, ay), (bx, by) = pts[0], pts[-1]
+        trees.append((c.x, c.y, abs(bx - ax) > abs(by - ay), W.PATH_W + 0.8))
 
     L = []
     a = L.append
@@ -1131,6 +1187,17 @@ def emit(walk, water, rooms, doors, tiles, props, consoles, blocks=()):
     a("    public static readonly Vector2[][] Hallways =\n    {")
     for h in halls:
         a(f"        {chain(list(h.exterior.coords)[:-1])},")
+    a("    };")
+    a("    /// <summary>Sturmholz-Stellen: Wegmitte, Weg laeuft waagerecht?, Stammlaenge (quer zum Weg).</summary>")
+    a("    public static readonly (float X, float Y, bool Horizontal, float Len)[] TreeSpots =\n    {")
+    for x, y, hor, ln in trees:
+        a(f"        ({x:.3f}f, {y:.3f}f, {'true' if hor else 'false'}, {ln:.2f}f),")
+    a("    };")
+    a("    /// <summary>Beschriftungen der Minimap (Weltmeter): Mitte, halbe Breite/Hoehe. Die Sabotage- und")
+    a("    /// Tuerknoepfe weichen ihnen aus (AtlasMuseumBuilder.AvoidLabels).</summary>")
+    a("    public static readonly (float X, float Y, float HalfW, float HalfH)[] MapLabels =\n    {")
+    for lx, ly, hw, hh in MAP_LABELS:
+        a(f"        ({lx:.3f}f, {ly:.3f}f, {hw:.3f}f, {hh:.3f}f),")
     a("    };")
     a(f"    public const float FloorPixelsPerMeter = {FLOOR_PPM}f;")
     a("    public static readonly (int Index, float WorldX, float WorldY, int W, int H)[] FloorTiles =\n    {")
@@ -1209,6 +1276,7 @@ def main():
     rooms = G.rooms(walk)
     obstacles = [G.shape(s) for s, _k in W.OPAQUE] + [G.shape(s) for s, _k in W.GLASS]
     consoles = place_consoles(walk, rooms, doors, obstacles)
+    update_brief(consoles, rooms)
     free = walk.difference(unary_union(obstacles).buffer(0.25))
     for k, p in list(consoles.items()) + [("Emergency", W.EMERGENCY), ("Surveillance", W.SURVEILLANCE),
                                           ("Admin", W.ADMIN_TABLE), ("Freeplay", W.FREEPLAY)] + \

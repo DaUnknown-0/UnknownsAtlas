@@ -79,7 +79,7 @@ internal static class AtlasMapShot
         }
         if (_screenFrames > 0 && --_screenFrames == 0)
         {
-            try { VisionDiagnostics(); CaptureScreen(); }
+            try { VisionDiagnostics(); CaptureScreen(); AtlasMuseumBuilder.LogLoopingAudio("at view spot"); }
             catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} view capture failed: {e}"); }
             // Naechste Teststelle (nur Museum); ScreenCapture schreibt erst am Frame-Ende.
             if (!_vanillaMode && ++_spotIndex < ViewSpots.Length) _nextSpotFrames = 30;

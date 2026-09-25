@@ -149,6 +149,8 @@ public class AtlasMinigame : Minigame
         "cctv" => new TuneMechanic(false),
         "antenna" => new TuneMechanic(true),
         "sawlog" => new SawMechanic(),
+        "rexmusic" => new MusicBoxMechanic(),
+        "rexlight" => new NightLightMechanic(),
         // Moonlight Carnival: bekannte Bausteine, eigene Grafik und Texte ueber AtlasMapDef.TaskArt/TaskText
         "lightstring" => new SpliceMechanic(),
         "motors" => new ClimateMechanic(),

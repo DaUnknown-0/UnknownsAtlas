@@ -24,6 +24,7 @@ import park_art as PA
 import park_floor as PF
 import park_layout as L
 import park_geo as G
+import map_labels
 
 HERE = Path(__file__).resolve().parent
 PROJECT = HERE.parent
@@ -75,6 +76,8 @@ def label_point(g, name=""):
     """Stelle fuer den Raumnamen: moeglichst nah an der Raummitte, der ganze Schriftzug frei von
     Hindernissen und Waenden (vorher lag "Carousel" unter dem Karussell bzw. in einer Ecke)."""
     obst = unary_union([G.shape(s) for s, _k in L.OPAQUE + L.GLASS]).buffer(0.3)
+    # TOR zeichnet Vents als Symbol (~2 x 1,3 m) auf die Minimap; der Name soll daneben stehen
+    obst = obst.union(unary_union([box(x - 1.1, y - 0.7, x + 1.1, y + 0.7) for x, y in L.VENTS.values()]))
     free = g.buffer(-0.3).difference(obst)
     half_w, half_h = max(1.0, len(name) * 0.26), 0.55
     c = g.centroid
@@ -205,7 +208,8 @@ def draw_block(kind, s, idx=0):
 
 
 def render_props():
-    items = [(s, k) for s, k in L.OPAQUE] + [(s, k) for s, k in L.GLASS]
+    # kind None = Sichtkern ohne eigenes Sprite (Karussell-Gehaeuse; das Sprite traegt die GLASS-Scheibe)
+    items = [(s, k) for s, k in L.OPAQUE if k] + [(s, k) for s, k in L.GLASS if k]
     images, meta = [], []
     for i, (s, kind) in enumerate(items):
         im, wx, wy, base = draw_block(kind, s, i)
@@ -255,6 +259,8 @@ def place_consoles(walk, rooms, doors, obstacles):
     edge = walk.boundary
     taken = [Point(p) for p in list(L.FIXED.values()) + [L.EMERGENCY, L.SURVEILLANCE, L.ADMIN_TABLE, L.FREEPLAY, L.SPAWN]]
     taken += [Point(p) for p in L.VENTS.values()] + [Point(p) for p in L.CAMERAS]
+    # Foto-Monitor der Geisterbahn haengt an einer Wand: dort keine Konsole (je Seite 1,2 m breit)
+    taken += [Point(L.GHOST_MONITOR[0] + dx, L.GHOST_MONITOR[1]) for dx in (-1.0, 0.0, 1.0)]
     door_pts = [o.centroid for *_r, o in doors]
     ends = []
     clearing_keys = [c[0] for c in L.CLEARINGS]
@@ -325,6 +331,9 @@ def render_consoles(consoles):
     return out
 
 
+MAP_LABELS = []   # (x, y, halbe Breite, halbe Hoehe) in Weltmetern, fuer AvoidLabels im Builder
+
+
 def minimap(walk, rooms):
     s = 24
     ww, hh = int((BX1 - BX0) * s), int((BY1 - BY0) * s)
@@ -342,9 +351,15 @@ def minimap(walk, rooms):
         font = ImageFont.truetype("arialbd.ttf", 20)
     except OSError:
         font = ImageFont.load_default()
+    # Teilflaechen eines Raums (gleicher Name) nur einmal beschriften
+    by_name = {}
     for key, (name, _s, g) in rooms.items():
-        c = label_point(g, name)
-        d.text(Pt(c.x, c.y), name, font=font, fill=(30, 22, 44, 255), anchor="mm")
+        by_name.setdefault(name, []).append(g)
+    MAP_LABELS.clear()
+    area = walk.buffer(0.15)
+    for name, gs in by_name.items():
+        c = label_point(max(gs, key=lambda g: g.area), name)
+        map_labels.place(d, font, name, c.x, c.y, area, s, Pt, (30, 22, 44, 255), MAP_LABELS)
     img.save(ASSETS / "park_minimap.png", optimize=True)
 
 
@@ -424,6 +439,12 @@ def emit(walk, water, rooms, doors, tiles, props, consoles, console_sprites=()):
     for h in halls:
         a(f"        {chain(list(h.exterior.coords)[:-1])},")
     a("    };")
+    a("    /// <summary>Beschriftungen der Minimap (Weltmeter): Mitte, halbe Breite/Hoehe. Die Sabotage- und")
+    a("    /// Tuerknoepfe weichen ihnen aus (AtlasMuseumBuilder.AvoidLabels).</summary>")
+    a("    public static readonly (float X, float Y, float HalfW, float HalfH)[] MapLabels =\n    {")
+    for lx, ly, hw, hh in MAP_LABELS:
+        a(f"        ({lx:.3f}f, {ly:.3f}f, {hw:.3f}f, {hh:.3f}f),")
+    a("    };")
     a(f"    public const float FloorPixelsPerMeter = {FLOOR_PPM}f;")
     a("    public static readonly (int Index, float WorldX, float WorldY, int W, int H)[] FloorTiles =\n    {")
     for i, wx, wy, ww, hh in tiles:
@@ -448,7 +469,7 @@ def emit(walk, water, rooms, doors, tiles, props, consoles, console_sprites=()):
         if kind != "door":
             continue
         c = o.centroid
-        slot = (f"{key}-{side}", c.x, c.y, b0 - a0, group[key])
+        slot = (f"{key}-{side}", c.x, c.y, b0 - a0, G.door_group(key, side, a0))
         (vert if side in "EW" else hori).append(slot)
 
     Ls = []
@@ -512,7 +533,7 @@ def emit(walk, water, rooms, doors, tiles, props, consoles, console_sprites=()):
     gates = []
     for bkey, side in L.CAROUSEL_GATES:
         b = next(b for b in L.BUILDINGS if b[0] == bkey)
-        for sd, a0, b0, _kind in b[4]:
+        for sd, a0, b0, _kind, *_g in b[4]:
             if sd == side:
                 gates.append(G.opening_rect(b[3], sd, a0, b0))
     a("    public static readonly (Vector2 Min, Vector2 Max)[] CarouselGates =")

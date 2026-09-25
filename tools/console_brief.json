@@ -1,8 +1,8 @@
 [
  [
   "Cafeteria/DataConsole/2",
-  7.85,
-  -5.9,
+  7.75,
+  -8.2,
   "foyer",
   "E",
   "Download Data"
@@ -25,111 +25,111 @@
  ],
  [
   "Admin/SwipeCardConsole/0",
-  -5.7,
-  -16.5,
+  -4.7,
+  -11.2,
   "shop",
   "-",
   "Swipe Card (Kartenleser, hier Museumskasse)"
  ],
  [
   "Admin/UploadDataConsole/0",
-  0.5,
-  -20.1,
+  -7.75,
+  -12.4,
   "shop",
-  "S",
+  "W",
   "Download/Upload Data (Datenterminal)"
  ],
  [
   "Admin/FixWiringConsole/2",
-  8.7,
-  -14.0,
+  -1.6,
+  -12.8,
   "shop",
-  "E",
+  "S",
   "Fix Wiring (Kabelkasten)"
  ],
  [
   "Admin/NoOxyConsole/1",
-  22.3,
-  -20.1,
+  20.8,
+  -7.1,
   "depot",
   "S",
   "Sabotage-Station Loeschgas-Abbruchtaster (O2-Keypad)"
  ],
  [
   "Security/DivertPowerConsole/1",
-  -22.7,
-  -15.6,
+  -8.75,
+  -1.8,
   "sicherheit",
   "E",
   "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
  ],
  [
   "Security/FixWiringConsole/5",
-  -28.4,
-  -13.25,
+  -14.4,
+  -0.75,
   "sicherheit",
   "N",
   "Fix Wiring (Kabelkasten)"
  ],
  [
   "Reactor/UpperHandConsole/0",
-  -23.2,
-  -13.3,
+  -13.0,
+  -0.8,
   "sicherheit",
   "N",
   "Sabotage Einbruchalarm A1 (Handscanner)"
  ],
  [
   "Electrical/SwitchConsole/0",
-  -29.1,
-  -6.2,
+  -23.0,
+  -5.2,
   "haustechnik",
   "W",
   "Sabotage Licht: Sicherungskasten"
  ],
  [
   "Electrical/CalibrateConsole/0",
-  -23.3,
-  -4.8,
+  -17.2,
+  -3.8,
   "haustechnik",
   "N",
   "Calibrate Distributor"
  ],
  [
   "Electrical/DivertPowerConsole/0",
-  -22.3,
-  -6.0,
+  -16.2,
+  -4.0,
   "haustechnik",
   "E",
   "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
  ],
  [
   "Electrical/UploadDataConsole/0",
-  -28.8,
-  -12.2,
+  -22.7,
+  -11.2,
   "haustechnik",
   "S",
   "Download/Upload Data (Datenterminal)"
  ],
  [
   "Electrical/FixWiringConsole/0",
-  -22.3,
-  -10.6,
+  -16.2,
+  -9.6,
   "haustechnik",
   "E",
   "Fix Wiring (Kabelkasten)"
  ],
  [
   "LifeSupp/NoOxyConsole/0",
-  -22.3,
-  -9.0,
+  -16.2,
+  -8.0,
   "haustechnik",
   "E",
   "Sabotage-Station Loeschgas-Abbruchtaster (O2-Keypad)"
  ],
  [
   "Reactor/StartReactorConsole/2",
-  -29.1,
+  -23.0,
   1.5,
   "aegypten",
   "W",
@@ -137,7 +137,7 @@
  ],
  [
   "Reactor/UnlockManifoldsConsole/2",
-  -23.5,
+  -17.4,
   2.9,
   "aegypten",
   "-",
@@ -145,8 +145,8 @@
  ],
  [
   "Reactor/LowerHandConsole/1",
-  21.8,
-  -4.5,
+  20.35,
+  6.4,
   "hof",
   "W",
   "Sabotage Einbruchalarm A2 (Handscanner)"
@@ -161,15 +161,15 @@
  ],
  [
   "Weapons/UploadDataConsole/1",
-  -16.3,
-  7.8,
+  -15.1,
+  6.6,
   "galerie",
-  "N",
+  "W",
   "Download/Upload Data (Datenterminal)"
  ],
  [
   "Weapons/DivertPowerConsole/1",
-  -20.3,
+  -15.1,
   1.6,
   "galerie",
   "W",
@@ -178,7 +178,7 @@
  [
   "Nav/ChartCourseConsole/0",
   -14.5,
-  20.1,
+  16.2,
   "planetarium",
   "N",
   "Chart Course (hier: Sternkarte)"
@@ -186,23 +186,23 @@
  [
   "Nav/StabilizeSteeringConsole/0",
   -13.3,
-  15.6,
+  13.1,
   "planetarium",
   "-",
   "Stabilize Steering (hier: Projektor-Steuerpult)"
  ],
  [
   "Nav/UploadDataConsole/0",
-  -20.1,
-  13.0,
+  -17.1,
+  10.5,
   "planetarium",
   "W",
   "Download/Upload Data (Datenterminal)"
  ],
  [
   "Nav/DivertPowerConsole/1",
-  -20.1,
-  18.5,
+  -17.1,
+  14.0,
   "planetarium",
   "W",
   "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
@@ -210,7 +210,7 @@
  [
   "Nav/FixWiringConsole/3",
   -8.8,
-  12.5,
+  10.0,
   "planetarium",
   "E",
   "Fix Wiring (Kabelkasten)"
@@ -225,8 +225,8 @@
  ],
  [
   "Shields/DivertPowerConsole/1",
-  2.0,
-  20.1,
+  3.6,
+  16.2,
   "mineralien",
   "N",
   "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
@@ -234,7 +234,7 @@
  [
   "Comms/FixCommsConsole/0",
   12.5,
-  19.1,
+  15.1,
   "telefon",
   "-",
   "Sabotage Comms: Telefonanlage"
@@ -242,7 +242,7 @@
  [
   "Comms/UploadDataConsole/1",
   17.7,
-  13.35,
+  15.8,
   "telefon",
   "E",
   "Download/Upload Data (Datenterminal)"
@@ -250,7 +250,7 @@
  [
   "Comms/DivertPowerConsole/1",
   9.3,
-  14.0,
+  10.6,
   "telefon",
   "W",
   "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
@@ -274,14 +274,14 @@
  [
   "UpperEngine/DivertPowerConsole/1",
   10.0,
-  -2.7,
+  1.3,
   "technikhalle",
   "S",
   "Divert Power (Empfang: Strom umleiten, kleiner Wandschalter)"
  ],
  [
   "LowerEngine/AlignEngineConsole/1",
-  23.0,
+  21.5,
   9.0,
   "hof",
   "-",
@@ -289,7 +289,7 @@
  ],
  [
   "LowerEngine/FuelEngineConsole/0",
-  25.7,
+  24.2,
   3.8,
   "hof",
   "-",
@@ -297,7 +297,7 @@
  ],
  [
   "LowerEngine/DivertPowerConsole/1",
-  29.1,
+  27.6,
   9.0,
   "hof",
   "E",
@@ -306,7 +306,7 @@
  [
   "MedBay/MedScanner/0",
   16.0,
-  -8.5,
+  -4.5,
   "werkstatt",
   "-",
   "Submit Scan (hier Roentgenrahmen, Boden-Scanner)"
@@ -314,39 +314,39 @@
  [
   "MedBay/MedBayConsole/0",
   11.2,
-  -4.9,
+  -0.9,
   "werkstatt",
   "-",
   "Inspect Sample (Analysegeraet)"
  ],
  [
   "Storage/gasCanConsole/0",
-  24.5,
-  -19.9,
+  23.0,
+  -7.1,
   "depot",
   "S",
   "Fuel Engines Teil 1 (Kanister holen)"
  ],
  [
   "Storage/FixWiringConsole/1",
-  21.8,
-  -11.4,
+  20.3,
+  -6.4,
   "depot",
   "W",
   "Fix Wiring (Kabelkasten)"
  ],
  [
   "Storage/AirlockConsole/0",
-  29.1,
-  -12.0,
+  27.6,
+  -5.8,
   "depot",
   "E",
   "Empty Garbage/Chute (Hebel)"
  ],
  [
   "LifeSupp/CleanFilterConsole/0",
-  -1.8,
-  6.7,
+  -3.4,
+  2.5,
   "rotunde",
   "-",
   "Clean O2 Filter (hier Skelett abstauben)"
@@ -377,24 +377,24 @@
  ],
  [
   "SurveillanceConsole",
-  -28.4,
-  -16.8,
+  -14.5,
+  -2.7,
   "-",
   "-",
   "Kameras (Sicherheitszentrale)"
  ],
  [
   "AdminTable",
-  -26.5,
-  -18.55,
+  -12.5,
+  -6.05,
   "-",
   "-",
   "Gebaeudeplan/Admin-Karte"
  ],
  [
   "FreeplayLaptop",
-  -7.3,
-  -12.3,
+  5.0,
+  -12.6,
   "-",
   "-",
   "Freeplay-Laptop (nur Freeplay)"

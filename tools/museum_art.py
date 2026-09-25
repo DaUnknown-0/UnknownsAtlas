@@ -18,9 +18,10 @@
 import math
 import random
 
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageFilter
 from shapely.geometry import Polygon, Point, LineString, box as sbox
 from shapely.ops import unary_union
+from shapely.affinity import translate
 
 import museum_layout as L
 
@@ -225,6 +226,40 @@ class Canvas:
         else:
             self.d.text(self.p(x, y), s, font=font, fill=fill, anchor=anchor)
 
+    def group(self, clip, ops):
+        """Befehle eines Raums auf eigener Ebene zeichnen und auf clip (Weltflaeche) beschneiden."""
+        bx0, by0, bx1, by1 = clip.bounds
+        x0, y0 = max(bx0, self.x0), max(by0, self.y0)
+        x1, y1 = min(bx1, self.x1), min(by1, self.y1)
+        if x1 <= x0 or y1 <= y0:
+            return
+        # auf das Pixelraster der Leinwand legen, damit die Ebene ohne Versatz einrastet
+        ox = int(math.floor((x0 - self.x0) * self.s)); oy = int(math.floor((self.y1 - y1) * self.s))
+        ex = int(math.ceil((x1 - self.x0) * self.s)); ey = int(math.ceil((self.y1 - y0) * self.s))
+        ox, oy = max(0, ox), max(0, oy)
+        ex, ey = min(self.w, ex), min(self.h, ey)
+        if ex <= ox or ey <= oy:
+            return
+        sub = Canvas.__new__(Canvas)
+        sub.x0 = self.x0 + ox / self.s; sub.x1 = self.x0 + ex / self.s
+        sub.y1 = self.y1 - oy / self.s; sub.y0 = self.y1 - ey / self.s
+        sub.ppm, sub.s = self.ppm, self.s
+        sub.w, sub.h = ex - ox, ey - oy
+        sub.img = Image.new("RGBA", (sub.w, sub.h), (0, 0, 0, 0))
+        sub.d = ImageDraw.Draw(sub.img, "RGBA")
+        for (ax0, ay0, ax1, ay1), fn, args, kw in ops:
+            if ay1 < sub.y0 or ay0 > sub.y1 or ax1 < sub.x0 or ax0 > sub.x1:
+                continue
+            getattr(sub, fn)(*args, **kw)
+        mask = Image.new("L", (sub.w, sub.h), 0)
+        md = ImageDraw.Draw(mask)
+        for p in ([clip] if clip.geom_type == "Polygon" else [q for q in clip.geoms if q.geom_type == "Polygon"]):
+            md.polygon(sub.pts(list(p.exterior.coords)), fill=255)
+            for h in p.interiors:
+                md.polygon(sub.pts(list(h.coords)), fill=0)
+        sub.img.putalpha(ImageChops.multiply(sub.img.getchannel("A"), mask))
+        self.img.alpha_composite(sub.img, (ox, oy))
+
     def finish(self):
         return self.img.resize((self.w // SS, self.h // SS), Image.LANCZOS)
 
@@ -234,11 +269,36 @@ class OpList:
 
     def __init__(self):
         self.ops = []
+        self._dx = self._dy = 0.0
+        self._group = None
+        self._clip = None
+
+    # Kartenverkleinerung (docs/KARTEN_VERKLEINERUNG.md): ein Raum wird in seinen alten
+    # Entwurfskoordinaten gezeichnet, um (dx, dy) an seinen neuen Platz verschoben und auf seine
+    # neue Flaeche beschnitten (sonst malten Laeufer, Lichtflecken usw. auf die Wandkrone).
+    def begin_room(self, clip, dx=0.0, dy=0.0):
+        self._dx, self._dy = dx, dy
+        self._group = []
+        self._clip = clip
+
+    def end_room(self):
+        g, clip = self._group, self._clip
+        self._group = None
+        self._clip = None
+        self._dx = self._dy = 0.0
+        if g:
+            self.ops.append((clip.bounds, "group", (clip, g), {}))
+
+    def _t(self, pts):
+        if not self._dx and not self._dy:
+            return list(pts)
+        return [(x + self._dx, y + self._dy) for x, y in pts]
 
     def add(self, bbox, fn, *args, **kw):
-        self.ops.append((bbox, fn, args, kw))
+        (self._group if self._group is not None else self.ops).append((bbox, fn, args, kw))
 
     def poly(self, pts, fill=None, outline=None, width=OUT_W):
+        pts = self._t(pts)
         xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
         self.add((min(xs), min(ys), max(xs), max(ys)), "poly", pts, fill, outline, width)
 
@@ -246,16 +306,20 @@ class OpList:
         self.poly([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], fill, outline, width)
 
     def ellipse(self, cx, cy, rx, ry, fill=None, outline=None, width=OUT_W):
+        cx, cy = cx + self._dx, cy + self._dy
         self.add((cx - rx, cy - ry, cx + rx, cy + ry), "ellipse", cx, cy, rx, ry, fill, outline, width)
 
     def line(self, pts, fill, width=OUT_W):
+        pts = self._t(pts)
         xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
         self.add((min(xs) - width, min(ys) - width, max(xs) + width, max(ys) + width), "line", pts, fill, width)
 
     def glow(self, cx, cy, r, color, strength=0.5):
+        cx, cy = cx + self._dx, cy + self._dy
         self.add((cx - r, cy - r, cx + r, cy + r), "glow", cx, cy, r, color, strength)
 
     def text(self, x, y, s, size_m, fill, anchor="mm"):
+        x, y = x + self._dx, y + self._dy
         w = len(s) * size_m
         self.add((x - w, y - size_m, x + w, y + size_m), "text", x, y, s, size_m, fill, anchor)
 
@@ -290,12 +354,14 @@ class OpList:
 # ---------------------------------------------------------------- Geometrie
 
 def room_polys():
+    """Stil -> WELT-Flaeche (fuer die Wand-Deko: wem gehoert die Wand?)."""
     out = {}
-    for key, _n, _s, poly, _c in L.ROOMS:
-        if key == "hof":
-            out[key] = unary_union([Polygon(p) for p, _c in L.HOF_FLOORS])
+    for style, poly, _shift in L.ROOM_ART:
+        if style == "hof":
+            g = unary_union([Polygon(p) for p, _c in L.HOF_FLOORS])
         else:
-            out[key] = Polygon(poly)
+            g = Polygon(poly)
+        out[style] = unary_union([out[style], g]) if style in out else g
     return out
 
 
@@ -413,7 +479,7 @@ def floor_room(ops, key, region):
                 ops.ellipse(rx_, ry_, 0.18, 0.18, fill=alpha(lift("#b08a3c", 1.1), 235))
                 ops.ellipse(rx_, ry_, 0.08, 0.08, fill=alpha(lift("#4e4a44", 1.2), 220))
         # innerer Messingkreis um den Sockel
-        ops.ellipse(0, 4, 4.45, 1.85, outline=alpha(lift("#b08a3c", 1.1), 200), width=0.04)
+        ops.ellipse(0.5, 4, 3.0, 1.2, outline=alpha(lift("#b08a3c", 1.1), 200), width=0.04)   # Podest 5,4 x 1,8 m
         # Mondfleck durch den Oculus
         ops.glow(-0.6, 3.4, 3.2, MOON, 0.35)
     elif key == "galerie":
@@ -635,6 +701,7 @@ def decor_outside(ops):
     ops.rect(26.5, 12.1, 29, 12.4, fill=hexc("#8a9196"), outline=OUTLINE, width=0.03)
 
 
+WALL_OUT = 1.0       # Staerke der Aussenwand (Wandkrone um den Grundriss)
 AO_PPM = 16          # Aufloesung der AO-Maske (px/m); wird weich hochskaliert
 AO_SIGMA = 0.28      # Weichheit in m
 AO_STRENGTH = 0.62   # Verdunklung bei voll umschlossenem Punkt (gerade Wand ~ halb, Innenecke ~ drei Viertel)
@@ -908,10 +975,12 @@ def build_floor_ops(walk):
     rooms = room_polys()
     solid = sbox(L.BOUNDS[0], L.BOUNDS[1], L.BOUNDS[2], L.BOUNDS[3]).difference(walk)
 
-    # Gebaeude-Grundflaeche (Wandkrone), Aussenbereich bleibt VOID
-    building = unary_union([sbox(-30, -21, 21.5, 21), sbox(21.5, -21, 30, -6.5)])
+    # Gebaeude-Grundflaeche (Wandkrone): folgt seit der Verkleinerung dem Grundriss (Aussenwand
+    # WALL_OUT dick); eingeschlossene Luecken zwischen Raeumen werden Wandmasse, der Rest bleibt VOID.
+    building = Polygon(walk.buffer(WALL_OUT, join_style=2).exterior)
     ops.geom(building, fill=WALL_TOP)
-    decor_outside(ops)
+    if L.DECOR:
+        decor_outside(ops)
 
     # Gaenge
     for _k, poly in L.CORRIDORS:
@@ -942,8 +1011,11 @@ def build_floor_ops(walk):
                 ops.line([(xx, y0), (xx, y1)], fill=edge, width=0.03)
     thresholds(ops)
 
-    for key, region in rooms.items():
-        floor_room(ops, key, region)
+    for style, poly, (dx, dy) in L.ROOM_ART:
+        world = unary_union([Polygon(p) for p, _c in L.HOF_FLOORS]) if style == "hof" else Polygon(poly)
+        ops.begin_room(world, dx, dy)
+        floor_room(ops, style, translate(world, -dx, -dy))
+        ops.end_room()
 
     crown_rim(ops, walk, building)
     wall_faces(ops, walk, rooms, L.CORRIDORS)
@@ -952,8 +1024,7 @@ def build_floor_ops(walk):
     for p in ([walk] if walk.geom_type == "Polygon" else list(walk.geoms)):
         for ring in [list(p.exterior.coords)] + [list(h.coords) for h in p.interiors]:
             ops.line(ring, fill=OUTLINE, width=0.09)
-    ops.line([(-30, -21), (21.5, -21), (21.5, -6.5), (30, -6.5), (30, -21), (21.5, -21)], fill=OUTLINE, width=0.09)
-    ops.poly([(-30, -21), (21.5, -21), (21.5, 21), (-30, 21)], outline=OUTLINE, width=0.09)
+    ops.poly(list(building.exterior.coords)[:-1], outline=OUTLINE, width=0.09)
 
     exit_signs(ops)
     return ops
@@ -1131,8 +1202,18 @@ PROP_H = {
     "hochregal": 2.4, "kiste": 0.9, "co2": 1.6, "lieferwagen": 2.3, "fass": 0.9,
     "vitrine": 1.6, "tischvitrine": 1.0, "tresorvitrine": 2.1, "bank": 0.45, "cafetisch": 0.75,
     "trog": 0.6, "admintisch": 0.9, "vermittlungstisch": 0.8, "glaswand": 2.0, "resttisch": 0.9,
-    "dino": 4.4, "lampe": 5.0,
+    "dino": 1.6, "dino_rex": 6.2, "lampe": 5.0,
+    # "Rex erwacht" (25.09.): Kopf und Unterkiefer als eigene Sprites (beweglich), zwei Stationen
+    "dino_rex_head": 6.2, "dino_rex_jaw": 6.2, "spieluhr": 1.3, "nachtlicht": 1.3,
 }
+
+# Objekte, deren Sprite auf den sichtbaren Inhalt zugeschnitten wird (gen_museum.render_props): Kopf und
+# Kiefer liegen auf der vollen 13,6-m-Leinwand des Skeletts, belegen davon aber nur einen kleinen Teil.
+CROP_KINDS = {"dino_rex_head", "dino_rex_jaw"}
+
+# Gelenkpunkte des Rex in Weltmetern (beim Zeichnen des Kopfes gefuellt, gen_museum schreibt sie in
+# AtlasMuseumData): Halsgelenk (Drehpunkt Kopf), Kiefergelenk, Augenhoehle (Leuchten).
+REX_RIG = {}
 
 
 def shape_bounds(shape):
@@ -1157,10 +1238,14 @@ def draw_prop(kind, shape, idx, ppm):
     extra_w = 0.0
     if kind == "dino":
         extra_w = 0.6
+    if kind in ("dino_rex", "dino_rex_head", "dino_rex_jaw"):
+        # Skelett als eigenes Objekt ueber dem Sockel (User 25.09.: "ragt wirklich in den Raum"): die
+        # Leinwand reicht links bis zur Schnauze, rechts bis zur Schwanzspitze (REX_* unten)
+        extra_w = 3.8
     p = Prop(x0 - extra_w, y0, x1 + extra_w, y1, h, ppm)
     c = p.c
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    if kind not in LEGGED and kind not in ("glaswand",):
+    if kind not in LEGGED and kind not in ("glaswand", "dino_rex", "dino_rex_head", "dino_rex_jaw"):
         # weicher Schlagschatten nach Suedost (Licht von Nordwest, wie in Among Us)
         if shape[0] in ("circle", "ellipse"):
             rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
@@ -1299,7 +1384,7 @@ def draw_prop(kind, shape, idx, ppm):
         c.line([(x1, cy), (x1, cy + zt)], fill=OUTLINE, width=OUT_W)
         # Fussband (dunkel) + Steinplattenfugen an der Wandung
         c.poly([(x0 + 0.03, cy + 0.02), (x1 - 0.03, cy + 0.02), (x1 - 0.03, cy + 0.11), (x0 + 0.03, cy + 0.11)], fill=shade(stone, 0.7))
-        for fx in (-3.2, -2.2, -1.1, 0, 1.1, 2.2, 3.2):
+        for fx in (f_ for f_ in (-3.2, -2.2, -1.1, 0, 1.1, 2.2, 3.2) if abs(f_) < rx - 0.2):
             yb = cy - ry * math.sqrt(max(0, 1 - (fx / rx) ** 2))
             c.line([(cx + fx, yb + 0.14), (cx + fx, yb + zt - 0.02)], fill=shade(stone, 0.78), width=0.025)
         c.ellipse(cx, cy + zt, rx, ry, fill=shade(stone, 1.18), outline=OUTLINE)
@@ -1317,12 +1402,21 @@ def draw_prop(kind, shape, idx, ppm):
         # Absperrpfosten hinten (vor dem Skelett gezeichnet) und vorne (danach)
         prx, pry = rx - 0.2, ry - 0.14
         draw_rope_posts(p, cx, cy + zt, prx, pry, 0, list(range(15, 166, 30)))
-        draw_skeleton(p, cx, cy + zt)
         draw_rope_posts(p, cx, cy + zt, prx, pry, 0, list(range(195, 346, 30)))
         # Plakette an der Sockelfront
         c.rect(cx - 0.55, cy + 0.14, cx + 0.55, cy + zt - 0.06, fill=hexc("#b08a3c"), outline=OUTLINE, width=0.025)
         c.rect(cx - 0.5, cy + 0.18, cx + 0.5, cy + zt - 0.1, outline=shade(hexc("#b08a3c"), 1.3), width=0.015)
         c.text(cx, cy + (zt + 0.08) / 2, "T. REX", 0.11, hexc("#2a2422"))
+    elif kind in ("dino_rex", "dino_rex_head", "dino_rex_jaw"):
+        # nur das Skelett (mit Stahlstuetzen), Standlinie wie der Sockel; Oberkante des Sockels = cy + 0,55 K.
+        # Rumpf, Kopf und Unterkiefer sind getrennte Sprites, damit der Rex bei der Sabotage den Kopf
+        # bewegen und das Maul aufreissen kann (AtlasRex).
+        part = {"dino_rex": "body", "dino_rex_head": "head", "dino_rex_jaw": "jaw"}[kind]
+        draw_skeleton(p, cx, cy + 0.55 * K, S=REX_SCALE, ox=REX_OFFSET, part=part)
+    elif kind == "spieluhr":
+        draw_spieluhr(p, cx, cy)
+    elif kind == "nachtlicht":
+        draw_nachtlicht(p, cx, cy)
     elif kind == "infotheke":
         wood = lift("#4a3222", 1.7)
         brass = lift("#b08a3c", 1.3)
@@ -1953,96 +2047,486 @@ def bezier(p0, p1, p2, n=8):
     return out
 
 
-def draw_skeleton(p, cx, base):
-    """Theropoden-Skelett (Kopf nach Westen) auf der Sockeloberkante; base = Bild-y der Oberkante.
-    Aufbau hinten -> vorne: fernes Bein, ferne Rippen, Wirbelsaeule, Becken, nahe Rippen, nahes
-    Bein, Arme, Schaedel. Knochen sind dick und rund, Licht von Nordwest (helle Oberkante)."""
-    c = p.c
-    bone = hexc("#ece3c8")
-    mid = hexc("#d2c8ac")
-    dark = hexc("#a89e84")
-    far = hexc("#8e846c")
-    white = (252, 250, 242, 255)
+REX_SCALE = 1.25      # 11 m statt 8,7 m
+REX_OFFSET = -1.0     # Skelett-Ursprung links von der Podestmitte: die Fuesse (Modell-x 0,6..2,2) stehen mittig
 
-    def B(pts, w, col, hi=True):
-        c.line(pts, fill=OUTLINE, width=w + 0.07)
-        c.line(pts, fill=col, width=w)
-        if hi and w >= 0.1:
-            c.line([(x, y + w * 0.22) for x, y in pts], fill=shade(col, 1.12), width=w * 0.3)
+
+def draw_skeleton(p, cx, base, S=1.0, ox=0.0, part="all"):
+    """T.-rex-Skelett (Kopf nach Westen) auf der Sockeloberkante; base = Bild-y der Oberkante.
+
+    Detailfassung (User 25.09.: "sehr viel detaillierter"). Seitenansicht in Modellkoordinaten
+    (x entlang des Koerpers um die Sockelmitte, z = Hoehe ueber dem Sockel in m), gezeichnet in der
+    schraegen Aufsicht (z * K). Aufbau hinten -> vorne: fernes Bein und ferner Arm, ferne Rippen,
+    Stahlstuetzen der Montage, Wirbelsaeule (Wirbelkoerper, Dornfortsaetze, Chevrons), Halsrippen,
+    Becken, nahe Rippen und Bauchrippen, nahes Bein, naher Arm, Schaedel mit Unterkiefer und Zaehnen.
+    Knochen sind verjuengte Flaechen mit dunkler Unterseite und heller Oberkante (Licht von oben),
+    fossile Toenung schwankt je Knochen leicht. Umriss wie bisher: Schnauze -4,15, Schwanz +4,6.
+
+    part: "all", "body" (ohne Kopf), "head" (Oberschaedel) oder "jaw" (Unterkiefer). Es wird immer alles
+    in derselben Reihenfolge gezeichnet (gleiche Zufallsfolge = gleiche Toenung); nicht gewuenschte
+    Teile landen auf einer Wegwerf-Leinwand."""
+    real = p.c
+    scrap = Canvas(0.0, 0.0, 0.1, 0.1, 10)
+    c = real if part in ("all", "body") else scrap
+    rnd = random.Random(1887)
+    OL = OUTLINE
+    BONE = hexc("#e9dfc4")
+    STEEL = hexc("#3b4046")
+    STEEL_HI = hexc("#737b84")
+    TOOTH = hexc("#f6f1e4")
+    HOLE = hexc("#2f2820")
+    HOLE_RIM = hexc("#5a4e3c")
+
+    def tone(col, f):
+        return shade(col, f)
+
+    def near_set():
+        b = tone(BONE, rnd.uniform(0.95, 1.03))
+        return b, tone(b, 0.78), tone(b, 1.1)
+
+    def far_set():
+        b = tone(BONE, rnd.uniform(0.66, 0.72))
+        return b, tone(b, 0.8), tone(b, 1.05)
 
     def P(x, z):
-        return (cx + x, base + z * K)
+        return (cx + ox + S * x, base + S * z * K)
 
-    def Pl(pts):
-        return [P(x, z) for x, z in pts]
+    def chaikin(pts, n=2):
+        for _ in range(n):
+            out = [pts[0]]
+            for a, b in zip(pts, pts[1:]):
+                out.append((0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]))
+                out.append((0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]))
+            out.append(pts[-1])
+            pts = out
+        return pts
 
-    # Wirbelsaeule: Hals (S-Bogen, hoch) -> Ruecken -> Huefte -> langer, leicht gehobener Schwanz
-    spine = [(-2.4, 3.45), (-2.15, 3.15), (-1.95, 2.85), (-1.6, 2.68), (-1.1, 2.65), (-0.5, 2.7),
-             (0.1, 2.75), (0.7, 2.72), (1.2, 2.62), (1.7, 2.45), (2.3, 2.25), (2.9, 2.05),
-             (3.5, 1.92), (4.1, 1.88), (4.55, 1.95)]
-    # fernes Bein (dunkler, hinter dem Becken)
-    B(Pl([(1.55, 2.3), (1.95, 1.5), (1.65, 0.7), (1.8, 0.12)]), 0.14, far, hi=False)
-    c.poly(Pl([(1.55, 0.04), (2.2, 0.04), (2.15, 0.14), (1.6, 0.14)]), fill=far, outline=OUTLINE, width=0.03)
-    # ferne Rippen: Boegen nach hinten-unten
-    for i in range(3, 10):
-        x, z = spine[i]
-        d = 1.0 - abs(i - 6) * 0.13
-        B(Pl(bezier((x + 0.05, z - 0.05), (x + 0.45, z - 0.55 * d), (x + 0.15, z - 1.3 * d))), 0.06, dark, hi=False)
-    # Wirbelsaeule mit Dornfortsaetzen (oben) und Chevrons (Schwanz, unten)
-    B(Pl(spine), 0.2, mid)
-    for x, z in spine[1:12]:
-        B(Pl([(x, z + 0.05), (x + 0.04, z + 0.36)]), 0.07, bone, hi=False)
-    for x, z in spine[10:]:
-        B(Pl([(x, z - 0.05), (x - 0.03, z - 0.3)]), 0.05, bone, hi=False)
-    for x, z in spine[1:]:
-        c.ellipse(*P(x, z), 0.09, 0.08, fill=bone, outline=OUTLINE, width=0.025)
-        c.ellipse(*P(x - 0.02, z + 0.03), 0.035, 0.025, fill=white)
-    # Becken (massiv) + Sitzbein nach hinten
-    c.poly(Pl([(0.75, 2.95), (1.85, 2.85), (2.05, 2.45), (1.7, 2.05), (1.1, 2.1), (0.8, 2.4)]), fill=bone, outline=OUTLINE, width=0.045)
-    B(Pl([(1.75, 2.3), (2.5, 2.0)]), 0.09, bone, hi=False)
-    # nahe Rippen: Boegen nach vorne-unten, heller
-    for i in range(3, 10):
-        x, z = spine[i]
-        d = 1.0 - abs(i - 6) * 0.13
-        B(Pl(bezier((x, z - 0.05), (x - 0.4, z - 0.6 * d), (x - 0.05, z - 1.4 * d))), 0.08, bone, hi=False)
-    # nahes Bein: Oberschenkel nach vorne, Schienbein zurueck, Fuss mit drei Zehen
-    B(Pl([(1.35, 2.35), (0.85, 1.45)]), 0.22, bone)
-    c.ellipse(*P(0.85, 1.45), 0.14, 0.13, fill=bone, outline=OUTLINE, width=0.03)
-    B(Pl([(0.85, 1.45), (1.2, 0.6)]), 0.16, bone)
-    B(Pl([(1.2, 0.6), (1.1, 0.15)]), 0.12, bone, hi=False)
-    for tx in (-0.45, -0.12, 0.22):
-        B(Pl([(1.1, 0.15), (1.1 + tx, 0.04)]), 0.08, bone, hi=False)
-        c.poly(Pl([(1.08 + tx, 0.06), (1.16 + tx, 0.06), (1.24 + tx, -0.02), (1.02 + tx, -0.02)]), fill=bone, outline=OUTLINE, width=0.025)
-    # kurze Arme mit zwei Krallen
-    B(Pl([(-1.45, 2.35), (-1.7, 1.95), (-1.5, 1.7)]), 0.08, bone, hi=False)
-    B(Pl([(-1.5, 1.7), (-1.36, 1.55)]), 0.05, bone, hi=False)
-    B(Pl([(-1.5, 1.7), (-1.62, 1.5)]), 0.05, bone, hi=False)
-    # Schaedel: hinten hoch, zur Schnauze hin flacher; hz = Zahnlinie des Oberkiefers
-    hx, hz = -2.85, 3.3
-    c.poly(Pl([(hx + 0.45, hz + 0.05), (hx + 0.52, hz + 0.45), (hx + 0.3, hz + 0.72), (hx - 0.25, hz + 0.7),
-               (hx - 0.75, hz + 0.48), (hx - 1.2, hz + 0.22), (hx - 1.3, hz + 0.03), (hx - 0.6, hz - 0.02),
-               (hx + 0.1, hz)]), fill=bone, outline=OUTLINE, width=0.05)
-    # Schaedelfenster: Schlaefe (dunkel), Augenhoehle mit hellem Rand, Vorderfenster, Nasenloch
-    c.poly(Pl([(hx + 0.28, hz + 0.55), (hx + 0.42, hz + 0.5), (hx + 0.4, hz + 0.2), (hx + 0.28, hz + 0.2)]), fill=dark, outline=OUTLINE, width=0.025)
-    c.ellipse(*P(hx + 0.12, hz + 0.42), 0.11, 0.11, fill=OUTLINE)
-    c.ellipse(*P(hx + 0.1, hz + 0.45), 0.05, 0.045, fill=dark)
-    c.poly(Pl([(hx - 0.3, hz + 0.52), (hx - 0.1, hz + 0.55), (hx - 0.12, hz + 0.22), (hx - 0.4, hz + 0.25)]), fill=dark, outline=OUTLINE, width=0.025)
-    c.ellipse(*P(hx - 1.0, hz + 0.2), 0.08, 0.05, fill=dark, outline=OUTLINE, width=0.025)
-    c.line(Pl([(hx + 0.05, hz + 0.08), (hx - 0.9, hz + 0.05)]), fill=mid, width=0.035)
-    # Unterkiefer, nach vorne-unten aufgeklappt
-    c.poly(Pl([(hx + 0.42, hz - 0.02), (hx + 0.3, hz - 0.1), (hx - 0.45, hz - 0.4), (hx - 1.2, hz - 0.6),
-               (hx - 1.25, hz - 0.45), (hx - 0.55, hz - 0.24), (hx + 0.35, hz + 0.02)]), fill=mid, outline=OUTLINE, width=0.045)
-    c.line(Pl([(hx + 0.2, hz - 0.1), (hx - 0.9, hz - 0.45)]), fill=shade(mid, 0.85), width=0.03)
-    # Zaehne oben (nach unten) und unten (nach oben)
+    def sides(Q, w0, w1):
+        n = len(Q)
+        L_, R_ = [], []
+        for i, (qx, qy) in enumerate(Q):
+            a, b = Q[max(0, i - 1)], Q[min(n - 1, i + 1)]
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            ln = math.hypot(dx, dy) or 1.0
+            nx, ny = -dy / ln, dx / ln
+            w = (w0 + (w1 - w0) * (i / (n - 1) if n > 1 else 0)) / 2
+            L_.append((qx + nx * w, qy + ny * w))
+            R_.append((qx - nx * w, qy - ny * w))
+        return L_, R_
+
+    def bone(pts, w0, w1=None, cols=None, smooth=2, ow=0.026, bulge=0.0):
+        """Verjuengter Knochen entlang pts (Modellkoordinaten); bulge verdickt die Enden (Gelenke)."""
+        w1 = w0 if w1 is None else w1
+        w0, w1 = w0 * S, w1 * S
+        col, lo, hi = cols or near_set()
+        Q = [P(x, z) for x, z in pts]
+        if len(Q) == 2:
+            Q = [(Q[0][0] + (Q[1][0] - Q[0][0]) * t / 8, Q[0][1] + (Q[1][1] - Q[0][1]) * t / 8) for t in range(9)]
+        elif smooth:
+            Q = chaikin(Q, smooth)
+        n = len(Q)
+        if bulge:
+            ws = [(w0 + (w1 - w0) * i / (n - 1)) * (1 + bulge * (abs(2 * i / (n - 1) - 1) ** 6)) for i in range(n)]
+            L_, R_ = [], []
+            for i, (qx, qy) in enumerate(Q):
+                a, b = Q[max(0, i - 1)], Q[min(n - 1, i + 1)]
+                dx, dy = b[0] - a[0], b[1] - a[1]
+                ln = math.hypot(dx, dy) or 1.0
+                nx, ny = -dy / ln, dx / ln
+                L_.append((qx + nx * ws[i] / 2, qy + ny * ws[i] / 2))
+                R_.append((qx - nx * ws[i] / 2, qy - ny * ws[i] / 2))
+        else:
+            L_, R_ = sides(Q, w0, w1)
+        poly = L_ + R_[::-1]
+        c.poly(poly, fill=col)
+        low, up = (R_, L_) if sum(y for _, y in R_) < sum(y for _, y in L_) else (L_, R_)
+        lin, uin = sides(Q, w0 * 0.45, w1 * 0.45)
+        lin, uin = (lin, uin) if low is L_ else (uin, lin)
+        c.poly(low + lin[::-1], fill=lo)
+        hl = [(a[0] * 0.6 + b[0] * 0.4, a[1] * 0.6 + b[1] * 0.4) for a, b in zip(up, uin)]
+        c.line(hl, fill=hi, width=max(0.01, min(w0, w1) * 0.16))
+        c.poly(poly, outline=OL, width=ow)
+        return Q
+
+    def knob(x, z, rx, ry=None, cols=None, ow=0.022):
+        col, lo, hi = cols or near_set()
+        ry = rx if ry is None else ry
+        rx, ry = rx * S, ry * S
+        q = P(x, z)
+        c.ellipse(q[0], q[1], rx, ry, fill=col)
+        c.ellipse(q[0] + rx * 0.12, q[1] - ry * 0.25, rx * 0.8, ry * 0.65, fill=lo)
+        c.ellipse(q[0] - rx * 0.1, q[1] + ry * 0.12, rx * 0.72, ry * 0.62, fill=col)
+        c.ellipse(q[0] - rx * 0.3, q[1] + ry * 0.35, rx * 0.28, ry * 0.2, fill=hi)
+        c.ellipse(q[0], q[1], rx, ry, outline=OL, width=ow)
+
+    def blob(pts_model, cols=None, ow=0.03, smooth=2, closed=True):
+        col, lo, hi = cols or near_set()
+        Q = [P(x, z) for x, z in pts_model]
+        if smooth:
+            Q = chaikin(Q + [Q[0]], smooth)[:-1]
+        c.poly(Q, fill=col)
+        cyq = sum(y for _, y in Q) / len(Q)
+        lower = [q for q in Q if q[1] < cyq]
+        if len(lower) > 2:
+            c.poly([(x, y) for x, y in lower] + [(lower[-1][0], cyq - (cyq - lower[-1][1]) * 0.3),
+                                                  (lower[0][0], cyq - (cyq - lower[0][1]) * 0.3)], fill=lo)
+        c.poly(Q, outline=OL, width=ow)
+        return Q
+
+    def claw(x, z, dx, dz, w, cols=None):
+        """Gebogene Kralle: Wurzel (x, z), Spitze (x+dx, z+dz), Breite w an der Wurzel."""
+        col, lo, hi = cols or near_set()
+        w = w * S
+        a = P(x, z)
+        tip = P(x + dx, z + dz)
+        mid = P(x + dx * 0.55, z + dz * 0.55 + abs(dx) * 0.18)
+        c.poly([(a[0], a[1] + w / 2), mid, tip, (mid[0], mid[1] - w * 0.35), (a[0], a[1] - w / 2)],
+               fill=tone(col, 0.82), outline=OL, width=0.018)
+
+    # ---------------------------------------------------------------- Wirbelsaeule (Kurve)
+    ctrl = [(-2.28, 3.42), (-2.12, 3.18), (-1.98, 2.97), (-1.78, 2.83), (-1.5, 2.74), (-1.1, 2.72),
+            (-0.6, 2.76), (-0.1, 2.8), (0.4, 2.8), (0.9, 2.76), (1.4, 2.66), (1.9, 2.52), (2.5, 2.33),
+            (3.1, 2.15), (3.7, 2.02), (4.2, 1.96), (4.6, 1.98)]
+    curve = chaikin(ctrl, 3)
+
+    def spine_at(x):
+        for a, b in zip(curve, curve[1:]):
+            if (a[0] - x) * (b[0] - x) <= 0 and a[0] != b[0]:
+                t = (x - a[0]) / (b[0] - a[0])
+                return (x, a[1] + (b[1] - a[1]) * t)
+        return curve[0] if x < curve[0][0] else curve[-1]
+
+    def tangent_img(x):
+        a, b = P(*spine_at(x - 0.04)), P(*spine_at(x + 0.04))
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        ln = math.hypot(dx, dy) or 1.0
+        return dx / ln, dy / ln
+
+    def vertebra(x, size, spine_len, tilt, chev=0.0, cols=None, rib=0.0, spine_w=0.55):
+        col, lo, hi = cols or near_set()
+        size, spine_len, chev = size * S, spine_len * S, chev * S
+        xz = spine_at(x)
+        q = P(*xz)
+        ux, uy = tangent_img(x)
+        nx, ny = -uy, ux
+        # Dornfortsatz: verjuengt, nach hinten (Schwanzrichtung) geneigt
+        if spine_len > 0.015:
+            dirx, diry = nx * math.cos(tilt) + ux * math.sin(tilt), ny * math.cos(tilt) + uy * math.sin(tilt)
+            b0 = (q[0] + nx * size * 0.25, q[1] + ny * size * 0.25)
+            t0 = (b0[0] + dirx * spine_len * K * 1.6, b0[1] + diry * spine_len * K * 1.6)
+            wb, wt = size * spine_w, size * spine_w * 0.62
+            poly = [(b0[0] - ux * wb / 2, b0[1] - uy * wb / 2), (t0[0] - ux * wt / 2, t0[1] - uy * wt / 2),
+                    (t0[0] + ux * wt / 2, t0[1] + uy * wt / 2), (b0[0] + ux * wb / 2, b0[1] + uy * wb / 2)]
+            c.poly(poly, fill=col)
+            c.line([(b0[0] + ux * wb * 0.3, b0[1] + uy * wb * 0.3), (t0[0] + ux * wt * 0.3, t0[1] + uy * wt * 0.3)], fill=lo, width=wb * 0.22)
+            c.poly(poly, outline=OL, width=0.018)
+            c.ellipse(t0[0], t0[1], wt * 0.62, wt * 0.5, fill=hi, outline=OL, width=0.016)
+        # Chevron (Haemalbogen) unter den Schwanzwirbeln
+        if chev > 0.015:
+            b0 = (q[0] - nx * size * 0.3, q[1] - ny * size * 0.3)
+            dirx, diry = -nx * math.cos(0.5) + ux * math.sin(0.5), -ny * math.cos(0.5) + uy * math.sin(0.5)
+            t0 = (b0[0] + dirx * chev * K * 1.6, b0[1] + diry * chev * K * 1.6)
+            w = size * 0.3
+            poly = [(b0[0] - ux * w / 2, b0[1] - uy * w / 2), (t0[0], t0[1]), (b0[0] + ux * w / 2, b0[1] + uy * w / 2)]
+            c.poly(poly, fill=lo, outline=OL, width=0.016)
+        # Querfortsatz (kleiner Knopf zur Betrachterseite)
+        if rib > 0:
+            c.ellipse(q[0] + ux * size * 0.1, q[1] - ny * size * 0.05, size * 0.2, size * 0.14, fill=lo, outline=OL, width=0.014)
+        # Wirbelkoerper: Rechteck mit runden Ecken entlang der Kurve, Bandscheibenkante
+        a, b = size * 0.5, size * 0.36
+        pts = []
+        for i in range(20):
+            t = i / 20 * 2 * math.pi
+            cs, sn = math.cos(t), math.sin(t)
+            ex = math.copysign(abs(cs) ** 0.45, cs) * a
+            ey = math.copysign(abs(sn) ** 0.45, sn) * b
+            pts.append((q[0] + ux * ex + nx * ey, q[1] + uy * ex + ny * ey))
+        c.poly(pts, fill=col)
+        c.poly([(q[0] + ux * a * 0.9 - nx * b * 0.95, q[1] + uy * a * 0.9 - ny * b * 0.95),
+                (q[0] - ux * a * 0.9 - nx * b * 0.95, q[1] - uy * a * 0.9 - ny * b * 0.95),
+                (q[0] - ux * a * 0.9 - nx * b * 0.2, q[1] - uy * a * 0.9 - ny * b * 0.2),
+                (q[0] + ux * a * 0.9 - nx * b * 0.2, q[1] + uy * a * 0.9 - ny * b * 0.2)], fill=lo)
+        c.line([(q[0] - ux * a * 0.6 + nx * b * 0.55, q[1] - uy * a * 0.6 + ny * b * 0.55),
+                (q[0] + ux * a * 0.6 + nx * b * 0.55, q[1] + uy * a * 0.6 + ny * b * 0.55)], fill=hi, width=size * 0.08)
+        c.poly(pts, outline=OL, width=0.018)
+        return q
+
+    # ---------------------------------------------------------------- Rippen-Geometrie
+    def belly(x):
+        """Unterkante des Brustkorbs (Modell-z): am tiefsten mittig, zu Schulter und Huefte flacher."""
+        return 1.42 + 0.42 * ((x + 0.3) / 1.05) ** 2
+
+    rib_xs = [-1.32 + i * 0.18 for i in range(11)]
+
+    def rib_pts(x, far=False):
+        sx, sz = spine_at(x)
+        zb = min(belly(x), sz - 0.55)
+        d = 0.06 if far else 0.0
+        return [(x + d, sz - 0.03 + d * 0.4), (x - 0.03 + d, sz - 0.28), (x + 0.02 + d, sz - 0.62),
+                (x + 0.12 + d, (sz + zb) / 2 - 0.25), (x + 0.22 + d, zb + 0.12), (x + 0.27 + d, zb)]
+
+    # ================================================================ hinten: fernes Bein, ferner Arm
+    fl = far_set()
+    bone([(1.55, 2.32), (1.72, 1.9), (1.86, 1.46)], 0.18, 0.15, fl, bulge=0.35)
+    bone([(1.88, 1.42), (1.74, 1.0), (1.62, 0.6)], 0.13, 0.1, fl)
+    knob(1.87, 1.44, 0.095, 0.085, fl)
+    knob(1.62, 0.57, 0.07, 0.06, fl)
+    for off in (-0.04, 0.0, 0.04):
+        bone([(1.62 + off, 0.56), (1.84 + off * 1.5, 0.13)], 0.05, 0.045, fl, smooth=0)
+    for dx_, ln_ in ((-0.02, 0.36), (0.02, 0.46), (0.06, 0.32)):
+        x0 = 1.84 + dx_
+        bone([(x0, 0.12), (x0 - ln_ * 0.5, 0.07), (x0 - ln_, 0.045)], 0.05, 0.035, fl, smooth=1)
+        claw(x0 - ln_, 0.045, -0.12, -0.04, 0.04, fl)
+    # ferner Arm (klein, halb verdeckt)
+    fa = far_set()
+    bone([(-1.36, 2.02), (-1.5, 1.8)], 0.05, 0.04, fa, smooth=0)
+    bone([(-1.5, 1.8), (-1.36, 1.64)], 0.035, 0.03, fa, smooth=0)
+
+    # ================================================================ ferne Rippen
+    for x in rib_xs:
+        bone(rib_pts(x, far=True), 0.048, 0.022, far_set(), smooth=2, ow=0.018)
+
+    # ================================================================ Stahlstuetzen der Montage
+    def rod(x, z_top):
+        a, b = P(x, 0.0), P(x, z_top)
+        c.ellipse(a[0], a[1], 0.13, 0.06, fill=tone(STEEL, 0.8), outline=OL, width=0.02)
+        c.ellipse(a[0], a[1] + 0.012, 0.1, 0.045, fill=STEEL)
+        c.rect(a[0] - 0.024, a[1], a[0] + 0.024, b[1], fill=STEEL, outline=OL, width=0.014)
+        c.line([(a[0] - 0.008, a[1] + 0.02), (b[0] - 0.008, b[1] - 0.02)], fill=STEEL_HI, width=0.01)
+        c.rect(b[0] - 0.07, b[1] - 0.035, b[0] + 0.07, b[1] + 0.01, fill=tone(STEEL, 1.2), outline=OL, width=0.014)
+
+    rod(-1.3, spine_at(-1.3)[1] - 0.12)         # Halsansatz (Kopf und Hals tragen sich frei darueber hinaus)
+    rod(-0.35, spine_at(-0.35)[1] - 0.12)       # Brustkorb
+    rod(2.05, spine_at(2.05)[1] - 0.1)          # Schwanzansatz
+
+    # ================================================================ Wirbelsaeule: Schwanz -> Hals
+    xs = []
+    x = 4.55
+    while x > 1.62:                              # Schwanzwirbel, zur Spitze kleiner und dichter
+        xs.append(("c", x))
+        t = (x - 1.6) / 3.0
+        x -= 0.11 + 0.07 * (1 - t)
+    x = 1.55
+    while x > 0.78:                              # Kreuzbein (vom Darmbein ueberdeckt)
+        xs.append(("s", x))
+        x -= 0.16
+    x = 0.72
+    while x > -1.48:                             # Rueckenwirbel
+        xs.append(("d", x))
+        x -= 0.18
+    for kind_, x in xs:
+        if kind_ == "c":
+            t = (x - 1.6) / 3.0                  # 0 am Becken, 1 an der Spitze
+            size = 0.15 - 0.105 * t
+            vertebra(x, size, 0.24 * (1 - t) ** 1.5, 0.55, chev=0.34 * (1 - t) ** 1.3)
+        elif kind_ == "s":
+            vertebra(x, 0.16, 0.24, 0.2, spine_w=1.0)
+        else:
+            vertebra(x, 0.16, 0.28 + 0.06 * math.sin((x + 1.4) / 2.2 * math.pi), 0.32, rib=1, spine_w=0.95)
+    # Halswirbel: S-Bogen vom Ruecken zum Schaedel, kurze Fortsaetze, Halsrippen nach hinten
+    neck_xs = [-1.55 - i * 0.1 for i in range(8)]
+    for i, x in enumerate(neck_xs):
+        q = vertebra(x, 0.2 - i * 0.006, 0.1 - i * 0.007, 0.3, spine_w=0.8)
+        ux, uy = tangent_img(x)
+        c.line([(q[0] - uy * 0.05, q[1] + ux * -0.06), (q[0] + ux * 0.2 - uy * 0.05, q[1] + uy * 0.2 - 0.09)],
+               fill=tone(BONE, 0.8), width=0.028)
+
+    # ================================================================ Becken
+    pc_ = near_set()
+    bone([(1.35, 2.36), (1.66, 2.04), (1.97, 1.73)], 0.13, 0.07, pc_)                   # Sitzbein
+    knob(1.98, 1.71, 0.055, 0.05, pc_)
+    bone([(0.98, 2.38), (0.8, 1.85), (0.58, 1.3)], 0.15, 0.11, pc_)                      # Schambein
+    blob([(0.2, 1.2), (0.52, 1.17), (0.98, 1.2), (0.93, 1.33), (0.62, 1.37), (0.38, 1.33)], pc_)   # "Stiefel"
+    blob([(0.26, 2.5), (0.3, 2.74), (0.5, 2.9), (0.9, 2.98), (1.35, 2.99), (1.75, 2.9), (2.02, 2.72),
+          (2.12, 2.56), (1.9, 2.52), (1.55, 2.5), (1.3, 2.44), (1.1, 2.47), (0.85, 2.44), (0.55, 2.5),
+          (0.38, 2.44)], pc_, ow=0.032, smooth=1)                                            # Darmbein
+    c.line([P(0.45, 2.84), P(0.9, 2.93), P(1.4, 2.94), P(1.85, 2.84)], fill=pc_[2], width=0.03)   # Oberkante hell
+    c.line([P(0.85, 2.52), P(1.05, 2.62), P(1.3, 2.62), P(1.5, 2.54)], fill=OL, width=0.022)       # Kamm ueber der Pfanne
+    c.line([P(0.85, 2.53), P(1.05, 2.63), P(1.3, 2.63), P(1.5, 2.55)], fill=pc_[2], width=0.012)
+    for gx in (0.62, 0.95, 1.6, 1.85):                                                         # Muskelansaetze
+        a, b = P(gx, 2.6), P(gx + 0.08, 2.86)
+        c.line([a, b], fill=tone(pc_[0], 0.84), width=0.016)
+    q = P(1.08, 2.36)
+    c.ellipse(q[0], q[1], 0.085, 0.07, fill=HOLE, outline=OL, width=0.02)                    # Hueftpfanne
+
+    # ================================================================ nahe Rippen + Bauchrippen
+    for x in rib_xs:
+        bone(rib_pts(x), 0.06, 0.026, near_set(), smooth=2, ow=0.02)
+    gcol = near_set()
+    gx = -1.0
+    while gx < 0.8:
+        zb = belly(gx) - 0.04
+        a, m, b = P(gx - 0.09, zb + 0.03), P(gx, zb - 0.05), P(gx + 0.09, zb + 0.03)
+        c.line([a, m, b], fill=OL, width=0.05)
+        c.line([a, m, b], fill=gcol[1], width=0.026)
+        gx += 0.17
+
+    # ================================================================ nahes Bein
+    lg = near_set()
+    bone([(0.92, 1.3), (1.1, 0.92), (1.25, 0.6)], 0.05, 0.04, (tone(lg[0], 0.85), lg[1], lg[2]))   # Wadenbein
+    bone([(1.12, 2.36), (0.96, 1.9), (0.79, 1.42)], 0.21, 0.17, lg, bulge=0.4)                    # Oberschenkel
+    knob(1.13, 2.37, 0.11, 0.1, lg)                                                                # Oberschenkelkopf
+    blob([(1.18, 2.2), (1.3, 2.28), (1.28, 2.08), (1.16, 2.05)], lg, ow=0.02)                      # grosser Rollhuegel
+    for (a_, b_) in (((1.02, 2.1), (0.9, 1.75)), ((0.98, 1.95), (0.93, 1.72))):                    # Risse im Fossil
+        c.line([P(*a_), P(*b_)], fill=tone(lg[0], 0.72), width=0.012)
+    bone([(0.8, 1.37), (0.98, 0.96), (1.16, 0.59)], 0.16, 0.115, lg, bulge=0.3)                  # Schienbein
+    knob(0.79, 1.4, 0.115, 0.1, lg)                                                                # Knie
+    knob(1.17, 0.55, 0.08, 0.07, lg)                                                               # Sprunggelenk
+    for off in (-0.045, 0.0, 0.045):                                                               # Mittelfuss
+        bone([(1.17 + off, 0.54), (1.06 + off * 1.4, 0.12)], 0.055, 0.048, lg, smooth=0)
+    bone([(1.21, 0.33), (1.29, 0.21)], 0.035, 0.03, lg, smooth=0)                                  # Afterzehe
+    claw(1.29, 0.21, 0.05, -0.08, 0.03, lg)
+    for dx_, ln_ in ((-0.05, 0.36), (0.0, 0.48), (0.05, 0.34)):                                   # Zehen mit Gliedern
+        x0 = 1.06 + dx_ * 1.4
+        pts = [(x0, 0.11), (x0 - ln_ * 0.38, 0.07), (x0 - ln_ * 0.72, 0.05), (x0 - ln_, 0.04)]
+        bone(pts, 0.058, 0.04, lg, smooth=0)
+        for k_ in (1, 2):
+            q = P(*pts[k_])
+            c.ellipse(q[0], q[1], 0.03, 0.026, fill=lg[2], outline=OL, width=0.012)
+        claw(x0 - ln_, 0.04, -0.13, -0.045, 0.045, lg)
+
+    # ================================================================ naher Arm (winzig)
+    am = near_set()
+    bone([(-1.05, 2.62), (-1.24, 2.32), (-1.38, 2.1)], 0.13, 0.08, am)                  # Schulterblatt
+    knob(-1.4, 2.06, 0.055, 0.05, am)                                                    # Rabenbein
+    bone([(-1.42, 2.05), (-1.6, 1.82)], 0.065, 0.055, am, smooth=0)                     # Oberarm
+    bone([(-1.6, 1.82), (-1.44, 1.64)], 0.032, 0.028, am, smooth=0)                     # Speiche
+    bone([(-1.62, 1.79), (-1.47, 1.61)], 0.028, 0.024, am, smooth=0)                    # Elle
+    for dx_, dz_ in ((0.08, -0.1), (-0.05, -0.12)):                                      # zwei Finger
+        bone([(-1.45, 1.62), (-1.45 + dx_, 1.62 + dz_)], 0.026, 0.022, am, smooth=0)
+        claw(-1.45 + dx_, 1.62 + dz_, dx_ * 0.6, -0.07, 0.024, am)
+
+    # ================================================================ Schaedel
+    # In der Schraegsicht (z * K) wird der Kopf so flach, dass er wie ein Krokodil liest: der Schaedel
+    # wird deshalb um die Zahnlinie senkrecht gestreckt (hoher Hinterkopf, tiefer Kiefer).
+    P0 = P
+
+    def P(x, z):
+        return P0(x, 3.12 + (z - 3.12) * 1.45)
+
+    sk = near_set()
+    c = real if part in ("all", "jaw") else scrap
+    if part == "head":
+        REX_RIG["neck"] = P(-2.22, 3.5)
+        REX_RIG["jaw"] = P(-2.38, 3.08)
+        REX_RIG["eye"] = P(-2.88, 3.9)
+    # Unterkiefer zuerst (liegt hinter dem Oberkiefer), Maul leicht geoeffnet
+    jaw = blob([(-2.33, 3.14), (-2.4, 2.9), (-2.9, 2.8), (-3.5, 2.74), (-3.97, 2.72), (-4.03, 2.8),
+                (-3.55, 2.93), (-3.0, 3.02), (-2.55, 3.1)], (tone(sk[0], 0.94), sk[1], sk[2]), ow=0.03)
+    q = P(-2.8, 2.92)
+    c.ellipse(q[0], q[1], 0.12, 0.035, fill=HOLE, outline=OL, width=0.016)                 # Unterkieferfenster
+    for i in range(12):                                                                     # untere Zaehne
+        tx = -3.92 + i * 0.085
+        zz = 2.8 + (tx + 3.92) * 0.17
+        ln = 0.07 + 0.05 * math.sin(i / 11 * math.pi)
+        a, b, t_ = P(tx - 0.025, zz), P(tx + 0.025, zz), P(tx + 0.012, zz + ln)
+        c.poly([a, t_, b], fill=TOOTH, outline=OL, width=0.012)
+    # Oberschaedel
+    c = real if part in ("all", "head") else scrap
+    skull = [(-2.28, 3.92), (-2.4, 4.1), (-2.56, 4.17), (-2.74, 4.12), (-2.92, 4.08), (-3.06, 4.14),
+             (-3.2, 4.04), (-3.46, 3.92), (-3.74, 3.74), (-3.98, 3.54), (-4.14, 3.34), (-4.16, 3.2),
+             (-3.95, 3.13), (-3.45, 3.1), (-2.95, 3.07), (-2.55, 3.04), (-2.34, 3.1), (-2.22, 3.38), (-2.2, 3.66)]
+    blob(skull, sk, ow=0.036, smooth=1)
+    # Wangenknochen (Jochbein) als dunkleres Band, Nasenkante hell
+    c.poly([P(-2.36, 3.13), P(-2.95, 3.12), P(-3.5, 3.15), P(-3.5, 3.24), P(-2.95, 3.25), P(-2.42, 3.3)], fill=sk[1])
+    c.line([P(-2.6, 4.12), P(-3.06, 4.1), P(-3.5, 3.9), P(-3.92, 3.58)], fill=sk[2], width=0.03)
+    # Schaedelfenster
+    def hole(pts_model, smooth=1):
+        Q = [P(x, z) for x, z in pts_model]
+        Q = chaikin(Q + [Q[0]], smooth)[:-1]
+        c.poly(Q, fill=HOLE_RIM)
+        cxq = sum(x for x, _ in Q) / len(Q)
+        cyq = sum(y for _, y in Q) / len(Q)
+        c.poly([(cxq + (x - cxq) * 0.82, cyq + (y - cyq) * 0.8 + 0.008) for x, y in Q], fill=HOLE)
+        c.poly(Q, outline=OL, width=0.018)
+    hole([(-3.06, 3.74), (-3.28, 3.84), (-3.64, 3.6), (-3.56, 3.4), (-3.14, 3.38)])          # Voraugenfenster
+    hole([(-3.72, 3.54), (-3.8, 3.5), (-3.76, 3.43), (-3.68, 3.46)])                         # Oberkieferfenster
+    hole([(-2.44, 3.94), (-2.68, 3.9), (-2.72, 3.56), (-2.52, 3.46), (-2.4, 3.66)])          # Schlaefenfenster
+    hole([(-3.95, 3.6), (-4.09, 3.45), (-4.03, 3.41), (-3.9, 3.54)])                          # Nasenloch
+    # Augenhoehle (Schluesselloch) mit Knochenring und kleinem Glanz
+    q = P(-2.88, 3.9)
+    c.ellipse(q[0], q[1], 0.1, 0.095, fill=HOLE_RIM, outline=OL, width=0.018)
+    c.poly([P(-2.95, 3.84), P(-2.82, 3.84), P(-2.88, 3.6)], fill=HOLE_RIM, outline=OL, width=0.016)
+    c.ellipse(q[0], q[1], 0.075, 0.07, fill=HOLE)
+    c.poly([P(-2.92, 3.82), P(-2.84, 3.82), P(-2.88, 3.66)], fill=HOLE)
+    c.ellipse(q[0] - 0.025, q[1] + 0.025, 0.018, 0.015, fill=(250, 244, 226, 255))
+    # Knochenhoecker ueber dem Auge (Postorbitale, Lacrimale)
+    for bx, bz, r in ((-2.58, 4.15, 0.06), (-3.06, 4.13, 0.05)):
+        q = P(bx, bz)
+        c.ellipse(q[0], q[1], r, r * 0.8, fill=sk[2], outline=OL, width=0.018)
+    # kleine Gefaessloecher am Oberkiefer
+    for i in range(6):
+        q = P(-3.9 + i * 0.16, 3.2 + 0.01 * (i % 2))
+        c.ellipse(q[0], q[1], 0.013, 0.01, fill=HOLE)
+    # obere Zaehne: bananenfoermig, nach hinten gekruemmt, vorn die grossen
+    for i in range(14):
+        tx = -4.08 + i * 0.095
+        zz = 3.14 + (tx + 4.08) * 0.02
+        ln = 0.1 + 0.09 * math.sin(min(1.0, (i + 1) / 9) * math.pi) + (0.02 if i % 3 == 1 else 0)
+        a, b = P(tx - 0.03, zz + 0.01), P(tx + 0.03, zz + 0.01)
+        m = P(tx + 0.012, zz - ln * 0.55)
+        t_ = P(tx + 0.03, zz - ln)
+        c.poly([a, m, t_, b], fill=TOOTH, outline=OL, width=0.012)
+        c.line([P(tx - 0.012, zz - 0.01), P(tx + 0.005, zz - ln * 0.5)], fill=(255, 255, 255, 255), width=0.008)
+
+
+def draw_spieluhr(p, cx, cy):
+    """Station der Sabotage "Rex erwacht": Spieluhr mit Kurbel auf einem Messingstaender (Rotunde)."""
+    c = p.c
+    brass = hexc("#c9a24c")
+    wood = lift("#5a3620", 1.5)
+    # Fuss, Saeule, Teller
+    c.ellipse(cx, cy, 0.24, 0.11, fill=shade(brass, 0.7), outline=OUTLINE, width=0.025)
+    c.ellipse(cx, cy + 0.02, 0.18, 0.08, fill=shade(brass, 0.95))
+    c.rect(cx - 0.045, cy + 0.02, cx + 0.045, cy + 0.86 * K, fill=brass, outline=OUTLINE, width=0.02)
+    c.line([(cx - 0.02, cy + 0.06), (cx - 0.02, cy + 0.84 * K)], fill=shade(brass, 1.35), width=0.015)
+    for z in (0.3, 0.6):
+        c.ellipse(cx, cy + z * K, 0.06, 0.025, fill=shade(brass, 1.15), outline=OUTLINE, width=0.015)
+    c.rect(cx - 0.07, cy + 0.42 * K, cx + 0.07, cy + 0.5 * K, fill=hexc("#e8e0d0"), outline=OUTLINE, width=0.012)
+    c.ellipse(cx, cy + 0.88 * K, 0.2, 0.09, fill=shade(brass, 1.1), outline=OUTLINE, width=0.02)
+    # Kasten mit offenem Deckel: Walze und Kamm sichtbar
+    x0, x1, y0, y1, z0, h = cx - 0.22, cx + 0.2, cy - 0.1, cy + 0.1, 0.92, 0.2
+    p.box(x0, y0, x1, y1, z0, h, shade(wood, 1.25), wood)
+    ft = y0 + (z0 + h) * K
+    c.rect(x0 + 0.04, ft + 0.02, x1 - 0.04, ft + 0.15, fill=hexc("#241810"))
+    c.rect(x0 + 0.06, ft + 0.05, x1 - 0.06, ft + 0.11, fill=brass, outline=OUTLINE, width=0.012)
     for i in range(9):
-        tx = hx - 1.2 + i * 0.15
-        c.poly(Pl([(tx, hz - 0.01), (tx + 0.08, hz - 0.0), (tx + 0.035, hz - 0.17)]), fill=white, outline=OUTLINE, width=0.015)
-    for i in range(8):
-        tx = hx - 1.15 + i * 0.16
-        zz = hz - 0.5 + i * 0.04
-        c.poly(Pl([(tx, zz), (tx + 0.08, zz + 0.02), (tx + 0.04, zz + 0.14)]), fill=white, outline=OUTLINE, width=0.015)
-    # Atlaswirbel ueberdeckt den Uebergang Hals -> Schaedel
-    c.ellipse(*P(-2.4, 3.45), 0.1, 0.09, fill=bone, outline=OUTLINE, width=0.025)
+        c.ellipse(x0 + 0.08 + i * 0.033, ft + 0.08 + (0.015 if i % 2 else -0.015), 0.008, 0.008, fill=shade(brass, 0.55))
+    c.line([(x0 + 0.06, ft + 0.13), (x1 - 0.06, ft + 0.13)], fill=hexc("#cfd6de"), width=0.02)
+    # Deckel aufgeklappt nach hinten
+    lid = [(x0, y1 + (z0 + h) * K), (x1, y1 + (z0 + h) * K), (x1 - 0.02, y1 + (z0 + h) * K + 0.26), (x0 + 0.02, y1 + (z0 + h) * K + 0.26)]
+    c.poly(lid, fill=shade(wood, 1.1), outline=OUTLINE, width=0.02)
+    c.poly([(q[0] * 0.8 + cx * 0.2, q[1] * 0.8 + (y1 + (z0 + h) * K + 0.13) * 0.2) for q in lid], fill=hexc("#6a2a3a"))
+    # Kurbel an der rechten Seite
+    ax, ay = x1 + 0.01, y0 + (z0 + h * 0.5) * K
+    c.line([(ax, ay), (ax + 0.1, ay + 0.02), (ax + 0.14, ay + 0.14)], fill=OUTLINE, width=0.05)
+    c.line([(ax, ay), (ax + 0.1, ay + 0.02), (ax + 0.14, ay + 0.14)], fill=brass, width=0.025)
+    c.ellipse(ax + 0.14, ay + 0.15, 0.035, 0.035, fill=shade(brass, 1.2), outline=OUTLINE, width=0.015)
+
+
+def draw_nachtlicht(p, cx, cy):
+    """Station der Sabotage "Rex erwacht": Sternenprojektor auf einem Dreibein (Security Office)."""
+    c = p.c
+    brass = hexc("#c9a24c")
+    dark = hexc("#3b3f46")
+    top = (cx, cy + 0.82 * K)
+    for fx, fy in ((-0.2, -0.04), (0.2, -0.04), (0.03, 0.14)):
+        c.line([top, (cx + fx, cy + fy)], fill=OUTLINE, width=0.05)
+        c.line([top, (cx + fx, cy + fy)], fill=dark, width=0.028)
+        c.ellipse(cx + fx, cy + fy, 0.03, 0.018, fill=OUTLINE)
+    c.rect(cx - 0.03, cy + 0.72 * K, cx + 0.03, cy + 0.9 * K, fill=dark, outline=OUTLINE, width=0.015)
+    # Kugelkopf mit Sternloechern und Aequatorring
+    hx, hy, r = cx, cy + 1.02 * K, 0.19
+    c.glow(hx, hy + 0.05, 0.5, (255, 226, 150, 255), 0.35)
+    c.ellipse(hx, hy, r, r, fill=brass, outline=OUTLINE, width=0.025)
+    c.ellipse(hx + 0.04, hy - 0.05, r * 0.8, r * 0.75, fill=shade(brass, 0.85))
+    c.ellipse(hx - 0.05, hy + 0.06, r * 0.45, r * 0.4, fill=shade(brass, 1.25))
+    c.ellipse(hx, hy, r, r * 0.3, outline=shade(brass, 0.6), width=0.02)
+    for dx, dy in ((-0.1, 0.07), (-0.02, 0.11), (0.08, 0.06), (0.11, -0.03), (0.02, -0.08), (-0.09, -0.06), (0.0, 0.02)):
+        c.ellipse(hx + dx, hy + dy, 0.016, 0.016, fill=(255, 238, 180, 255))
+    c.ellipse(hx, hy, r, r, outline=OUTLINE, width=0.025)
+    # Kabel zum Boden
+    c.line([(cx + 0.02, cy + 0.72 * K), (cx + 0.1, cy + 0.3 * K), (cx + 0.26, cy - 0.02)], fill=hexc("#1c1f24"), width=0.02)
 
 
 def draw_rope_posts(p, cx, cy, rx, ry, z0, angles, rnd=None):
@@ -2067,7 +2551,7 @@ def draw_rope_posts(p, cx, cy, rx, ry, z0, angles, rnd=None):
 
 def extra_props():
     """Objekte ohne eigenen Kollider-Eintrag (Deko mit Hoehe)."""
-    return [("lampe", ("circle", 28.8, 10.5, 0.12))]
+    return list(L.EXTRA_PROPS)
 
 
 def all_props():

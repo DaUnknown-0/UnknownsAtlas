@@ -324,6 +324,12 @@ internal static class AtlasMuseumBuilder
         var roots = candidates.Where(t => !HasAncestorIn(t, all, ship.transform)).ToList();
         foreach (var t in roots) t.SetParent(ship.transform, true);
 
+        // 3a. Skeld-Klang abstellen (User 25.09.: "man hoert im Hintergrund immer noch das Rauschen von
+        //     Skeld"). SoundStarter legt beim Laden eine benannte Endlosschleife im SoundManager an und
+        //     vergisst sie; wird er mit der Kulisse geloescht, laeuft die Schleife weiter. Die Raumklaenge
+        //     (Ambient-/TagAmbientSoundPlayer) stoppen sich zwar in OnDestroy, hier trotzdem ausdruecklich.
+        StopSkeldSounds(ship);
+
         // 3. Wipe: alle Kinder des Ship-Roots ausser den geretteten.
         var rootSet = new HashSet<IntPtr>(roots.Select(t => t.Pointer));
         int wiped = 0;
@@ -335,6 +341,7 @@ internal static class AtlasMuseumBuilder
             wiped++;
         }
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} kept {roots.Count} root object(s), wiped {wiped}");
+        RemoveSurvivingAmbience(ship);
 
         // 4. Geometrie-Wurzel in Weltmetern (Ship-Root ist 1,2-fach skaliert und liegt bei z 8).
         var world = new GameObject("Atlas_Museum");
@@ -451,6 +458,7 @@ internal static class AtlasMuseumBuilder
         AtlasPlugin.Logger.LogInfo(
             $"{LogPrefix} BUILD DONE: consoles {placed} placed/{unplaced} parked, vents {ventCount}, " +
             $"doors {doorCount}, cameras {camCount}, wall rings {walls}, props {props}, rooms {ship.AllRooms.Length}, console footprints {FootprintCount}");
+        LogLoopingAudio("after build");
     }
 
     // ------------------------------------------------------------------ Helfer
@@ -671,7 +679,8 @@ internal static class AtlasMuseumBuilder
         foreach (var p in D.Props)
         {
             var tex = AtlasAssets.MapPropsTexture(D, p.Atlas);
-            if (tex == null) continue;
+            // Platzhalter, damit PropRenderers[i] immer zu D.Props[i] gehoert (UnmaskOccluders).
+            if (tex == null) { PropRenderers.Add(null); continue; }
             var sprite = Sprite.Create(tex, new Rect(p.X, p.Y, p.W, p.H), Vector2.zero, D.PropPixelsPerMeter);
             sprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
             var go = Child(root, $"Prop_{p.Kind}_{n}", LayerShortObjects);
@@ -734,8 +743,10 @@ internal static class AtlasMuseumBuilder
     /// halb dunkel), weil das Sprite hinter der eigenen Schattenkante liegt. NoShadowBehaviour hat im
     /// Test nichts bewirkt. Loesung wie die Skeld-Waende: diese Sprites bekommen das normale
     /// Sprite-Material und werden vom Sichtsystem nie ausgeblendet; Spieler dahinter bleiben
-    /// trotzdem unsichtbar, weil nur die Spieler maskiert werden. Props-Reihenfolge = OPAQUE-
-    /// Reihenfolge (gen_museum: erst alle OPAQUE, dann GLASS, dann Deko), Index j = Hindernis j.
+    /// trotzdem unsichtbar, weil nur die Spieler maskiert werden.
+    /// Zuordnung Hindernis -> Sprite ueber die Geometrie (OccluderProp), nicht ueber die Listenposition:
+    /// seit der Kartenverkleinerung gibt es Sichtkerne ohne eigenes Sprite (Baumstamm im Kronen-Sprite,
+    /// Karussell-Gehaeuse in der Scheibe), die die alte Regel "Index j = Hindernis j" verschoben haetten.
     /// </summary>
     private static int UnmaskOccluders()
     {
@@ -751,16 +762,44 @@ internal static class AtlasMuseumBuilder
         AtlasPlugin.Logger.LogInfo(
             $"{LogPrefix} render queues: masking={(_maskingMaterial != null ? _maskingMaterial.renderQueue : -1)} " +
             $"default={_defaultSpriteMaterial.renderQueue} player={(playerRend != null && playerRend.sharedMaterial != null ? playerRend.sharedMaterial.renderQueue : -1)} -> {queue}");
-        int n = 0;
-        int count = Math.Min(OpaqueShadowObjects.Count, PropRenderers.Count);
-        for (int j = 0; j < count; j++)
+        int n = 0, missing = 0;
+        for (int j = 0; j < OpaqueShadowObjects.Count && j < D.Opaque.Length; j++)
         {
-            if (PropRenderers[j] == null || OpaqueShadowObjects[j] == null) continue;
-            PropRenderers[j].sharedMaterial = unmasked;
+            if (OpaqueShadowObjects[j] == null) continue;
+            int i = OccluderProp(D.Opaque[j]);
+            if (i < 0 || i >= PropRenderers.Count || PropRenderers[i] == null) { missing++; continue; }
+            if (PropRenderers[i].sharedMaterial == unmasked) continue;
+            PropRenderers[i].sharedMaterial = unmasked;
             n++;
         }
-        AtlasPlugin.Logger.LogInfo($"{LogPrefix} occluder sprites unmasked: {n}/{OpaqueShadowObjects.Count} (Rest steht an Waenden, ohne Schatten)");
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} occluder sprites unmasked: {n} (shadow casters {OpaqueShadowObjects.FindAll(o => o != null).Count}, without sprite {missing}; der Rest steht an Waenden)");
         return n;
+    }
+
+    /// <summary>
+    /// Das Sprite zu einem Schattenhindernis: das Prop mit der schmalsten Grundflaeche (FootX0..FootX1 ab
+    /// BaseY), die das Hindernis ganz enthaelt. Bei einem Kern (Baumstamm) ist das die Krone, deren
+    /// Wegkollider den Stamm umschliesst; bei einem normalen Hindernis sein eigenes Sprite. -1 = keins.
+    /// </summary>
+    private static int OccluderProp(Vector2[] poly)
+    {
+        if (poly == null || poly.Length == 0) return -1;
+        float x0 = float.MaxValue, x1 = float.MinValue, y0 = float.MaxValue;
+        foreach (var q in poly) { x0 = Mathf.Min(x0, q.x); x1 = Mathf.Max(x1, q.x); y0 = Mathf.Min(y0, q.y); }
+        const float tol = 0.05f;
+        int best = -1;
+        float bestWidth = float.MaxValue;
+        for (int i = 0; i < D.Props.Length; i++)
+        {
+            var p = D.Props[i];
+            if (p.FootX0 > x0 + tol || p.FootX1 < x1 - tol || p.BaseY > y0 + tol) continue;
+            float top = p.WorldY + p.H / D.PropPixelsPerMeter;
+            // Kern liegt in der Grundflaeche, nicht irgendwo weit hinter einem breiten Objekt.
+            if (top < y0 || y0 - p.BaseY > 3f) continue;
+            float w = p.FootX1 - p.FootX0;
+            if (w < bestWidth) { bestWidth = w; best = i; }
+        }
+        return best;
     }
 
     // ------------------------------------------------------ Durchsicht-Blende
@@ -992,6 +1031,77 @@ internal static class AtlasMuseumBuilder
         ship.FastRooms = fast;
     }
 
+    // ---------------------------------------------------------- Skeld-Klang
+
+    private static void StopSkeldSounds(ShipStatus ship)
+    {
+        var sm = SoundManager.Instance;
+        if (sm == null) return;
+        var names = new List<string>();
+        // SoundStarter: nicht nur unter dem Ship-Root suchen, auch sonst in der Skeld-Szene
+        foreach (var s in Object.FindObjectsOfType<SoundStarter>(true))
+        {
+            if (s == null) continue;
+            try
+            {
+                if (!string.IsNullOrEmpty(s.Name)) sm.StopNamedSound(s.Name);
+                if (s.SoundToPlay != null) sm.StopSound(s.SoundToPlay);
+                names.Add($"starter:{s.Name}/{(s.SoundToPlay != null ? s.SoundToPlay.name : "-")}");
+                s.enabled = false;
+            }
+            catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} sound starter '{s.name}': {e.Message}"); }
+        }
+        foreach (var a in ship.GetComponentsInChildren<AmbientSoundPlayer>(true))
+        {
+            if (a == null || a.AmbientSound == null) continue;
+            try { sm.StopSound(a.AmbientSound); names.Add($"ambient:{a.AmbientSound.name}"); } catch { }
+        }
+        foreach (var a in ship.GetComponentsInChildren<TagAmbientSoundPlayer>(true))
+        {
+            if (a == null || a.AmbientSound == null) continue;
+            try { sm.StopSound(a.AmbientSound); names.Add($"tag:{a.AmbientSound.name}"); } catch { }
+        }
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} skeld sounds stopped: {names.Count} ({string.Join(", ", names)})");
+    }
+
+    /// <summary>
+    /// Nach dem Wipe: Raumklaenge, die an einem geretteten Objekt hingen, ueberleben und starten neu. Ohne ihre
+    /// Skeld-Raumflaechen spielen sie dann ueberall (Autotest 25.09.: ambience_Mainambience lief nach dem
+    /// Stopp wieder mit 0,89). Die Komponente wird entfernt; ihr OnDestroy stoppt die Schleife.
+    /// </summary>
+    private static void RemoveSurvivingAmbience(ShipStatus ship)
+    {
+        var sm = SoundManager.Instance;
+        var found = new List<string>();
+        foreach (var a in Object.FindObjectsOfType<AmbientSoundPlayer>(true))
+        {
+            if (a == null) continue;
+            try { if (sm != null && a.AmbientSound != null) sm.StopSound(a.AmbientSound); } catch { }
+            found.Add($"{Path(a.transform, null)}:{(a.AmbientSound != null ? a.AmbientSound.name : "-")}");
+            Object.Destroy(a);
+        }
+        foreach (var a in Object.FindObjectsOfType<TagAmbientSoundPlayer>(true))
+        {
+            if (a == null) continue;
+            try { if (sm != null && a.AmbientSound != null) sm.StopSound(a.AmbientSound); } catch { }
+            found.Add($"{Path(a.transform, null)}:{(a.AmbientSound != null ? a.AmbientSound.name : "-")}");
+            Object.Destroy(a);
+        }
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} surviving skeld ambience removed: {found.Count} ({string.Join(", ", found)})");
+    }
+
+    /// <summary>Diagnose: alle gerade spielenden Endlos-Tonquellen der Szene (Name, Clip, Lautstaerke).</summary>
+    internal static void LogLoopingAudio(string when)
+    {
+        var list = new List<string>();
+        foreach (var src in Object.FindObjectsOfType<AudioSource>())
+        {
+            if (src == null || !src.isPlaying || !src.loop) continue;
+            list.Add($"{src.gameObject.name}:{(src.clip != null ? src.clip.name : "-")}@{src.volume:F2}");
+        }
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} looping audio {when}: {list.Count} [{string.Join(", ", list)}]");
+    }
+
     // ---------------------------------------------------- Vents, Tueren, Kameras
 
     private static int PlaceVents(ShipStatus ship, Vent[] vents)
@@ -1125,7 +1235,7 @@ internal static class AtlasMuseumBuilder
             if (cam == null || n >= D.Cameras.Length) continue;
             var pos = D.Cameras[n];
             MoveTo(cam.transform, pos);
-            LinkCameraRoom(ship, cam, pos);
+            LinkCameraRoom(ship, cam, pos, D.CameraViews.TryGetValue(n, out var view) ? view : (Vector2?)null);
             n++;
         }
         return n;
@@ -1136,8 +1246,10 @@ internal static class AtlasMuseumBuilder
     /// (SurveillanceMinigame.FilteredRooms = AllRooms mit gesetztem survCamera). Unsere Raeume
     /// hatten keine - im Test 22.09. zeigten alle vier Bilder nur Rauschen. Zusaetzlich zielt
     /// die Kamera ueber Offset auf die Raummitte statt auf den alten Skeld-Blickpunkt.
+    /// view (AtlasMapDef.CameraViews): eigener Blickpunkt statt der Raummitte. Die Rotunden-Kamera zeigte
+    /// auf die Raummitte und damit nur den Skelett-Sockel (User 24.09.: "sonst ist die eine Kamera nutzlos").
     /// </summary>
-    private static void LinkCameraRoom(ShipStatus ship, SurvCamera cam, Vector2 pos)
+    private static void LinkCameraRoom(ShipStatus ship, SurvCamera cam, Vector2 pos, Vector2? view = null)
     {
         PlainShipRoom best = null;
         foreach (var r in ship.AllRooms)
@@ -1159,6 +1271,13 @@ internal static class AtlasMuseumBuilder
         best.survCamera = cam;
         Vector2 center = best.transform.position;
         cam.Offset = new Vector3(0f, 0f, cam.Offset.z);
+        if (view.HasValue && best.transform.parent != null)
+        {
+            // Blickpunkt in Kartenkoordinaten -> Welt (der Raum haengt unter dem Kartenknoten), Differenz = Offset
+            Vector2 target = best.transform.parent.TransformPoint(new Vector3(view.Value.x, view.Value.y, 0f));
+            cam.Offset = new Vector3(target.x - center.x, target.y - center.y, cam.Offset.z);
+            center = target;
+        }
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} camera '{cam.name}' -> room {best.RoomId} ({best.name}), view center ({center.x:F1},{center.y:F1})");
     }
 
@@ -1326,9 +1445,177 @@ internal static class AtlasMuseumBuilder
         }
 
         AtlasWorld.AddMapButtons(copy, MapWorld);
+        AvoidLabels(copy, MapWorld);
 
         AtlasPlugin.Logger.LogInfo(
             $"{LogPrefix} minimap: scale {scale:F3}, {hidden} label(s) hidden, {buttons} button room(s), {counters} counter(s)");
+    }
+
+    /// <summary>
+    /// Sabotage- und Tuerknoepfe duerfen die Raumnamen der Minimap nicht verdecken (User 25.09.). Die Knoepfe
+    /// sitzen an der Raummitte, also genau dort, wo auch der Name steht; auf der verkleinerten Karte ist ein
+    /// Knopf ~3,4 m Welt breit. Jede Knopfgruppe (MapRoom = Tuer + Sabotage eines Systems, dazu die eigenen
+    /// Atlas-Knoepfe) wird auf dem kuerzesten Weg aus allen Beschriftungen und aus schon gesetzten Knoepfen
+    /// geschoben. Beschriftungen kommen aus den Generatoren (AtlasMapDef.MapLabels).
+    /// </summary>
+    private static void AvoidLabels(MapBehaviour copy, Func<Vector2, Vector3> mapWorld)
+    {
+        var ov = copy != null ? copy.infectedOverlay : null;
+        if (ov == null || D.MapLabels == null || D.MapLabels.Length == 0) return;
+        var labels = new List<Rect>();
+        foreach (var l in D.MapLabels)
+        {
+            var a = mapWorld(new Vector2(l.X - l.HalfW - 0.25f, l.Y - l.HalfH - 0.2f));
+            var b = mapWorld(new Vector2(l.X + l.HalfW + 0.25f, l.Y + l.HalfH + 0.2f));
+            labels.Add(Rect.MinMaxRect(Mathf.Min(a.x, b.x), Mathf.Min(a.y, b.y), Mathf.Max(a.x, b.x), Mathf.Max(a.y, b.y)));
+        }
+        var groups = new List<Transform>();
+        if (ov.rooms != null)
+            foreach (var r in ov.rooms) if (r != null && r.gameObject.activeSelf) groups.Add(r.transform);
+        for (int i = 0; i < ov.transform.childCount; i++)
+        {
+            var t = ov.transform.GetChild(i);
+            if (t.name.StartsWith("Atlas_Sab_", StringComparison.Ordinal)) groups.Add(t);
+        }
+        // Knoepfe duerfen nicht aus der Karte geschoben werden (Wald 25.09.: Water Works landete ueber dem
+        // Kartenrand). Der Szenenraum der Karte ist achsparallel skaliert, also laesst sich jeder Punkt
+        // zurueck in Weltmeter rechnen und gegen die begehbaren Flaechen pruefen.
+        var p00 = mapWorld(Vector2.zero);
+        var p11 = mapWorld(Vector2.one);
+        float sx = p11.x - p00.x, sy = p11.y - p00.y;
+        var walk = new List<Vector2[]>();
+        if (D.Rooms != null) foreach (var r in D.Rooms) walk.Add(r.Area);
+        if (D.Hallways != null) walk.AddRange(D.Hallways);
+        bool Walkable(float x, float y)
+        {
+            var w = new Vector2((x - p00.x) / sx, (y - p00.y) / sy);
+            foreach (var poly in walk) if (InPoly(poly, w)) return true;
+            return false;
+        }
+        string RoomAt(Vector2 scene)
+        {
+            var w = new Vector2((scene.x - p00.x) / sx, (scene.y - p00.y) / sy);
+            if (D.Rooms != null) foreach (var r in D.Rooms) if (InPoly(r.Area, w)) return r.Name;
+            return null;
+        }
+        bool InRoom(float x, float y, string name)
+        {
+            var w = new Vector2((x - p00.x) / sx, (y - p00.y) / sy);
+            foreach (var r in D.Rooms) if (r.Name == name && InPoly(r.Area, w)) return true;
+            return false;
+        }
+        bool Inside(Rect r, string room)
+        {
+            // Mitte (im eigenen Raum, falls verlangt) und ein innerer Kranz (70 %) auf begehbarem Boden:
+            // ein Knopf an der Wand darf mit dem Rand ueberstehen
+            float hx = r.width * 0.35f, hy = r.height * 0.35f;
+            var c = r.center;
+            if (room != null ? !InRoom(c.x, c.y, room) : !Walkable(c.x, c.y)) return false;
+            return Walkable(c.x - hx, c.y - hy) && Walkable(c.x + hx, c.y - hy)
+                && Walkable(c.x - hx, c.y + hy) && Walkable(c.x + hx, c.y + hy);
+        }
+        var placed = new List<Rect>();
+        bool FreeOfLabels(Rect r)
+        {
+            foreach (var l in labels) if (l.Overlaps(r)) return false;
+            return true;
+        }
+        bool FreeOfButtons(Rect r)
+        {
+            foreach (var q in placed) if (q.Overlaps(r)) return false;
+            return true;
+        }
+        var dirs = new[] { new Vector2(0, -1), new Vector2(0, 1), new Vector2(1, 0), new Vector2(-1, 0),
+                           new Vector2(0.7f, -0.7f), new Vector2(-0.7f, -0.7f), new Vector2(0.7f, 0.7f), new Vector2(-0.7f, 0.7f) };
+        int moved = 0, lenient = 0, foreign = 0;
+        foreach (var g in groups)
+        {
+            var btn = GroupRect(g, out float timer);
+            if (btn.width <= 0f || btn.height <= 0f) continue;
+            var full = Rect.MinMaxRect(btn.xMin, btn.yMin - timer, btn.xMax, btn.yMax);
+            string room = RoomAt(btn.center);
+            // Stufen (Park 25.09.: der O2-Knopf aus dem kleinen Cold Store landete zwei Raeume weiter):
+            // 0 eigener Raum, Knopf samt Abklingzeit-Text frei
+            // 1 eigener Raum, nur der Knopf frei (der Text steht bloss sekundenweise und darf streifen)
+            // 2 irgendwo auf begehbarem Boden, 3 irgendwo
+            bool Ok(Vector2 off, int stage)
+            {
+                var b = new Rect(btn.position + off, btn.size);
+                var f = new Rect(full.position + off, full.size);
+                if (!FreeOfButtons(f)) return false;
+                if (!FreeOfLabels(stage == 1 ? b : f)) return false;
+                if (stage <= 1) return room != null && Inside(b, room);
+                return stage == 3 || Inside(b, null);
+            }
+            if (Ok(Vector2.zero, 0)) { placed.Add(full); continue; }
+            float step = Mathf.Max(btn.height, btn.width) * 0.2f;
+            Vector2 best = Vector2.zero;
+            int found = -1;
+            for (int stage = 0; stage < 4 && found < 0; stage++)
+            {
+                if (stage == 1 && Ok(Vector2.zero, 1)) { found = 1; break; }
+                for (int i = 1; i <= 30 && found < 0; i++)
+                    foreach (var d in dirs)
+                    {
+                        var off = d * step * i;
+                        if (!Ok(off, stage)) continue;
+                        best = off; found = stage;
+                        break;
+                    }
+            }
+            if (found >= 0)
+            {
+                if (best != Vector2.zero)
+                {
+                    g.position += new Vector3(best.x, best.y, 0f);
+                    moved++;
+                }
+                if (found == 1) lenient++;
+                if (found >= 2) foreign++;
+                full = new Rect(full.position + best, full.size);
+            }
+            placed.Add(full);
+        }
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} minimap: {moved} of {groups.Count} button group(s) moved off the room labels "
+            + $"({lenient} with the timer text touching a label, {foreign} outside their room)");
+    }
+
+    private static bool InPoly(Vector2[] poly, Vector2 p)
+    {
+        bool inside = false;
+        for (int i = 0, j = poly.Length - 1; i < poly.Length; j = i++)
+            if ((poly[i].y > p.y) != (poly[j].y > p.y)
+                && p.x < (poly[j].x - poly[i].x) * (p.y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x)
+                inside = !inside;
+        return inside;
+    }
+
+    /// <summary>Umriss einer Knopfgruppe im Szenenraum (ohne Abklingzeit-Text, dessen Hoehe in `timer`), aus den Sprites berechnet (die Karte liegt beim Bau
+    /// unter einem inaktiven Halter, Renderer.bounds waeren dort leer).</summary>
+    private static Rect GroupRect(Transform g, out float timer)
+    {
+        float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
+        foreach (var sr in g.GetComponentsInChildren<SpriteRenderer>(true))
+        {
+            if (sr == null || sr.sprite == null) continue;
+            var b = sr.sprite.bounds;
+            foreach (var corner in new[] { new Vector3(b.min.x, b.min.y), new Vector3(b.max.x, b.min.y),
+                                           new Vector3(b.min.x, b.max.y), new Vector3(b.max.x, b.max.y) })
+            {
+                var w = sr.transform.TransformPoint(corner);
+                x0 = Mathf.Min(x0, w.x); y0 = Mathf.Min(y0, w.y); x1 = Mathf.Max(x1, w.x); y1 = Mathf.Max(y1, w.y);
+            }
+        }
+        timer = 0f;
+        if (x1 <= x0) return new Rect(0, 0, 0, 0);
+        // Abklingzeit-Text ("1s") unter Sabotageknoepfen gehoert dazu, sonst landet er auf dem Raumnamen.
+        // Er entsteht erst beim Oeffnen der Karte und steht nur unter Comms/O2 (Sprite "bomb"); gemessen
+        // (Park 25.09.) reicht er knapp eine halbe Knopfhoehe unter den Knopf.
+        bool text = g.GetComponentsInChildren<TMP_Text>(true).Length > 0;
+        foreach (var sr in g.GetComponentsInChildren<SpriteRenderer>(true))
+            if (sr != null && sr.name == "bomb") text = true;
+        if (text) timer = (y1 - y0) * 0.5f;
+        return Rect.MinMaxRect(x0, y0, x1, y1);
     }
 
     private static bool InOverlay(Transform t, MapBehaviour map)

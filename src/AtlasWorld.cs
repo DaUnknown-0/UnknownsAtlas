@@ -14,6 +14,7 @@
 //   8 Hello [maj][min][build][rev][on]  jeder -> alle, auch in der Lobby: Versions-Abgleich (AtlasHandshake)
 //   9 BuildFailed                       Gast -> Host: Atlas-Karte wurde bei mir nicht gebaut (AtlasHandshake)
 //  10 ParkEvent [art]                   Host -> alle: Fahrgeschaeft im Park startet (AtlasParkWorld)
+//  11 Rex [sub][...]                    Museum-Sabotage "Rex erwacht" (AtlasRex)
 //
 // Wald: Regen und Sturm verlangsamen den Waldbrand-Countdown (Reaktor-System) auf die Haelfte. Im
 // Sturm kann ein Blitz einen Waldbrand ausloesen, auch waehrend Licht oder Comms sabotiert sind
@@ -39,6 +40,7 @@ internal static class AtlasWorld
     public const byte RpcId = 237;
     private const byte OpWeather = 1, OpStrike = 2, OpSabStart = 3, OpSabReq = 4, OpRepair = 5, OpSabEnd = 6, OpEjectScene = 7;
     public const byte SabTrees = 1;
+    public const byte SabRex = 3;          // 2 = AtlasParkWorld.SabRide
 
     public enum Weather : byte { Clear, Rain, Fog, Storm }
 
@@ -64,6 +66,7 @@ internal static class AtlasWorld
         _root = null;
         AtlasWeatherFx.Reset();
         AtlasParkWorld.Reset();
+        AtlasRex.Reset();
     }
 
     /// <summary>Nach dem Kartenbau: Baum-Stellen, Nebelmaschine, Laserschranken anlegen.</summary>
@@ -77,8 +80,13 @@ internal static class AtlasWorld
         var D = AtlasMuseumBuilder.D;
         if (Wald)
         {
-            // Sturmholz: quer ueber die Waldwege (Flurflaechen), Ausrichtung nach der langen Seite
-            foreach (var h in D.Hallways)
+            // Sturmholz: quer ueber die Waldwege. Seit der Kartenverkleinerung liefert der Generator die
+            // Stellen als Daten (die 1-m-Hoefe verschmelzen Wege und Hoefe zu wenigen grossen Fluren).
+            if (D.TreeSpots != null)
+                foreach (var t in D.TreeSpots)
+                    TreeSpots.Add((new Vector2(t.X, t.Y), t.Horizontal, t.Len));
+            // alte Ableitung aus schmalen Flurflaechen (Karten ohne eigene Liste)
+            else foreach (var h in D.Hallways)
             {
                 if (h == null || h.Length < 3) continue;
                 float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
@@ -94,6 +102,7 @@ internal static class AtlasWorld
             BuildLasers();
         }
         if (Park) AtlasParkWorld.Build(ship, _root);
+        if (Museum) AtlasRex.OnBuilt(ship);
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} ready: {TreeSpots.Count} tree spot(s), {Lasers.Count} laser(s)");
     }
 
@@ -145,6 +154,7 @@ internal static class AtlasWorld
                 case OpRepair when AmHost: HostRepair(reader.ReadByte(), reader.ReadByte()); break;
                 case OpEjectScene when fromHost: AtlasEject.NextScene = reader.ReadByte(); AtlasEject.NextSkip = reader.ReadByte(); break;
                 case AtlasParkWorld.OpParkEvent when fromHost: AtlasParkWorld.Apply((AtlasParkWorld.Ev)reader.ReadByte()); break;
+                case AtlasRex.OpRex: AtlasRex.Receive(__instance, fromHost, reader); break;
             }
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} rpc: {e.Message}"); }
@@ -156,8 +166,11 @@ internal static class AtlasWorld
     {
         var r = SabKit.Sys<ReactorSystemType>(SystemTypes.Reactor);
         var o = SabKit.Sys<LifeSuppSystemType>(SystemTypes.LifeSupp);
-        return (r != null && r.IsActive) || (o != null && o.IsActive);
+        return (r != null && r.IsActive) || (o != null && o.IsActive) || AtlasRex.Active;
     }
+
+    /// <summary>Gemeinsame Abklingzeit der Welt-Sabotagen (AtlasRex nach dem Ende).</summary>
+    internal static void SetSabCooldown(float seconds) => _sabCooldownUntil = Mathf.Max(_sabCooldownUntil, Time.time + seconds);
 
     private static void HostTick()
     {
@@ -210,6 +223,11 @@ internal static class AtlasWorld
         if (kind == AtlasParkWorld.SabRide)
         {
             if (Park && AtlasParkWorld.HostRide()) _sabCooldownUntil = Time.time + 30f;
+            return;
+        }
+        if (kind == SabRex)
+        {
+            if (Museum && AtlasRex.HostTryStart()) _sabCooldownUntil = Time.time + 30f;
             return;
         }
         if (kind != SabTrees || !Wald || Trees.Count > 0) return;
@@ -535,6 +553,7 @@ internal static class AtlasWorld
             var list = new List<(byte Kind, Vector2 W, string Icon, float Scale)>();
             if (Wald && TreeSpots.Count > 0) list.Add((SabTrees, TreeSpots[0].C, "task_fallen_tree.png", 0.16f));
             if (Park) list.Add((AtlasParkWorld.SabRide, AtlasParkWorld.RideButtonSpot(), "task_button.png", 0.45f));
+            if (Museum) list.Add((SabRex, AtlasMuseumLayout.RexMapButton, "task_museum_dino.png", 0.2f));
             foreach (var (kind, w, icon, scale) in list)
             {
                 var go = Object.Instantiate(template.gameObject, ov.transform);
@@ -562,7 +581,7 @@ internal static class AtlasWorld
         foreach (var (b, r, kind) in MapButtons)
         {
             if (r == null) continue;
-            bool active = Trees.Count > 0 || AtlasParkWorld.EventActive;
+            bool active = Trees.Count > 0 || AtlasParkWorld.EventActive || AtlasRex.Active;
             r.color = active ? new Color(1f, 0.4f, 0.4f) : cooling && AmHost ? new Color(0.5f, 0.5f, 0.5f) : Color.white;
         }
     }
@@ -571,7 +590,7 @@ internal static class AtlasWorld
 
     public static string DiagState() =>
         $"weather {CurrentWeather}, trees {Trees.Count}, lasers {Lasers.Count}, log {LaserLog.Count}" +
-        (Park ? "; " + AtlasParkWorld.DiagState() : "");
+        (Park ? "; " + AtlasParkWorld.DiagState() : "") + (Museum ? "; " + AtlasRex.DiagState() : "");
 
     private static void Snap(Vector2 p)
     {
@@ -604,15 +623,15 @@ internal static class AtlasWorld
                 ShipStatus.Instance.RpcUpdateSystem(SystemTypes.Reactor, ReactorSystemType.StartCountdown);
                 break;
             // Park (AtlasParkWorld): Fahrgeschaefte sofort, Spieler an eine Stelle mit Blick darauf
-            case "coaster": Snap(new Vector2(15.8f, 5.6f)); AtlasParkWorld.DiagStart(AtlasParkWorld.Ev.Coaster); break;
-            case "carousel": Snap(new Vector2(-18.25f, 8.0f)); AtlasParkWorld.DiagStart(AtlasParkWorld.Ev.Carousel); break;
+            case "coaster": Snap(new Vector2(12.1f, 5.2f)); AtlasParkWorld.DiagStart(AtlasParkWorld.Ev.Coaster); break;
+            case "carousel": Snap(new Vector2(-15.25f, 7.2f)); AtlasParkWorld.DiagStart(AtlasParkWorld.Ev.Carousel); break;
             case "ghost":
-                Snap(new Vector2(-32.25f, 10.2f));
+                Snap(new Vector2(-14.5f, -13.4f));   // Werkstatt: Tunnelausgang + Foto-Monitor
                 AtlasParkWorld.DiagDummyInGhost();
                 AtlasParkWorld.DiagStart(AtlasParkWorld.Ev.GhostFlash);
                 break;
-            case "flume": Snap(new Vector2(32.75f, -6.6f)); AtlasParkWorld.DiagStart(AtlasParkWorld.Ev.Flume); break;
-            case "jam": Snap(new Vector2(0f, -16.2f)); AtlasParkWorld.DiagStart(AtlasParkWorld.Ev.TurnstileJam); break;
+            case "flume": Snap(new Vector2(18.0f, -6.2f)); AtlasParkWorld.DiagStart(AtlasParkWorld.Ev.Flume); break;
+            case "jam": Snap(new Vector2(0f, -4.8f)); AtlasParkWorld.DiagStart(AtlasParkWorld.Ev.TurnstileJam); break;
             case "oneway": AtlasParkWorld.DiagOneWay(); break;
             // Lichtebene: bei einer Laterne stehen (an), dann Park Blackout ausloesen (aus, Neon bleibt)
             case "lamps": Snap(AtlasParkWorldData.Lamps[2] + new Vector2(0f, -1.2f)); break;
@@ -648,6 +667,8 @@ internal static class AtlasWorld
                 }
                 break;
             case "cams": AtlasMapShot.OpenCamerasForDiag(); break;
+            // Museum-Sabotage "Rex erwacht": rex, rexmusic, rexlight, rexboth, rexlose (AtlasRex.Diag)
+            case var r when r.StartsWith("rex", StringComparison.Ordinal) || r == "arrowinfo": AtlasRex.Diag(r, Snap); break;
         }
         _sabCooldownUntil = 0f;
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag {what}: {DiagState()}");
@@ -669,6 +690,7 @@ internal static class AtlasWorld
             MapButtonTick();
             AtlasWeatherFx.Tick(dt, Wald);
             AtlasParkWorld.Tick(dt);
+            AtlasRex.Tick(dt);
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} tick: {e.Message}"); }
     }

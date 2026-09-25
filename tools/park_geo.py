@@ -64,13 +64,25 @@ def build():
         x0, y0, x1, y1 = inner
         shells.append(box(x0 - P.WALL, y0 - P.WALL, x1 + P.WALL, y1 + P.WALL))
         inners.append(box(*inner))
-        for side, a, b, kind in dl:
+        for side, a, b, kind, *_group in dl:     # optional 5. Feld: Tuergruppe (door_group)
             o = opening_rect(inner, side, a, b)
             openings.append(o)
             doors.append((key, side, a, b, kind, o))
     walk = outdoor.difference(unary_union(shells))
     walk = unary_union([walk] + inners + openings).buffer(0)
     return walk, water.difference(bridges), shells, doors
+
+
+def door_group(key, side, a):
+    """Tuergruppe einer Oeffnung: das fuenfte Feld, sonst das System des Gebaeudes."""
+    for bkey, _n, sysname, _inner, dl in P.BUILDINGS:
+        if bkey != key:
+            continue
+        for d in dl:
+            if d[0] == side and abs(d[1] - a) < 1e-6:
+                return d[4] if len(d) > 4 else sysname
+        return sysname
+    raise KeyError(key)
 
 
 def rooms(walk):
