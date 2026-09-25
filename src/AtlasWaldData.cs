@@ -215,6 +215,7 @@ public static class AtlasWaldData
         ("hochsitz", 0, 1188, 2326, 352, 616, 12.200f, 2.300f, 2.600f, 12.500f, 14.100f),
         ("baum", 0, 2570, 3375, 736, 721, -2.600f, 10.300f, 10.600f, -1.100f, 0.500f),
         ("baum", 0, 3308, 3375, 736, 721, 16.300f, -8.300f, -8.000f, 17.800f, 19.400f),
+        ("hochsitz_front", 0, 3628, 1685, 334, 100, 12.256f, 3.763f, 2.600f, 12.500f, 14.100f),
     };
     public static readonly (string Key, int Atlas, int X, int Y, int W, int H, float PivotX, float PivotY)[] ConsoleSprites =
     {

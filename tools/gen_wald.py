@@ -449,7 +449,7 @@ def render_floor(walk, water, shells, doors, rooms):
 
 H = {"tisch_lang": 0.8, "herd": 1.0, "regal": 1.9, "laborbank": 1.0, "schrank": 1.9, "saegetisch": 1.0,
      "holzstapel": 1.1, "kisten": 1.1, "boot": 0.8, "monitore": 1.8, "aggregat": 1.3, "fels": 1.2,
-     "turm": 3.2, "mast": 4.2, "tank": 3.0, "pumpenhaus": 1.9, "hochsitz": 3.0, "baum": 3.2,
+     "turm": 3.2, "mast": 4.2, "tank": 3.0, "pumpenhaus": 1.9, "hochsitz": 3.0, "hochsitz_front": 3.0, "baum": 3.2,
      "bank": 0.45, "kartentisch": 0.85, "lagerfeuer": 0.5, "baumstamm": 0.45}
 LEGGED = {"bank", "kartentisch", "tisch_lang"}
 
@@ -471,7 +471,7 @@ def draw_prop(kind, s, idx, ppm):
     c = p.c
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     wood, wood_d = hexc("#9a6a3e"), hexc("#6e4a2a")
-    if kind not in LEGGED and kind not in ("lagerfeuer",):
+    if kind not in LEGGED and kind not in ("lagerfeuer", "hochsitz_front"):
         if s[0] == "rect":
             pts = [(x0 + 0.07, y0 - 0.1), (x1 + 0.1, y0 - 0.1), (x1 + 0.1, y1 - 0.05), (x0 + 0.07, y1 - 0.05)]
         else:
@@ -857,11 +857,26 @@ def draw_prop(kind, s, idx, ppm):
         c.line([(x0 + 0.25, y0 + (h - 0.9) * A.K), (x1 - 0.25, y0 + 0.2)], fill=alpha(wood_d, 220), width=0.05)
         p.box(x0 - 0.2, y0, x1 + 0.2, y1, h - 0.8, 0.8, shade(wood, 1.15), wood)
         grain(x0 - 0.17, y0 + (h - 0.8) * A.K + 0.05, x1 + 0.17, y0 + h * A.K - 0.05, wood, 0.1)
-        c.rect(x0 + 0.2, y0 + (h - 0.5) * A.K, x1 - 0.2, y0 + (h - 0.2) * A.K, fill=hexc("#1c1e20"))
-        c.line([(x0 + 0.2, y0 + (h - 0.35) * A.K), (x1 - 0.2, y0 + (h - 0.35) * A.K)], fill=wood_d, width=0.03)
+        # grosses Fenster: wer oben steht, schaut mit dem Oberkoerper heraus (AtlasLookout); die Frontwand
+        # darunter und der Rahmen kommen zusaetzlich als "hochsitz_front" VOR die Figur
+        wy0, wy1 = y0 + (h - 0.62) * A.K, y0 + (h - 0.1) * A.K
+        c.rect(x0 + 0.12, wy0, x1 - 0.12, wy1, fill=hexc("#1c1e20"))
+        c.rect(x0 + 0.12, wy1 - 0.06, x1 - 0.12, wy1, fill=hexc("#2c2a26"))
         c.poly([(x0 - 0.35, y0 + h * A.K), (x1 + 0.35, y0 + h * A.K), (cx, y1 + (h + 0.6) * A.K)], fill=hexc("#5b3b22"), outline=OUTLINE, width=0.05)
         c.line([(x0 - 0.1, y0 + h * A.K + 0.15), (x1 + 0.1, y0 + h * A.K + 0.15)], fill=alpha(shade(hexc("#5b3b22"), 0.7), 220), width=0.03)
         lantern(x1 + 0.1, y0 + (h - 0.45) * A.K + 0.05)
+    elif kind == "hochsitz_front":
+        # nur die Teile der Kabinenfront um das Fenster: Bruestung, Pfosten, Sturz (gleiche Farben wie "hochsitz")
+        yF, yT = y0 + (h - 0.8) * A.K, y0 + h * A.K
+        wy0, wy1 = y0 + (h - 0.62) * A.K, y0 + (h - 0.1) * A.K
+        xa, xb, xwa, xwb = x0 - 0.2, x1 + 0.2, x0 + 0.12, x1 - 0.12
+        for r in ((xa, yF, xb, wy0), (xa, wy0, xwa, yT), (xwb, wy0, xb, yT), (xwa, wy1, xwb, yT)):
+            c.rect(*r, fill=wood)
+        grain(xa + 0.03, yF + 0.03, xb - 0.03, wy0 - 0.02, wood, 0.05)
+        c.rect(xa, yF, xb, yT, outline=OUTLINE, width=0.03)
+        c.rect(xwa, wy0, xwb, wy1, outline=OUTLINE, width=0.025)
+        c.line([(xwa, wy0 + 0.012), (xwb, wy0 + 0.012)], fill=shade(wood, 1.25), width=0.02)
+        lantern(x1 + 0.1, y0 + (h - 0.45) * A.K + 0.05, glow=False)
     elif kind == "baum":
         c.rect(cx - 0.18, cy, cx + 0.18, cy + 1.2 * A.K + 0.3, fill=C["stamm"], outline=OUTLINE, width=0.04)
         c.line([(cx + 0.06, cy + 0.1), (cx + 0.04, cy + 1.2 * A.K + 0.2)], fill=C["stamm_dunkel"], width=0.03)
@@ -904,10 +919,18 @@ def draw_prop(kind, s, idx, ppm):
 def render_props():
     # kind None = Sichtkern ohne eigenes Sprite (Baumstamm; die Krone kommt aus dem GLASS-Eintrag)
     items = [(s, k) for s, k in W.OPAQUE if k] + [(s, k) for s, k in W.GLASS if k]
+    # Hochsitz-Front als eigenes, zugeschnittenes Sprite (vor der Figur, die oben im Fenster steht)
+    items += [(s, "hochsitz_front") for s, k in W.OPAQUE + W.GLASS if k == "hochsitz"]
     images, meta = [], []
     for i, (s, kind) in enumerate(items):
         im, wx, wy, base = draw_prop(kind, s, i, PROP_PPM)
         im = im.filter(ImageFilter.GaussianBlur(0.45))
+        if kind == "hochsitz_front":
+            l_, t_, r_, b_ = im.getchannel("A").getbbox()
+            l_, t_, r_, b_ = max(0, l_ - 2), max(0, t_ - 2), min(im.width, r_ + 2), min(im.height, b_ + 2)
+            wx += l_ / PROP_PPM
+            wy += (im.height - b_) / PROP_PPM
+            im = im.crop((l_, t_, r_, b_))
         images.append((i, im))
         fx0, _, fx1, _ = bounds(s)
         meta.append((kind, wx, wy, base, fx0, fx1))

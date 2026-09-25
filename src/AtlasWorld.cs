@@ -15,6 +15,7 @@
 //   9 BuildFailed                       Gast -> Host: Atlas-Karte wurde bei mir nicht gebaut (AtlasHandshake)
 //  10 ParkEvent [art]                   Host -> alle: Fahrgeschaeft im Park startet (AtlasParkWorld)
 //  11 Rex [sub][...]                    Museum-Sabotage "Rex erwacht" (AtlasRex)
+//  12 Lookout [spieler][oben]           jeder -> alle: Figur steht auf dem Hochsitz (AtlasLookout, nur Optik)
 //
 // Wald: Regen und Sturm verlangsamen den Waldbrand-Countdown (Reaktor-System) auf die Haelfte. Im
 // Sturm kann ein Blitz einen Waldbrand ausloesen, auch waehrend Licht oder Comms sabotiert sind
@@ -67,6 +68,7 @@ internal static class AtlasWorld
         AtlasWeatherFx.Reset();
         AtlasParkWorld.Reset();
         AtlasRex.Reset();
+        AtlasLookout.Reset();
     }
 
     /// <summary>Nach dem Kartenbau: Baum-Stellen, Nebelmaschine, Laserschranken anlegen.</summary>
@@ -155,6 +157,7 @@ internal static class AtlasWorld
                 case OpEjectScene when fromHost: AtlasEject.NextScene = reader.ReadByte(); AtlasEject.NextSkip = reader.ReadByte(); break;
                 case AtlasParkWorld.OpParkEvent when fromHost: AtlasParkWorld.Apply((AtlasParkWorld.Ev)reader.ReadByte()); break;
                 case AtlasRex.OpRex: AtlasRex.Receive(__instance, fromHost, reader); break;
+                case AtlasLookout.OpLookout: AtlasLookout.Receive(__instance, reader); break;
             }
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} rpc: {e.Message}"); }
@@ -314,6 +317,7 @@ internal static class AtlasWorld
     {
         float f = 1f;
         if (Wald) f *= CurrentWeather == Weather.Fog ? 0.65f : CurrentWeather == Weather.Storm ? 0.85f : 1f;
+        if (Wald) f *= AtlasLookout.VisionFactor;                 // Hochsitz: oben sieht man weiter
         if (Park) f *= AtlasParkWorld.VisionFactor(pos);
         return f;
     }
@@ -669,6 +673,8 @@ internal static class AtlasWorld
             case "cams": AtlasMapShot.OpenCamerasForDiag(); break;
             // Museum-Sabotage "Rex erwacht": rex, rexmusic, rexlight, rexboth, rexlose (AtlasRex.Diag)
             case var r when r.StartsWith("rex", StringComparison.Ordinal) || r == "arrowinfo": AtlasRex.Diag(r, Snap); break;
+            // Forest-Hochsitz: lookoutbase, lookout1..3 (Sichtstufen), lookoutdown, lookoutdummy (AtlasLookout.Diag)
+            case var l when l.StartsWith("lookout", StringComparison.Ordinal): AtlasLookout.Diag(l, Snap); break;
         }
         _sabCooldownUntil = 0f;
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag {what}: {DiagState()}");
@@ -691,6 +697,7 @@ internal static class AtlasWorld
             AtlasWeatherFx.Tick(dt, Wald);
             AtlasParkWorld.Tick(dt);
             AtlasRex.Tick(dt);
+            AtlasLookout.Tick(dt);
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} tick: {e.Message}"); }
     }
