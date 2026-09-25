@@ -221,8 +221,16 @@ internal static class AtlasWorld
 
     private static void HostSabRequest(PlayerControl from, byte kind)
     {
-        if (from == null || from.Data == null || from.Data.Role == null || !from.Data.Role.IsImpostor || from.Data.IsDead) return;
-        if (Time.time < _sabCooldownUntil || CriticalActive()) return;
+        if (from == null || from.Data == null || from.Data.Role == null || !from.Data.Role.IsImpostor || from.Data.IsDead)
+        {
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} sabotage {kind} refused: requester is no living impostor");
+            return;
+        }
+        if (Time.time < _sabCooldownUntil || CriticalActive())
+        {
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} sabotage {kind} refused: cooldown {Mathf.Max(0f, _sabCooldownUntil - Time.time):F0} s, critical {CriticalActive()}");
+            return;
+        }
         if (kind == AtlasParkWorld.SabRide)
         {
             if (Park && AtlasParkWorld.HostRide()) _sabCooldownUntil = Time.time + 30f;
@@ -546,6 +554,7 @@ internal static class AtlasWorld
     public static void AddMapButtons(MapBehaviour copy, Func<Vector2, Vector3> mapWorld)
     {
         MapButtons.Clear();
+        int made = 0;
         try
         {
             var ov = copy != null ? copy.infectedOverlay : null;
@@ -569,14 +578,84 @@ internal static class AtlasWorld
                 go.transform.localScale = Vector3.one * scale / Mathf.Max(0.01f, ov.transform.lossyScale.x);
                 var bb = go.GetComponent<ButtonBehavior>();
                 if (bb == null) continue;
+                FitClickArea(go, bb, sr, kind);
+                // die Vanilla-Aktion (persistenter Aufruf der Vorlage) loeschen; der eigene Klick kommt erst
+                // beim Oeffnen dazu (BindMapButtons), siehe dort
                 bb.OnClick = new UnityEngine.UI.Button.ButtonClickedEvent();
-                byte k = kind;
-                bb.OnClick.AddListener((Action)(() => RequestSab(k)));
-                MapButtons.Add((bb, sr, kind));
+                made++;
             }
-            AtlasPlugin.Logger.LogInfo($"{LogPrefix} {MapButtons.Count} sabotage map button(s)");
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} {made} sabotage map button(s)");
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} map buttons: {e.Message}"); }
+    }
+
+    /// <summary>
+    /// `copy` in AddMapButtons ist nur die VORLAGE (ShipStatus.MapPrefab); die sichtbare Karte ist ein
+    /// Instantiate davon. Per AddListener gesetzte Laufzeit-Listener kopiert Unity dabei nicht mit, der
+    /// sichtbare Knopf hatte also ein leeres OnClick (Playtest 25.09.: T. rex nicht ausloesbar, im Log
+    /// kein Klick; der Autotest "sabtap" rief den Vorlagen-Knopf direkt auf und war deshalb gruen).
+    /// Deshalb bei jedem Oeffnen die Knoepfe der angezeigten Karte verdrahten.
+    /// </summary>
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(MapBehaviour), nameof(MapBehaviour.Show))]
+    internal static void MapBehaviour_Show_Postfix(MapBehaviour __instance)
+    {
+        if (!AtlasMuseumBuilder.Active || __instance == null) return;
+        try { BindMapButtons(__instance); }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} bind map buttons: {e.Message}"); }
+    }
+
+    private static void BindMapButtons(MapBehaviour map)
+    {
+        MapButtons.Clear();
+        var ov = map.infectedOverlay;
+        if (ov == null) return;
+        for (int i = 0; i < ov.transform.childCount; i++)
+        {
+            var t = ov.transform.GetChild(i);
+            if (!t.name.StartsWith("Atlas_Sab_", StringComparison.Ordinal)) continue;
+            if (!byte.TryParse(t.name.Substring("Atlas_Sab_".Length), out byte kind)) continue;
+            var bb = t.GetComponent<ButtonBehavior>();
+            var sr = t.GetComponent<SpriteRenderer>();
+            if (bb == null) continue;
+            var box = t.GetComponent<BoxCollider2D>();
+            if (box != null) bb.colliders = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Collider2D>(new Collider2D[] { box });
+            bb.OnClick = new UnityEngine.UI.Button.ButtonClickedEvent();
+            byte k = kind;
+            bb.OnClick.AddListener((Action)(() =>
+            {
+                AtlasPlugin.Logger.LogInfo($"{LogPrefix} map button {k} clicked");
+                RequestSab(k);
+            }));
+            MapButtons.Add((bb, sr, kind));
+        }
+    }
+
+    /// <summary>
+    /// Der Klon behaelt den Collider des Vanilla-Knopfs (0,6er-Kreis/Box) und schrumpft mit der Klon-Skalierung,
+    /// das eigene Bild ist aber mehrere Einheiten breit: der T. rex war nur auf einem Punkt in den Rippen
+    /// anklickbar (Playtest 25.09., im Log kein einziger Klick). Klickflaeche deshalb auf das Bild ziehen.
+    /// </summary>
+    private static void FitClickArea(GameObject go, ButtonBehavior bb, SpriteRenderer sr, byte kind)
+    {
+        if (sr == null || sr.sprite == null) return;
+        var b = sr.sprite.bounds;   // lokale Einheiten des Knopfs
+        var old = go.GetComponents<Collider2D>();
+        string before = "";
+        foreach (var c in old)
+        {
+            var wb = c.bounds;
+            before += $"{c.GetIl2CppType().Name} {wb.size.x:F2}x{wb.size.y:F2} ";
+            c.enabled = false;
+        }
+        var box = go.AddComponent<BoxCollider2D>();
+        box.size = new Vector2(b.size.x * 0.9f, b.size.y * 0.9f);
+        box.offset = b.center;
+        box.isTrigger = old.Length > 0 && old[0].isTrigger;
+        bb.colliders = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Collider2D>(new Collider2D[] { box });
+        var ab = box.bounds;
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} map button {kind}: click area {before.Trim()} -> box {ab.size.x:F2}x{ab.size.y:F2} " +
+            $"(image {sr.bounds.size.x:F2}x{sr.bounds.size.y:F2})");
     }
 
     private static void MapButtonTick()
@@ -656,8 +735,25 @@ internal static class AtlasWorld
                 HudManager.Instance.ToggleMapVisible(new MapOptions { Mode = MapOptions.Modes.Sabotage });
                 break;
             case "sabtap":
-                // den Sturmholz-Knopf wie ein Klick ausloesen, dann Karte zu
-                foreach (var (b, _, _) in MapButtons) { if (b != null) b.OnClick.Invoke(); break; }
+                // Knopf der ANGEZEIGTEN Karte (MapButtons wird beim Oeffnen neu verdrahtet): erst pruefen, ob
+                // Punkte auf dem Bild seinen Collider treffen, dann wie ein Klick ausloesen, dann Karte zu
+                foreach (var (b, r, kind) in MapButtons)
+                {
+                    if (b == null || r == null) continue;
+                    var bo = r.bounds;
+                    int hits = 0, tried = 0;
+                    foreach (var f in new[] { new Vector2(0f, 0f), new Vector2(-0.35f, 0f), new Vector2(0.35f, 0f), new Vector2(0f, -0.3f), new Vector2(0f, 0.3f) })
+                    {
+                        var pt = (Vector2)bo.center + new Vector2(bo.size.x * f.x, bo.size.y * f.y);
+                        tried++;
+                        foreach (var c in Physics2D.OverlapPointAll(pt))
+                            if (c != null && c.gameObject == b.gameObject) { hits++; break; }
+                    }
+                    bool live = MapBehaviour.Instance != null && b.transform.IsChildOf(MapBehaviour.Instance.transform);
+                    AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag sabtap: button {kind} on shown map {live}, image hits {hits}/{tried}");
+                    b.OnClick.Invoke();
+                    break;
+                }
                 if (MapBehaviour.Instance != null) MapBehaviour.Instance.Close();
                 break;
             case "laser":

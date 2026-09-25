@@ -123,7 +123,11 @@ internal static class AtlasRex
         if (!Museum || Active) return false;
         var sab = SabKit.Sys<SabotageSystemType>(SystemTypes.Sabotage);
         // wie jede Sabotage: nicht waehrend einer anderen und nicht in der gemeinsamen Abklingzeit
-        if (sab != null && (sab.AnyActive || sab.Timer > 0f)) return false;
+        if (sab != null && (sab.AnyActive || sab.Timer > 0f))
+        {
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} refused: vanilla sabotage active {sab.AnyActive}, shared cooldown {sab.Timer:F0} s");
+            return false;
+        }
         HostStart();
         return true;
     }
