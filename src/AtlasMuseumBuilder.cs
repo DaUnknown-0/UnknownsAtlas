@@ -644,7 +644,7 @@ internal static class AtlasMuseumBuilder
     private const float FallbackFeetOffset = 0.3636f;
     private static float _feetOffset = float.NaN;
 
-    private static float FeetOffset()
+    internal static float FeetOffset()
     {
         if (!float.IsNaN(_feetOffset)) return _feetOffset;
         var pc = PlayerControl.LocalPlayer;

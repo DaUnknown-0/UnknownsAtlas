@@ -22,6 +22,10 @@
 //   3 End [0 eingeschlafen, 1 Meeting, 2 Impostor gewinnen]   Host -> alle
 //   4 Input [station][an]                    jeder -> Host
 // Ausgeloest wird ueber den Kartenknopf (AtlasWorld OpSabReq, Art SabRex).
+//
+// Eigene Abklingzeit (User 26.09.): doppelt so lang wie die normale Sabotage-Abklingzeit (Vanilla 30 s) und
+// neu gestartet, sobald irgendeine Sabotage ausgeloest oder behoben wird (Vanilla-Sabotagen und der Rex
+// selbst; Tueren zaehlen nicht). Nur der Host fuehrt sie.
 
 using System;
 using System.Collections.Generic;
@@ -46,6 +50,7 @@ internal static class AtlasRex
     public const float Countdown = 50f, RateOne = 2f, RateBoth = 6f, Decay = 1f, RoarLoss = 6f;
     public const float RoarMin = 10f, RoarMax = 13f, Warn = 1.6f;
     public const float CrankMin = 0.75f, CrankMax = 1.35f, ProjTol = 9f;
+    public const float NormalSabCooldown = 30f, Cooldown = 2f * NormalSabCooldown;
 
     private static bool Museum => AtlasMuseumBuilder.Active && AtlasMuseumBuilder.D.Key == "museum";
     private static bool AmHost => AmongUsClient.Instance != null && AmongUsClient.Instance.AmHost;
@@ -69,6 +74,11 @@ internal static class AtlasRex
     private static readonly HashSet<byte> MusicUsers = new(), LightUsers = new();
     private static float _hostNextHit, _hostSendAt;
     private static bool _hostWarned;
+    private static float _hostReadyAt;
+    private static bool _hostSabWasActive;
+
+    /// <summary>Restliche Rex-Abklingzeit in Sekunden (nur beim Host gefuehrt, sonst 0).</summary>
+    public static float CooldownLeft => Mathf.Max(0f, _hostReadyAt - Time.time);
 
     public static void Reset()
     {
@@ -76,6 +86,7 @@ internal static class AtlasRex
         Roars = 0; WarnPhase = 0f; _roarAt = -1f; LocalCranking = false;
         MyInput[0] = MyInput[1] = false;
         MusicUsers.Clear(); LightUsers.Clear();
+        _hostReadyAt = 0f; _hostSabWasActive = false;
         _headPivot = _jawPivot = null; _eye = null; _awake = 0f; _headAng = _jawAng = 0f;
         _hint = null; _arrows.Clear(); _shakeT = 0f; _roarShake = 0f;
     }
@@ -128,6 +139,11 @@ internal static class AtlasRex
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} refused: vanilla sabotage active {sab.AnyActive}, shared cooldown {sab.Timer:F0} s");
             return false;
         }
+        if (CooldownLeft > 0f)
+        {
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} refused: Rex cooldown {CooldownLeft:F0} s");
+            return false;
+        }
         HostStart();
         return true;
     }
@@ -162,6 +178,17 @@ internal static class AtlasRex
             if (info == null || info.IsDead || info.Disconnected) gone.Add(id);
         }
         foreach (var id in gone) set.Remove(id);
+    }
+
+    /// <summary>Startet die Rex-Abklingzeit neu, sobald eine Sabotage beginnt oder behoben wird.</summary>
+    private static void HostCooldownTick()
+    {
+        var sab = SabKit.Sys<SabotageSystemType>(SystemTypes.Sabotage);
+        bool any = Active || (sab != null && sab.AnyActive);
+        if (any == _hostSabWasActive) return;
+        _hostSabWasActive = any;
+        _hostReadyAt = Time.time + Cooldown;
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} host: sabotage {(any ? "started" : "fixed")}, Rex cooldown {Cooldown:F0} s");
     }
 
     private static void HostTick(float dt)
@@ -280,6 +307,7 @@ internal static class AtlasRex
         AnimateRex(dt);
         ShakeTick(dt);
         FlashTick();
+        if (AmHost) HostCooldownTick();
         if (!Active) { MelodyTick(dt, false); return; }
         if (AmHost) HostTick(dt);
         else TimeLeft = Mathf.Max(0f, TimeLeft - dt);                // zwischen zwei Zustandsmeldungen weiterzaehlen
@@ -404,7 +432,7 @@ internal static class AtlasRex
 
     private static void RoarFx()
     {
-        _roarShake = 0.75f;
+        _roarShake = 1.2f;   // Maul offen, solange das Gebruell (Spitze bei 0,6 s) laut ist
         var lp = PlayerControl.LocalPlayer;
         if (lp == null) return;
         var me = lp.GetTruePosition();
@@ -794,7 +822,7 @@ internal static class AtlasRex
     }
 
     public static string DiagState() =>
-        $"rex {(Active ? "awake" : "asleep")}, sleep {Sleep:F0}, time {TimeLeft:F1}, music {MusicOn}, light {LightOn}, roars {Roars}";
+        $"rex {(Active ? "awake" : "asleep")}, sleep {Sleep:F0}, time {TimeLeft:F1}, music {MusicOn}, light {LightOn}, roars {Roars}, cooldown {CooldownLeft:F0}";
 
     [HarmonyPostfix]
     [HarmonyPatch(typeof(ShipStatus), nameof(ShipStatus.OnDestroy))]

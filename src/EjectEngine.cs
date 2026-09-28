@@ -651,7 +651,7 @@ internal static class EjectSynth {
         try {
             if (SoundManager.Instance == null) return;
             if (!Clips.TryGetValue(name, out var c) || c == null) {
-                var s = Make(name);
+                var s = Samples(name);
                 if (s == null || s.Length < 2) return;
                 c = AudioClip.Create("eject_" + name, s.Length, 1, Sr, false);
                 c.hideFlags |= HideFlags.HideAndDontSave;
@@ -660,6 +660,33 @@ internal static class EjectSynth {
             }
             SoundManager.Instance.PlaySound(c, false, vol * 0.8f);
         } catch (Exception e) { EjectEngine.Warn($"eject: sound {name}: {e.Message}"); }
+    }
+
+    /// <summary>Samples eines Klangs: eine eingebettete Aufnahme sfx_&lt;name&gt;.wav (PCM 16 bit, 22050 Hz) hat
+    /// Vorrang vor dem Synth-Klang (Atlas: sfx_roar.wav, erzeugt von tools/gen_roar.py).</summary>
+    internal static float[] Samples(string name) => LoadWav(name) ?? Make(name);
+
+    private static float[] LoadWav(string name) {
+        try {
+            using var st = typeof(EjectSynth).Assembly.GetManifestResourceStream(typeof(EjectSynth).Namespace + ".Resources.sfx_" + name + ".wav");
+            if (st == null) return null;
+            using var br = new BinaryReader(st);
+            br.ReadBytes(12);                                                   // "RIFF", Groesse, "WAVE"
+            int ch = 1, rate = 0, bits = 0;
+            while (st.Position + 8 <= st.Length) {
+                string id = System.Text.Encoding.ASCII.GetString(br.ReadBytes(4));
+                int len = br.ReadInt32();
+                if (id == "fmt ") { br.ReadInt16(); ch = br.ReadInt16(); rate = br.ReadInt32(); br.ReadBytes(6); bits = br.ReadInt16(); br.ReadBytes(len - 16); }
+                else if (id == "data") {
+                    if (bits != 16 || rate != Sr || ch < 1) { EjectEngine.Warn($"eject: sfx_{name}.wav needs 16 bit / {Sr} Hz"); return null; }
+                    int n = len / 2 / ch; var s = new float[n];
+                    for (int i = 0; i < n; i++) { s[i] = br.ReadInt16() / 32768f; for (int k = 1; k < ch; k++) br.ReadInt16(); }
+                    return s;
+                }
+                else br.ReadBytes(len + (len & 1));
+            }
+        } catch (Exception e) { EjectEngine.Warn($"eject: sfx_{name}.wav unreadable: {e.Message}"); }
+        return null;
     }
 
     private static float[] Make(string name) {

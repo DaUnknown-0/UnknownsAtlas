@@ -242,6 +242,8 @@ internal sealed class AtlasMapDef
         Vents = AtlasWaldLayout.Vents, VentNetworks = AtlasWaldLayout.VentNetworks,
         VerticalDoors = AtlasWaldLayout.VerticalDoors, HorizontalDoors = AtlasWaldLayout.HorizontalDoors,
         Cameras = AtlasWaldLayout.Cameras, MapButtons = AtlasWaldLayout.MapButtons, MapLabels = AtlasWaldData.MapLabels,
+        // Hochsitz: die Teile blendet AtlasLookout selbst (Dach aus, solange jemand oben steht)
+        NoFadeKinds = new() { "hochsitz", "hochsitz_front", "hochsitz_roof" },
         CameraColor = new Color(0x16 / 255f, 0x30 / 255f, 0x1f / 255f),
         // Messe (Spawn), Funkmast-Vent, Generator-Vent, Steg, Wachstube mit Kameras
         ViewSpots = new Vector2[] { new(0f, 1f), new(3.0f, 12.0f), new(-10.5f, -7.5f), new(18.5f, -10.0f), new(-24.5f, -9.0f) },

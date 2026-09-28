@@ -665,7 +665,8 @@ internal static class AtlasWorld
         {
             if (r == null) continue;
             bool active = Trees.Count > 0 || AtlasParkWorld.EventActive || AtlasRex.Active;
-            r.color = active ? new Color(1f, 0.4f, 0.4f) : cooling && AmHost ? new Color(0.5f, 0.5f, 0.5f) : Color.white;
+            bool wait = cooling || (kind == SabRex && AtlasRex.CooldownLeft > 0f);
+            r.color = active ? new Color(1f, 0.4f, 0.4f) : wait && AmHost ? new Color(0.5f, 0.5f, 0.5f) : Color.white;
         }
     }
 

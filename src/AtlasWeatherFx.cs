@@ -346,7 +346,7 @@ internal static class AtlasWeatherFx
             "thud" => Thud(),
             "splash" => Splash(),
             "slam" => Slam(),
-            "roar" => Roar(),
+            "roar" => EjectSynth.Samples("roar"),                              // echte Aufnahme, tools/gen_roar.py
             "grind" => Grind(),
             "growl" => Growl(),
             "rush" => Rush(),
@@ -537,21 +537,6 @@ internal static class AtlasWeatherFx
     {
         var s = Thud();
         for (int j = 0; j < 260; j++) s[j] += N() * 0.7f * (1f - j / 260f);
-        return s;
-    }
-
-    private static float[] Roar()
-    {
-        int n = (int)(Rate * 1.6f);
-        var s = Brown(n, 0.08f, 1.4f);
-        for (int i = 0; i < n; i++)
-        {
-            float t = (float)i / Rate;
-            float f = 95f + 25f * Mathf.Sin(t * 3f) + 8f * Mathf.Sin(t * 37f);
-            float saw = (t * f) % 1f * 2f - 1f;
-            float env = Mathf.Clamp01(t / 0.15f) * Mathf.Clamp01((1.6f - t) / 0.6f);
-            s[i] = Mathf.Clamp((saw * 0.55f + s[i] * 0.6f) * env, -1f, 1f);
-        }
         return s;
     }
 

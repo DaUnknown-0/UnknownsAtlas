@@ -447,6 +447,14 @@ function synth(name) {
   }
   return s;
 }
+// Aufnahmen statt Synth wie im Spiel (EjectSynth.Samples): sfx_<name>.wav neben scenes.json, sonst Synth
+const RAW = {};
+async function loadRecordings() {
+  for (const n of ["roar"]) try { const r = await fetch("sfx_" + n + ".wav"); if (r.ok) RAW[n] = await r.arrayBuffer(); } catch { }
+}
+function decodeRecordings() {
+  for (const n in RAW) { const a = RAW[n]; delete RAW[n]; AC.decodeAudioData(a).then(b => { BUF[n] = b; }).catch(() => { }); }
+}
 function play(name, vol) {
   if (!soundOn || !AC) return;
   let b = BUF[name];
@@ -532,7 +540,7 @@ function buildUi() {
   $("scrub").addEventListener("input", e => { seek(e.target.value / 1000 * (scene.len + 2.0)); });
   $("sound").addEventListener("click", () => {
     soundOn = !soundOn;
-    if (soundOn && !AC) { try { AC = new AudioContext(); } catch { soundOn = false; } }
+    if (soundOn && !AC) { try { AC = new AudioContext(); decodeRecordings(); } catch { soundOn = false; } }
     if (AC && AC.state === "suspended") AC.resume();
     $("sound").setAttribute("aria-pressed", String(soundOn)); $("sound").textContent = soundOn ? "Ton aus" : "Ton an";
   });
@@ -563,6 +571,7 @@ function renderSheet(mode) {
 async function boot() {
   DATA = await (await fetch("scenes.json")).json();
   try { const v = await (await fetch("void.json")).json(); DATA.scenes.push(...v.scenes); } catch { }
+  await loadRecordings();
   const order = s => (s.map === "museum" ? 0 : s.map === "wald" ? 2 : s.map === "park" ? 4 : 6) + (s.skip ? 1 : 0);
   DATA.scenes.sort((a, b) => order(a) - order(b));
   const names = new Set(["task_eject_vignette.png"]);

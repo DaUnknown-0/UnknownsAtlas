@@ -35,9 +35,15 @@ def floor(x0, y0, x1, y1):
 def render(x0, y0, x1, y1):
     img = floor(x0, y0, x1, y1)
     sprites = []
-    items = list(W.OPAQUE) + list(W.GLASS)
+    items = [(s, k) for s, k in list(W.OPAQUE) + list(W.GLASS) if k]   # k None = Sichtkern ohne Sprite
+    items += [(s, part) for s, k in items if k == "hochsitz" for part in ("hochsitz_front", "hochsitz_roof")]
+    # Hochsitz wie im Spiel: Unterbau an der Hinterkante, Front und Dach vor allem (AtlasLookout.SortParts)
+    hs_sort = {"hochsitz": lambda y0, y1: y1, "hochsitz_front": lambda y0, y1: y0 - 0.9, "hochsitz_roof": lambda y0, y1: y0 - 1.0}
     for i, (s, kind) in enumerate(items):
         im, wx, wy, base = GW.draw_prop(kind, s, i, PPM)
+        if kind in hs_sort:
+            _, fy0, _, fy1 = GW.bounds(s)
+            base = hs_sort[kind](fy0, fy1)
         sprites.append((base, im, wx, wy))
     try:
         import re

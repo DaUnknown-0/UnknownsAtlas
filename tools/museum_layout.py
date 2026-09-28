@@ -52,9 +52,15 @@ ROOM_DEFS = {
 }
 
 
+# Gerundet: -29.4 + 14.0 ergibt -15.399999999999999; gegen eine Oeffnung bei -15.4 bliebe ein
+# 1e-15-m-Spalt, den shapely als Wand durch die Tuer stehen laesst (Utilities -> Security, 26.09.).
+def _r(v):
+    return round(v, 6)
+
+
 def mv(key, pts):
     dx, dy = ROOM_DEFS[key][4]
-    return [(x + dx, y + dy) for x, y in pts]
+    return [(_r(x + dx), _r(y + dy)) for x, y in pts]
 
 
 def mv_shape(key, shape):
@@ -62,13 +68,13 @@ def mv_shape(key, shape):
     kind = shape[0]
     if kind == "rect":
         _, x0, y0, x1, y1 = shape
-        return ("rect", x0 + dx, y0 + dy, x1 + dx, y1 + dy)
+        return ("rect", _r(x0 + dx), _r(y0 + dy), _r(x1 + dx), _r(y1 + dy))
     if kind == "ellipse":
         _, cx, cy, rx, ry = shape
-        return ("ellipse", cx + dx, cy + dy, rx, ry)
+        return ("ellipse", _r(cx + dx), _r(cy + dy), rx, ry)
     if kind == "circle":
         _, cx, cy, r = shape
-        return ("circle", cx + dx, cy + dy, r)
+        return ("circle", _r(cx + dx), _r(cy + dy), r)
     raise ValueError(kind)
 
 
