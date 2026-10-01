@@ -110,8 +110,10 @@ internal static class AtlasParkWorld
 
         // Foto-Monitor am Nordausgang: dunkler Rahmen, Beschriftung, Platz fuer 8 Figuren
         var mp = AtlasParkWorldData.GhostMonitor;
-        _monitor = Spr("RidePhoto", Px, mp, 2.2f, mp.y - 0.8f, aspect: 0.6f);
-        _monitor.color = new Color(0.08f, 0.07f, 0.12f);
+        // gezeichnetes Gehaeuse (tools/gen_park_fun.py ridephoto), sonst die dunkle Flaeche von frueher
+        var frame = AtlasAssets.TaskSprite("task_park_ridephoto.png", 100f, new Vector2(0.5f, 0.5f));
+        _monitor = Spr("RidePhoto", frame ?? Px, mp, 2.2f, mp.y - 0.8f, aspect: 0.6f);
+        if (frame == null) _monitor.color = new Color(0.08f, 0.07f, 0.12f);
         for (int i = 0; i < 8; i++)
         {
             var p = mp + new Vector2(-0.8f + (i % 4) * 0.53f, i < 4 ? 0.22f : -0.36f);
@@ -122,6 +124,8 @@ internal static class AtlasParkWorld
         }
         // keine Schrift: Weltschrift ist nicht sichtmaskiert und laege auch ueber der HUD-Karte (Test 23.09.);
         // die Figuren sind maskiert und nur in Sichtweite zu sehen
+
+        AtlasParkFun.Build(_root);                                    // Lukas, Kostuem, Riesenrad, Pendelwagen
 
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} ready: {Crossings.Count} crossing(s), {CarouselGates.Count} carousel gate(s), " +
                                    $"{Turnstiles.Count} turnstile(s), bridge {(_bridge != null ? "yes" : "no")}");

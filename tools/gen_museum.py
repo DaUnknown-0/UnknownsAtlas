@@ -201,6 +201,11 @@ def render_props():
         old.unlink()
     for k, atlas in enumerate(atlases):
         atlas.save(ASSETS / f"museum_props_{k}.png", optimize=True)
+    if A.PORTRAIT_EYES:
+        A.pupil_sprite(PROP_PX_PER_M).save(ASSETS / "task_museum_pupil.png", optimize=True)
+    # Planetariumsshow (voller Pass 01.10.): Sternenkuppel + drei Planeten als Laufzeit-Sprites (task_* wird eingebettet)
+    for name, im in A.planetarium_sprites().items():
+        im.save(ASSETS / name, optimize=True)
     print(f"props  {len(images)} sprites in {len(atlases)} atlas(es) {[a.size for a in atlases]}")
     out = []
     for i, (kind, wx, wy, base, fx0, fx1) in enumerate(meta):
@@ -390,6 +395,13 @@ def emit_cs(walk, props=None, tiles=None, consoles=None):
         a("    /// Kiefergelenk, Augenhoehle.</summary>")
         a("    public static readonly Vector2 RexNeck = new(%.3ff, %.3ff), RexJaw = new(%.3ff, %.3ff), RexEye = new(%.3ff, %.3ff);"
           % (rig["neck"] + rig["jaw"] + rig["eye"]))
+    eyes = A.PORTRAIT_EYES
+    if eyes:
+        a("    /// <summary>Portraet auf der Staffelei in der Galerie (Stilblatt): Augenmitten in Weltkoordinaten der")
+        a("    /// Bildebene, Halbachsen des Augenweiss; Pupillen-Sprite assets/task_museum_pupil.png (PropPixelsPerMeter,")
+        a("    /// Pivot Mitte), Standlinie PortraitBaseY (Pupillen knapp davor einsortieren).</summary>")
+        a("    public static readonly Vector2[] PortraitEyes = { " + ", ".join(f"new({x:.3f}f, {y:.3f}f)" for x, y in eyes["eyes"]) + " };")
+        a(f"    public const float PortraitEyeRx = {eyes['rx']:.3f}f, PortraitEyeRy = {eyes['ry']:.3f}f, PortraitBaseY = {eyes['base_y']:.3f}f;")
     a("    /// <summary>Gaenge als Hallway-Raeume (nur AllRooms, nicht FastRooms).</summary>")
     a("    public static readonly Vector2[][] Hallways =")
     a("    {")

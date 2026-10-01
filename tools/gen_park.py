@@ -553,6 +553,17 @@ def emit(walk, water, rooms, doors, tiles, props, consoles, console_sprites=()):
     for nm, pts in (("TrackLoop", L.TRACK_LOOP), ("CanalLine", L.CANAL_LINE), ("GhostRide", L.GHOST_RIDE)):
         a(f"    public static readonly Vector2[] {nm} = {chain(pts)};")
     a(f"    public static readonly Vector2 GhostMonitor = {v2(L.GHOST_MONITOR)};")
+    # Attraktionen zum Benutzen (AtlasParkFun)
+    lx0, ly0, lx1, ly1 = L.LUKAS_RECT[1:]
+    a(f"    public static readonly Vector2 Lukas = {v2(L.LUKAS)}, LukasUse = {v2(L.LUKAS_USE)};")
+    a(f"    public static readonly (Vector2 Min, Vector2 Max) LukasRect = ({v2((lx0, ly0))}, {v2((lx1, ly1))});")
+    a(f"    public static readonly Vector2 CostumeRack = {v2(L.COSTUME_RACK)}, CostumeUse = {v2(L.COSTUME_USE)};")
+    a(f"    public static readonly Vector2 WheelHub = {v2((L.WHEEL[0], L.WHEEL[1] + L.WHEEL_HUB_LIFT))};")
+    a(f"    public const float WheelRadius = {L.WHEEL_R:.3f}f;")
+    a(f"    public static readonly Vector2 WheelBoard = {v2(L.WHEEL_BOARD)};")
+    a(f"    public static readonly Vector2 ShuttleA = {v2(L.SHUTTLE_A[0])}, ShuttleStopA = {v2(L.SHUTTLE_A[1])};")
+    a(f"    public static readonly Vector2 ShuttleB = {v2(L.SHUTTLE_B[0])}, ShuttleStopB = {v2(L.SHUTTLE_B[1])};")
+    a("    public static readonly Vector2[] ShuttlePath = new Vector2[] { " + ", ".join(v2(p) for p in L.SHUTTLE_PATH) + " };")
     a("    /// <summary>Laternen am Weg (Lichtebene, gehen bei Park Blackout aus); Bild task_park_lamppost(_off).png.</summary>")
     a(f"    public static readonly Vector2[] Lamps = {chain(LAMPS)};")
     a(f"    public static readonly Vector2 LampPivot = new({LAMP_PIVOT[0]:.4f}f, {LAMP_PIVOT[1]:.4f}f);")

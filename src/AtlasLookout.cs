@@ -64,15 +64,8 @@ internal static class AtlasLookout
     private static float _p;                                   // 0 unten .. 1 oben (lokaler Spieler)
     private static Vector2? _walkTo;                           // Transform-Ziel, zu dem die Figur oben selbst geht
     private static Vector2 _look;                              // aktuelle Blickrichtung (-1..1)
-    private static float _zoomBase = 3f, _zoomNow = -1f;
     private static readonly HashSet<byte> UpPlayers = new();
-    private static readonly HashSet<byte> NoCollide = new();
     private static readonly Dictionary<byte, float> Lifts = new();
-    private static readonly Dictionary<(byte, string), Vector3> BasePos = new();
-    // Sichtbare Teile der Figur (Autotest 25.09.: pc.cosmetics hebt nur Hut/Visier, der Koerper blieb unten).
-    // Licht und Aufgabenpfeile bleiben an der echten Position.
-    private static readonly string[] Parts = { "BodyForms", "Cosmetics", "Names", "Hand" };
-    private static readonly Dictionary<byte, float> TorScale = new(), OurScale = new();
     private static bool _partsSorted;
     private static SpriteRenderer _roof;
     private static float _roofAlpha = 1f;
@@ -91,10 +84,9 @@ internal static class AtlasLookout
 
     public static void Reset()
     {
-        RestoreZoom();
-        foreach (var pc in PlayerControl.AllPlayerControls) if (pc != null) { SetLift(pc, 0f); SetCollide(pc, true); }
+        // Figur, Kollider und Kamera setzt AtlasWorld.Reset ueber AtlasFigure/AtlasView zurueck
         _state = St.Down; _p = 0f; _walkTo = null; _look = Vector2.zero;
-        UpPlayers.Clear(); NoCollide.Clear(); Lifts.Clear(); BasePos.Clear(); ShadowBase.Clear(); TorScale.Clear(); OurScale.Clear();
+        UpPlayers.Clear(); Lifts.Clear();
         _partsSorted = false; _roof = null; _roofAlpha = 1f; _posts = null;
     }
 
@@ -137,7 +129,7 @@ internal static class AtlasLookout
             case St.Climbing:
                 // die Leiter hoch bis zur Klappe, dann selbst zum freien Platz
                 _p = Mathf.MoveTowards(_p, 1f, dt / ClimbTime);
-                SetPos(lp, Vector2.Lerp(footT, hatchT, Smooth(_p)));
+                AtlasFigure.SetPos(lp, Vector2.Lerp(footT, hatchT, Smooth(_p)));
                 if (_p >= 1f)
                 {
                     _state = St.Up;
@@ -146,7 +138,7 @@ internal static class AtlasLookout
                 }
                 break;
             case St.Up:
-                if (_walkTo.HasValue && WalkTowards(lp, _walkTo.Value, dt))
+                if (_walkTo.HasValue && AtlasFigure.WalkTowards(lp, _walkTo.Value, WalkSpeed, dt))
                 {
                     AtlasPlugin.Logger.LogInfo($"{LogPrefix} arrived at {_walkTo.Value.x:F2}/{_walkTo.Value.y:F2}");
                     _walkTo = null;
@@ -156,11 +148,11 @@ internal static class AtlasLookout
             case St.Descending:
                 if (_walkTo.HasValue)
                 {
-                    if (WalkTowards(lp, _walkTo.Value, dt)) _walkTo = null;         // erst zur Klappe
+                    if (AtlasFigure.WalkTowards(lp, _walkTo.Value, WalkSpeed, dt)) _walkTo = null;         // erst zur Klappe
                     break;
                 }
                 _p = Mathf.MoveTowards(_p, 0f, dt / ClimbTime);
-                SetPos(lp, Vector2.Lerp(footT, hatchT, Smooth(_p)));
+                AtlasFigure.SetPos(lp, Vector2.Lerp(footT, hatchT, Smooth(_p)));
                 if (_p <= 0f) Land();
                 break;
         }
@@ -169,12 +161,12 @@ internal static class AtlasLookout
             // Nur oben und ohne Zielweg frei beweglich (andere Stellen setzen moveable gern wieder frei)
             bool free = _state == St.Up && !_walkTo.HasValue && Minigame.Instance == null;
             if (lp.moveable != free) lp.moveable = free;
-            ApplyZoom(Mathf.Lerp(_zoomBase, Levels[Level].Zoom, Smooth(_p)));
+            AtlasView.ZoomTo(Levels[Level].Zoom, Smooth(_p));
             LookTick(lp, dt);
         }
         SetPosts(_state != St.Down);
         RoofTick(lp, dt);
-        UseButtonTick(lp);
+        UseOffer(lp);
         LiftTick(dt, lp);
     }
 
@@ -183,8 +175,7 @@ internal static class AtlasLookout
         var lp = PlayerControl.LocalPlayer;
         if (lp == null || _state != St.Down) return;
         try { lp.NetTransform.RpcSnapTo(LadderFoot); } catch { }
-        StopBody(lp);
-        if (_zoomNow < 0f && Camera.main != null) _zoomBase = Camera.main.orthographicSize;
+        AtlasFigure.StopBody(lp);
         lp.moveable = false;
         _walkTo = null;
         _state = St.Climbing;
@@ -198,7 +189,7 @@ internal static class AtlasLookout
         bool fromTop = _state == St.Up;
         _state = St.Descending;
         _walkTo = fromTop ? ToTransform(HatchFeet) : null;
-        if (lp != null) { lp.moveable = false; StopBody(lp); }
+        if (lp != null) { lp.moveable = false; AtlasFigure.StopBody(lp); }
     }
 
     private static void Land()
@@ -208,10 +199,10 @@ internal static class AtlasLookout
         if (lp != null)
         {
             try { lp.NetTransform.RpcSnapTo(LadderFoot); } catch { }
-            SetCollide(lp, true);
+            AtlasFigure.SetCollide(lp, true);
             if (lp.Data != null && !lp.Data.IsDead && MeetingHud.Instance == null) lp.moveable = true;
         }
-        RestoreZoom();
+        AtlasView.Restore();
         Announce(false);
     }
 
@@ -223,41 +214,15 @@ internal static class AtlasLookout
         bool dead = lp == null || lp.Data == null || lp.Data.IsDead;
         _p = 0f; _walkTo = null;
         _state = St.Down;
-        RestoreZoom();
+        AtlasView.Restore();
         Announce(false);
         if (lp == null) return;
         if (!dead && MeetingHud.Instance == null) { try { lp.NetTransform.RpcSnapTo(LadderFoot); } catch { } }
-        SetCollide(lp, true);
+        AtlasFigure.SetCollide(lp, true);
         SetLift(lp, 0f);
     }
 
     // ------------------------------------------------------------------ Bewegung oben
-
-    private static void SetPos(PlayerControl lp, Vector2 t)
-    {
-        try
-        {
-            var tr = lp.transform;
-            tr.position = new Vector3(t.x, t.y, tr.position.z);
-            var body = lp.MyPhysics != null ? lp.MyPhysics.body : null;
-            if (body != null) { body.position = t; body.velocity = Vector2.zero; }
-        }
-        catch { }
-    }
-
-    private static void StopBody(PlayerControl lp)
-    {
-        try { if (lp.MyPhysics != null && lp.MyPhysics.body != null) lp.MyPhysics.body.velocity = Vector2.zero; } catch { }
-    }
-
-    /// <summary>Ein Stueck zum Ziel gehen (Transform-Koordinaten); true, sobald es erreicht ist.</summary>
-    private static bool WalkTowards(PlayerControl lp, Vector2 target, float dt)
-    {
-        Vector2 cur = lp.transform.position;
-        var next = Vector2.MoveTowards(cur, target, WalkSpeed * dt);
-        SetPos(lp, next);
-        return (next - target).sqrMagnitude < 0.0004f;
-    }
 
     /// <summary>Oben: nach der Physik auf dem Deck halten.</summary>
     private static void KeepOnDeck(PlayerControl lp)
@@ -307,7 +272,7 @@ internal static class AtlasLookout
         if (d.sqrMagnitude > 1f) d.Normalize();
         if (_state != St.Up) d = Vector2.zero;
         _look = Vector2.MoveTowards(_look, d, dt * 2.5f);
-        ApplyCamOffset(_look * (Levels[Level].Look * Smooth(_p)));
+        AtlasView.Offset(_look * (Levels[Level].Look * Smooth(_p)));
     }
 
     // ------------------------------------------------------------------ Pfosten und Dach
@@ -397,187 +362,32 @@ internal static class AtlasLookout
             }
             if (pc.Data.IsDead) { target = 0f; up = false; }
             // oben kein Kollider (die echte Position liegt in der Hochsitz-Grundflaeche), unten wieder an
-            SetCollide(pc, !up);
+            AtlasFigure.SetCollide(pc, !up);
             // TOR setzt die Spielergroesse in jedem FixedUpdate zurueck: solange angehoben, jeden Frame anwenden
-            if (target <= 0f && !OurScale.ContainsKey(pc.PlayerId)) { Lifts[pc.PlayerId] = 0f; continue; }
+            if (target <= 0f && !AtlasFigure.Posed(pc.PlayerId)) { Lifts[pc.PlayerId] = 0f; continue; }
             SetLift(pc, target);
         }
     }
 
-    /// <summary>Kollider ab- und wieder anschalten; zurueckgesetzt wird nur, was wir abgeschaltet haben.</summary>
-    private static void SetCollide(PlayerControl pc, bool on)
-    {
-        try
-        {
-            var col = pc.Collider;
-            if (col == null) return;
-            byte id = pc.PlayerId;
-            if (!on)
-            {
-                if (col.enabled) { col.enabled = false; NoCollide.Add(id); }
-            }
-            else if (NoCollide.Remove(id)) col.enabled = true;
-        }
-        catch { }
-    }
-
+    /// <summary>Figur um lift (Weltmeter) anheben; oben auf UpScale verkleinert (AtlasFigure).</summary>
     private static void SetLift(PlayerControl pc, float lift)
     {
-        try
-        {
-            byte id = pc.PlayerId;
-            var root = pc.transform;
-            float cur = root.localScale.y;
-            // Wert von TOR (0,7, Mini kleiner) merken, sobald er nicht mehr unserer ist
-            if (!OurScale.TryGetValue(id, out var ours) || Mathf.Abs(cur - ours) > 0.0005f) TorScale[id] = cur;
-            float s0 = TorScale.TryGetValue(id, out var t0) ? t0 : cur;
-            float k = Mathf.Clamp01(lift / Mathf.Max(0.01f, Lift));
-            float f = Mathf.Lerp(1f, UpScale, k);
-            float sc = s0 * f;
-            if (k <= 0f)
-            {
-                root.localScale = new Vector3(s0, s0, 1f);
-                OurScale.Remove(id);
-                sc = s0;
-            }
-            else
-            {
-                root.localScale = new Vector3(sc, sc, 1f);
-                OurScale[id] = sc;
-            }
-            foreach (var name in Parts)
-            {
-                var t = pc.transform.Find(name);
-                if (t == null) continue;
-                var key = (id, name);
-                if (!BasePos.TryGetValue(key, out var b)) { b = t.localPosition; BasePos[key] = b; }
-                // Hub in Weltmetern, deshalb durch die Spielergroesse teilen
-                t.localPosition = new Vector3(b.x, b.y + lift / sc, b.z);
-                if (name == "Names") t.localScale = Vector3.one / f;       // Namen bleiben lesbar
-            }
-            var light = pc.transform.Find("Light(Clone)");
-            if (light != null) light.localScale = Vector3.one / f;        // Sicht nicht mitschrumpfen
-            Lifts[id] = lift;
-        }
-        catch { }
+        float k = Mathf.Clamp01(lift / Mathf.Max(0.01f, Lift));
+        AtlasFigure.Pose(pc, new Vector2(0f, lift), k <= 0f ? 1f : Mathf.Lerp(1f, UpScale, k));
+        Lifts[pc.PlayerId] = lift;
     }
 
     // ------------------------------------------------------------------ Use-Knopf (wie an den Kameras)
 
-    private static bool _useOwned;
-    private static Sprite _useIcon;
-    private static IntPtr _hookedButton;
-
-    private static void UseButtonTick(PlayerControl lp)
+    private static void UseOffer(PlayerControl lp)
     {
-        var ub = HudManager.InstanceExists ? HudManager.Instance.UseButton : null;
-        if (ub == null) return;
-        string label = null;
         if (_state == St.Down)
         {
-            bool can = !lp.Data.IsDead && Minigame.Instance == null && MeetingHud.Instance == null && !lp.inVent && lp.CanMove
-                       && Vector2.Distance(lp.GetTruePosition(), LadderFoot) < 1.6f && ub.currentTarget == null;
-            if (can) label = "CLIMB";
+            if (AtlasUse.CanReach(lp, LadderFoot, 1.6f)) AtlasUse.Offer("CLIMB", "task_climb_button.png", Climb);
         }
-        else if (_state == St.Up) label = "CLIMB DOWN";
-        if (label == null)
-        {
-            if (_useOwned) { _useOwned = false; try { ub.SetTarget(null); } catch { } }
-            return;
-        }
-        try
-        {
-            if (_hookedButton != ub.Pointer)
-            {
-                var pb = ub.GetComponent<PassiveButton>();
-                if (pb != null) pb.OnClick.AddListener((Action)OnUse);
-                _hookedButton = ub.Pointer;
-            }
-            if (_useIcon == null)
-            {
-                // so gross wie das Vanilla-Symbol auf dem Knopf
-                float w = ub.graphic != null && ub.graphic.sprite != null ? ub.graphic.sprite.bounds.size.x : 1f;
-                _useIcon = AtlasAssets.TaskSprite("task_climb_button.png", 256f / Mathf.Max(0.2f, w), new Vector2(0.5f, 0.5f));
-            }
-            if (_useIcon != null) ub.graphic.sprite = _useIcon;
-            ub.SetEnabled();
-            if (ub.buttonLabelText != null) ub.buttonLabelText.text = label;
-            _useOwned = true;
-            if (Input.GetKeyDown(KeyCode.E)) OnUse();                    // Use-Taste auf der Tastatur
-        }
-        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} use button: {e.Message}"); }
+        else if (_state == St.Up) AtlasUse.Offer("CLIMB DOWN", "task_climb_button.png", Descend, always: true);
     }
 
-    private static void OnUse()
-    {
-        if (!_useOwned) return;
-        if (_state == St.Down) Climb();
-        else if (_state == St.Up) Descend();
-    }
-
-    private static Vector2 _camOffset;
-
-    private static void ApplyCamOffset(Vector2 o)
-    {
-        if ((o - _camOffset).sqrMagnitude < 0.000004f) return;
-        _camOffset = o;
-        try { if (HudManager.InstanceExists && HudManager.Instance.PlayerCam != null) HudManager.Instance.PlayerCam.Offset = o; }
-        catch { }
-    }
-
-    // ------------------------------------------------------------------ Kamera
-
-    private static void ApplyZoom(float z)
-    {
-        if (Mathf.Abs(z - _zoomNow) < 0.002f) return;
-        _zoomNow = z;
-        try
-        {
-            if (Camera.main != null) Camera.main.orthographicSize = z;
-            ScaleShadow(z);
-            // Die Oberflaeche zoomt mit, sonst stimmen die Klickflaechen der Knoepfe nicht (wie TORs Geister-Zoom)
-            foreach (var cam in Camera.allCameras)
-                if (cam != null && cam.gameObject.name == "UI Camera") cam.orthographicSize = z;
-            ResolutionManager.ResolutionChanged.Invoke((float)Screen.width / Screen.height, Screen.width, Screen.height, Screen.fullScreen);
-        }
-        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} zoom: {e.Message}"); }
-    }
-
-    // Die Sichtschatten zeichnet eine eigene Kamera (ShadowCollab) auf ein Viereck in Bildgroesse; beide
-    // muessen mitwachsen, sonst blieb beim Herauszoomen ein dunkler Rahmen (Autotest 25.09.).
-    private static readonly Dictionary<IntPtr, (float Ortho, Vector3 Scale)> ShadowBase = new();
-
-    private static void ScaleShadow(float z)
-    {
-        foreach (var sc in Object.FindObjectsOfType<ShadowCollab>())
-        {
-            if (sc == null || sc.ShadowCamera == null || sc.ShadowQuad == null) continue;
-            if (!ShadowBase.TryGetValue(sc.Pointer, out var b))
-            {
-                b = (sc.ShadowCamera.orthographicSize, sc.ShadowQuad.transform.localScale);
-                ShadowBase[sc.Pointer] = b;
-            }
-            float k = z / Mathf.Max(0.1f, _zoomBase);
-            sc.ShadowCamera.orthographicSize = b.Ortho * k;
-            sc.ShadowQuad.transform.localScale = new Vector3(b.Scale.x * k, b.Scale.y * k, b.Scale.z);
-        }
-    }
-
-    private static void RestoreZoom()
-    {
-        ApplyCamOffset(Vector2.zero);
-        if (_zoomNow < 0f) return;
-        _zoomNow = -1f;
-        try
-        {
-            if (Camera.main != null) Camera.main.orthographicSize = _zoomBase;
-            ScaleShadow(_zoomBase);
-            foreach (var cam in Camera.allCameras)
-                if (cam != null && cam.gameObject.name == "UI Camera") cam.orthographicSize = _zoomBase;
-            ResolutionManager.ResolutionChanged.Invoke((float)Screen.width / Screen.height, Screen.width, Screen.height, Screen.fullScreen);
-        }
-        catch { }
-    }
 
     // ------------------------------------------------------------------ Diagnose (AtlasWorld.Diag "lookout...")
 
@@ -631,7 +441,7 @@ internal static class AtlasLookout
                 {
                     if (pc == null || pc == PlayerControl.LocalPlayer || pc.Data == null || pc.Data.IsDead) continue;
                     UpPlayers.Add(pc.PlayerId);
-                    SetCollide(pc, false);
+                    AtlasFigure.SetCollide(pc, false);
                     try { pc.NetTransform.SnapTo(ToTransform(HatchFeet)); } catch { }
                     break;
                 }

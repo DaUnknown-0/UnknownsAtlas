@@ -37,10 +37,10 @@ internal static class AtlasParkLayout
         ["LowerEngine/FuelEngineConsole/0"] = new(-2.050f, -15.610f),
         ["MedBay/MedBayConsole/0"] = new(21.860f, -15.050f),
         ["MedBay/MedScanner/0"] = new(19.500f, -18.000f),
-        ["Nav/ChartCourseConsole/0"] = new(-0.320f, 16.950f),
-        ["Nav/DivertPowerConsole/1"] = new(2.690f, 16.950f),
+        ["Nav/ChartCourseConsole/0"] = new(3.600f, 19.350f),
+        ["Nav/DivertPowerConsole/1"] = new(4.450f, 10.560f),
         ["Nav/FixWiringConsole/3"] = new(-2.180f, 9.050f),
-        ["Nav/StabilizeSteeringConsole/0"] = new(4.450f, 10.570f),
+        ["Nav/StabilizeSteeringConsole/0"] = new(-2.900f, 19.350f),
         ["Nav/UploadDataConsole/0"] = new(-5.440f, 10.320f),
         ["Reactor/LowerHandConsole/1"] = new(19.400f, 4.900f),
         ["Reactor/StartReactorConsole/2"] = new(14.640f, 5.450f),
@@ -158,8 +158,17 @@ internal static class AtlasParkWorldData
     public static readonly Vector2[] CanalLine = new Vector2[] { new(21.500f, -8.000f), new(9.500f, -8.000f) };
     public static readonly Vector2[] GhostRide = new Vector2[] { new(-15.000f, -4.200f), new(-15.000f, -5.000f), new(-13.600f, -5.000f), new(-13.600f, -7.300f), new(-16.400f, -7.300f), new(-16.400f, -9.800f), new(-15.000f, -9.800f), new(-15.000f, -10.900f) };
     public static readonly Vector2 GhostMonitor = new(-18.800f, -12.600f);
+    public static readonly Vector2 Lukas = new(-19.500f, 11.100f), LukasUse = new(-18.500f, 11.300f);
+    public static readonly (Vector2 Min, Vector2 Max) LukasRect = (new(-19.950f, 11.100f), new(-19.050f, 11.750f));
+    public static readonly Vector2 CostumeRack = new(-13.200f, -14.400f), CostumeUse = new(-14.300f, -14.400f);
+    public static readonly Vector2 WheelHub = new(-0.500f, 16.610f);
+    public const float WheelRadius = 3.000f;
+    public static readonly Vector2 WheelBoard = new(0.400f, 9.200f);
+    public static readonly Vector2 ShuttleA = new(17.200f, 5.300f), ShuttleStopA = new(17.200f, 7.900f);
+    public static readonly Vector2 ShuttleB = new(-4.600f, 19.200f), ShuttleStopB = new(-5.200f, 20.900f);
+    public static readonly Vector2[] ShuttlePath = new Vector2[] { new(17.200f, 7.900f), new(7.400f, 7.900f), new(7.400f, 20.900f), new(-5.200f, 20.900f) };
     /// <summary>Laternen am Weg (Lichtebene, gehen bei Park Blackout aus); Bild task_park_lamppost(_off).png.</summary>
     public static readonly Vector2[] Lamps = new Vector2[] { new(-7.500f, 2.750f), new(7.750f, 0.750f), new(-1.000f, 7.500f), new(-7.750f, 11.250f), new(-16.250f, 7.250f), new(6.750f, 11.600f), new(11.100f, 7.500f), new(5.500f, -5.750f), new(10.500f, -5.750f), new(16.000f, -4.000f), new(-9.500f, -11.750f), new(10.500f, -11.750f), new(-11.500f, -15.250f), new(14.500f, -11.750f) };
-    public static readonly Vector2 LampPivot = new(0.5000f, 0.1615f);
+    public static readonly Vector2 LampPivot = new(0.5000f, 0.3189f);
     public const float LampPixelsPerMeter = 160f;
 }

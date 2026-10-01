@@ -148,7 +148,9 @@ internal static class AtlasWeatherFx
         }
 
         // Grundfarbe: Wald nachts leicht blau, Wetter legt nach
-        Color want = wald ? new Color(0.02f, 0.04f, 0.12f, 0.12f) : Color.clear;
+        // Daemmerung (AtlasDusk): der Grundschleier wird ueber die Runde tiefer
+        float dusk = AtlasDusk.Level;
+        Color want = wald ? new Color(0.02f, 0.04f - 0.015f * dusk, 0.12f + 0.04f * dusk, 0.12f + 0.26f * dusk) : Color.clear;
         if (wald)
             want = _weather switch
             {
@@ -350,6 +352,8 @@ internal static class AtlasWeatherFx
             "grind" => Grind(),
             "growl" => Growl(),
             "rush" => Rush(),
+            "ding" => Ding(),
+            "chime" or "clack" or "pop" or "boom" or "organ" or "click" or "zap" => EjectSynth.Samples(name),
             _ => Clock(),
         };
         c = AudioClip.Create("atlas_" + name, s.Length, 1, Rate, false);
@@ -382,6 +386,25 @@ internal static class AtlasWeatherFx
         var o = new float[s.Length - fade];
         Array.Copy(s, o, o.Length);
         return o;
+    }
+
+    /// <summary>Glocke von Hau den Lukas: unharmonische Teiltoene mit langem Ausklang, kurzer Anschlag.</summary>
+    private static float[] Ding()
+    {
+        int n = (int)(Rate * 1.8f);
+        var s = new float[n];
+        float[] f = { 1240f, 2210f, 3360f, 4720f };
+        float[] a = { 0.5f, 0.28f, 0.16f, 0.08f };
+        float[] d = { 2.2f, 3.4f, 5.0f, 7.0f };
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / Rate, v = 0f;
+            for (int k = 0; k < f.Length; k++) v += Mathf.Sin(2f * Mathf.PI * f[k] * t) * a[k] * Mathf.Exp(-t * d[k]);
+            v *= Mathf.Min(1f, t * 400f);                                       // weicher Einsatz gegen Knacken
+            if (t < 0.03f) v += N() * 0.3f * (1f - t / 0.03f);                  // Anschlag des Pucks
+            s[i] = v * 0.8f;
+        }
+        return s;
     }
 
     private static float[] WaldBed()

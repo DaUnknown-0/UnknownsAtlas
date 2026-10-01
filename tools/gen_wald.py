@@ -19,6 +19,7 @@ from shapely.geometry import Polygon, Point, LineString, box
 from shapely.affinity import translate
 from shapely.ops import unary_union
 
+import handdraw as HD
 import museum_art as A
 import wald_layout as W
 import wald_geo as G
@@ -50,12 +51,14 @@ C = {
     "gras2": hexc("#6a8a44"),
     "gras3": hexc("#51702f"),
     "halm": hexc("#3f5e27"),
-    "erde": hexc("#8a6a45"),
-    "erde2": hexc("#7c5e3c"),
-    "erde_rand": hexc("#6a4f33"),
-    "kiesel": hexc("#a28a68"),
-    "kies": hexc("#76694a"),
-    "kies2": hexc("#66593c"),
+    # Voller Pass 01.10.: Wege dunkler und roetlicher, Kies heller und grauer (im Stilblatt waren beide kaum
+    # zu unterscheiden)
+    "erde": hexc("#7a5433"),
+    "erde2": hexc("#684628"),
+    "erde_rand": hexc("#52361d"),
+    "kiesel": hexc("#b6a688"),
+    "kies": hexc("#8c846c"),
+    "kies2": hexc("#776e56"),
     "diele": [hexc("#a8784a"), hexc("#9c6f44"), hexc("#b0804f")],
     "diele_fuge": hexc("#6a4628"),
     "wand_krone": hexc("#5b3b22"),
@@ -134,8 +137,9 @@ def build_floor_ops(walk, water, shells, doors, rooms):
             x += rnd.uniform(1.25, 1.75)
         y -= rnd.uniform(1.05, 1.35)
     clip = forest.buffer(0.18)   # Kronen haengen minimal ueber den Rand
-    for cx, cy, r in crowns:   # Norden zuerst, suedliche Kronen liegen vorne
-        disk = Point(cx, cy).buffer(r, 20)
+    for ci, (cx, cy, r) in enumerate(crowns):   # Norden zuerst, suedliche Kronen liegen vorne
+        # Stilblatt: Kronenumriss mit leichtem Zittern statt sauberem Kreis
+        disk = Polygon(HD.wobble_ellipse(cx, cy, r, r, amp=r * 0.035, seed=1000 + ci)).buffer(0)
         g = disk.intersection(clip)
         if g.is_empty:
             continue
@@ -152,24 +156,15 @@ def build_floor_ops(walk, water, shells, doors, rooms):
             if g.contains(p):
                 ops.ellipse(p.x, p.y, r * 0.16, r * 0.12, fill=alpha(shade(col, 0.7), 200))
 
-    # 2. Wasser
-    fill(ops, water, C["wasser"])
+    # 2. Wasser (Stilblatt: Seeufer): Tiefenstufen, Wellenstruktur, Mondbahn, Seerosen; das Ufer selbst
+    # (Uferband, Steine, Schilf) kommt in draw_shore NACH Gras und Kies, der Steg in draw_dock
     wx0, wy0, wx1, wy1 = water.bounds
-    yy = wy0 + 0.4
-    while yy < wy1:
-        xx = wx0 + rnd.uniform(0.2, 0.8)
-        while xx < wx1 - 0.4:
-            ops.line([(xx, yy), (xx + 0.5, yy + 0.04)], fill=alpha(C["wasser_licht"], 180), width=0.05)
-            xx += rnd.uniform(0.9, 1.5)
-        yy += rnd.uniform(0.6, 1.0)
-    # Uferzone: flaches helles Wasser am Westufer, tiefes dunkles Wasser im Osten, Mondspiegelung
-    fill(ops, water.intersection(box(wx0, wy0, wx0 + 0.6, wy1)), alpha(C["wasser_licht"], 70))
-    fill(ops, water.intersection(box(wx1 - 1.4, wy0, wx1, wy1)), alpha(hexc("#1b3f5c"), 90))
-    ops.glow(wx0 + 1.6, (W.DOCK[2] + W.DOCK[4]) / 2, 2.6, A.MOON, 0.22)
-    ops.line(list(water.exterior.coords), fill=alpha(hexc("#1b3f5c"), 255), width=0.12)
+    draw_water(ops, water, rnd)
 
-    # 3. Aussenflaechen: Gras (Lichtungen), Kies (Hoefe), Erde (Wege)
-    outdoor = walk.difference(unary_union([box(*b[3]) for b in W.BUILDINGS]).buffer(W.WALL + 0.02))
+    # 3. Aussenflaechen: Gras (Lichtungen), Kies (Hoefe), Erde (Wege). Stilblatt: Kiesrand, Lichtungsraender
+    # und der Umriss am Ende laufen auf derselben leicht zittrigen Kante (walk_w); die Kollider bleiben gerade.
+    walk_w = wobble_geom(walk, amp=0.03, seed=600, step=0.22)
+    outdoor = walk_w.difference(unary_union([box(*b[3]) for b in W.BUILDINGS]).buffer(W.WALL + 0.02))
     fill(ops, outdoor, C["kies"])
     A.speckle(ops, outdoor, 5000, [C["kies2"], shade(C["kies"], 1.12), C["kiesel"]], 0.02, 0.05, seed=5)
     A.speckle(ops, outdoor, 900, [alpha(C["gras3"], 200), alpha(C["halm"], 200)], 0.06, 0.16, seed=6)   # Grasflecken im Waldboden
@@ -187,9 +182,19 @@ def build_floor_ops(walk, water, shells, doors, rooms):
     # Nadelstreu am Waldrand (brauner Saum, der in den Kies auslaeuft)
     litter = outdoor.intersection(forest.buffer(1.1)).buffer(0)
     A.speckle(ops, litter, 2600, [alpha(C["nadeln"], 150), alpha(C["nadeln2"], 130)], 0.03, 0.08, seed=12)
-    clearing_polys = [rooms[k][2] for k, *_ in W.CLEARINGS]
+    clearing_polys = [wobble_geom(rooms[k][2], amp=0.04, seed=620 + i, step=0.25).intersection(walk_w) for i, (k, *_r) in enumerate(W.CLEARINGS)]
     grass = unary_union(clearing_polys)
     fill(ops, grass, C["gras"])
+    # Grasrand: feine Halmsaeume entlang der zittrigen Kante (Lichtung geht in Kies ueber)
+    for i, part in enumerate(geom_parts(grass)):
+        ring = part.exterior
+        s = 0.2
+        while s < ring.length:
+            p = ring.interpolate(s)
+            if outdoor.buffer(-0.15).contains(p) and rnd.random() < 0.55:
+                for k in range(3):
+                    ops.line([(p.x + (k - 1) * 0.04, p.y), (p.x + (k - 1) * 0.08, p.y + 0.13)], fill=rnd.choice([C["halm"], C["gras3"]]), width=0.022)
+            s += rnd.uniform(0.25, 0.6)
     A.speckle(ops, grass, 2500, [C["gras2"], C["gras3"]], 0.08, 0.22, seed=7)
     # Moosflecken (weich, ohne Umriss) und Nadelstreu unter den Kronen der Lichtung
     for _ in range(90):
@@ -211,25 +216,7 @@ def build_floor_ops(walk, water, shells, doors, rooms):
             if g.buffer(-0.4).contains(p):
                 ops.ellipse(p.x, p.y, 0.05, 0.05, fill=rnd.choice([hexc("#e8d96a"), hexc("#e8e8f0"), hexc("#d27ab0")]))
     paths = unary_union([LineString(pts).buffer(W.PATH_W / 2 - 0.35, 16) for pts in W.PATHS]).intersection(outdoor)
-    fill(ops, paths.buffer(0.18).intersection(outdoor), C["erde_rand"])
-    fill(ops, paths, C["erde"])
-    A.speckle(ops, paths, 1600, [C["erde2"], C["kiesel"]], 0.02, 0.06, seed=9)
-    for pts in W.PATHS:   # Fahrspuren
-        ls = LineString(pts)
-        for off in (-0.45, 0.45):
-            tr = ls.parallel_offset(off, "left") if ls.length > 0.5 else None
-            if tr is not None and not tr.is_empty and tr.geom_type == "LineString":
-                seg = tr.intersection(paths.buffer(-0.2))
-                for q in ([seg] if seg.geom_type == "LineString" else list(getattr(seg, "geoms", []))):
-                    if q.geom_type == "LineString" and q.length > 0.3:
-                        ops.line(list(q.coords), fill=alpha(C["erde2"], 200), width=0.12)
-    # Pfuetzen auf den Wegen und Wurzeln, die vom Waldrand in Weg und Kies kriechen
-    for _ in range(8):
-        p = Point(rnd.uniform(BX0, BX1), rnd.uniform(BY0, BY1))
-        if paths.buffer(-0.5).contains(p):
-            rx, ry = rnd.uniform(0.25, 0.45), rnd.uniform(0.15, 0.25)
-            ops.ellipse(p.x, p.y, rx, ry, fill=alpha(hexc("#3d5a6e"), 150), outline=alpha(C["erde_rand"], 200), width=0.03)
-            ops.line([(p.x - rx * 0.5, p.y + ry * 0.35), (p.x - rx * 0.1, p.y + ry * 0.35)], fill=alpha(C["wasser_licht"], 170), width=0.03)
+    paths = draw_paths(ops, paths, outdoor, grass, rnd)
     edge_zone = outdoor.intersection(forest.buffer(1.0)).buffer(0)
     fedge = forest.boundary
     for _ in range(70):
@@ -249,40 +236,19 @@ def build_floor_ops(walk, water, shells, doors, rooms):
         if all(outdoor.contains(Point(x, y)) for x, y in pts[1:]):
             ops.line(pts, fill=C["wurzel"], width=0.09)
             ops.line(pts[:3], fill=shade(C["wurzel"], 1.45), width=0.03)
-    # Ufersteine und Schilf entlang der Westkante des Bachs (auf der Grasseite, nach dem Gras gezeichnet)
-    yy = wy0 + 0.5
-    while yy < wy1 - 0.4:
-        if walk.contains(Point(wx0 - 0.3, yy)):
-            if rnd.random() < 0.45:
-                r = rnd.uniform(0.08, 0.16)
-                ops.ellipse(wx0 - 0.22, yy, r, r * 0.7, fill=C["fels"], outline=OUTLINE, width=0.03)
-                ops.ellipse(wx0 - 0.26, yy + r * 0.25, r * 0.45, r * 0.3, fill=shade(C["fels"], 1.18))
-            else:
-                for k in range(3):
-                    bx = wx0 - 0.2 + (k - 1) * 0.07
-                    ops.line([(bx, yy - 0.05), (bx + (k - 1) * 0.04, yy + 0.32)], fill=C["schilf"], width=0.03)
-                    if k == 1:
-                        ops.ellipse(bx, yy + 0.3, 0.025, 0.06, fill=C["schilf_kolben"])
-        yy += rnd.uniform(0.5, 0.9)
+    # Ufer (Stilblatt): Uferband mit welliger Wasserkante, Steine halb im Wasser, Schilfgruppen, Wurzeln
+    # am Waldufer; danach der Steg mit Pfaehlen, Spiegelung und vertaeutem Ruderboot
+    draw_shore(ops, water, walk, forest, rnd)
+    draw_far_shore(ops, water, rnd)
+    for dock in W.DOCKS:
+        draw_dock(ops, water, rnd, dock)
 
-    # 3b. Bootssteg (ueber dem Wasser, begehbar)
-    dx0, dy0, dx1, dy1 = W.DOCK[1:5]
-    ops.rect(dx0, dy0 - 0.12, dx1, dy1, fill=(0, 0, 0, 70))
-    ops.rect(dx0, dy0, dx1, dy1, fill=hexc("#9a6a3e"), outline=OUTLINE, width=0.06)
-    xx = dx0 + 0.3
-    while xx < dx1:
-        ops.line([(xx, dy0), (xx, dy1)], fill=hexc("#6e4a2a"), width=0.03)
-        xx += 0.3
-    for px_ in (dx0 + 0.9, dx1 - 0.15):
-        for py_ in (dy0 + 0.12, dy1 - 0.12):
-            ops.ellipse(px_, py_, 0.12, 0.12, fill=hexc("#5a3d24"), outline=OUTLINE, width=0.03)
-    ops.line([(dx1 - 0.35, dy0 + 0.4), (dx1 + 0.4, dy0 + 0.1)], fill=hexc("#d8cfb0"), width=0.04)   # Leine
-
-    # 4. Gebaeude: Wandkrone (Blockbohlen) + Dielenboden
-    for key, _n, _s, inner, _d in W.BUILDINGS:
+    # 4. Gebaeude: Wandkrone (Blockbohlen) + Boden je Haus (hut_floor)
+    for bi, (key, _n, _s, inner, _d) in enumerate(W.BUILDINGS):
         x0, y0, x1, y1 = inner
         shell = box(x0 - W.WALL, y0 - W.WALL, x1 + W.WALL, y1 + W.WALL)
-        fill(ops, shell, C["wand_krone"], outline=OUTLINE, width=0.07)
+        ops.poly(HD.wobble_rect(x0 - W.WALL, y0 - W.WALL, x1 + W.WALL, y1 + W.WALL, amp=0.008, seed=640 + bi, step=0.12),
+                 fill=C["wand_krone"], outline=OUTLINE, width=0.07)
         # Wandkrone = oberster Blockbalken: Lichtkante an Nord- und Westseite, Schattenkante an Sued/Ost,
         # dazu eine feine Laengsfaser in der Bandmitte
         wx0, wy0, wx1, wy1 = x0 - W.WALL, y0 - W.WALL, x1 + W.WALL, y1 + W.WALL
@@ -301,19 +267,7 @@ def build_floor_ops(walk, water, shells, doors, rooms):
             for rr in (0.16, 0.1, 0.05):
                 ops.ellipse(cx_, cy_, rr, rr, outline=alpha(C["balken_dunkel"], 200), width=0.02)
             ops.ellipse(cx_ - 0.07, cy_ + 0.07, 0.07, 0.05, fill=alpha((255, 255, 255, 255), 50))
-        t = PLANK_TINT.get(key, 1.0)
-        cols = [shade(c, t) for c in C["diele"]]
-        A.tiles(ops, box(*inner), x0, y0, x1, y1, 1.6, 0.28, cols, shade(C["diele_fuge"], t),
-                offset_rows=True, seed=hash(key) % 97, fuge_w=0.025)
-        # Astknoten und Maserung in den Dielen
-        area = (x1 - x0) * (y1 - y0)
-        for _ in range(int(area * 0.35)):
-            kx, ky = rnd.uniform(x0 + 0.2, x1 - 0.2), rnd.uniform(y0 + 0.1, y1 - 0.1)
-            ops.ellipse(kx, ky, 0.05, 0.035, fill=alpha(shade(C["knoten"], t), 190))
-            ops.ellipse(kx, ky, 0.025, 0.017, fill=alpha(shade(C["diele"][0], t * 1.1), 200))
-        for _ in range(int(area * 0.6)):
-            gx, gy = rnd.uniform(x0 + 0.3, x1 - 0.6), rnd.uniform(y0 + 0.1, y1 - 0.1)
-            ops.line([(gx, gy), (gx + rnd.uniform(0.3, 0.7), gy + rnd.uniform(-0.03, 0.03))], fill=alpha(shade(C["diele_fuge"], t), 70), width=0.015)
+        hut_floor(ops, key, inner, rnd)
         # Teppich/Laeufer in Messe und Wachstube (mit Fransen an den Schmalseiten)
         if key == "messe":
             ops.rect(-3.8, -1.6, 3.8, 3.2, fill=alpha(hexc("#8a3a2e"), 230), outline=alpha(hexc("#d9b25c"), 220), width=0.06)
@@ -406,22 +360,503 @@ def build_floor_ops(walk, water, shells, doors, rooms):
                         ops.line([(xx + w * 0.15, my + 0.08), (xx + w * 0.1, my + fh - 0.08)], fill=C["stamm_dunkel"], width=0.02)
                         ops.line([(xx - w * 0.3, my + 0.1), (xx - w * 0.3, my + fh - 0.1)], fill=alpha(shade(C["stamm"], 1.3), 180), width=0.02)
                         xx += rnd.uniform(0.45, 0.9)
-                    for _ in range(int((b - a) * 1.4)):
+                    for hi in range(int((b - a) * 1.4)):
                         bx = rnd.uniform(a, b)
-                        ops.ellipse(bx, my + 0.12, rnd.uniform(0.2, 0.35), 0.18, fill=rnd.choice(C["krone"]), outline=OUTLINE, width=0.03)
+                        # Hecken/Buesche am Fuss der Waldfront: zittriger Umriss (Stilblatt)
+                        ops.poly(HD.wobble_ellipse(bx, my + 0.12, rnd.uniform(0.2, 0.35), 0.18, amp=0.012, seed=int(bx * 10) + hi),
+                                 fill=rnd.choice(C["krone"]), outline=OUTLINE, width=0.03)
                 sh = Polygon([(x0, y0), (x1, y1), (x1, y1 - 0.3), (x0, y0 - 0.3)]).intersection(walk)
                 fill(ops, sh, (0, 0, 0, 55))
-    # Umriss der begehbaren Flaeche
-    for p in geom_parts(walk):
+    # Umriss der begehbaren Flaeche: dieselbe zittrige Kante wie Kies und Gras (walk_w)
+    for p in geom_parts(walk_w):
         for ring in [p.exterior] + list(p.interiors):
             ops.line(list(ring.coords), fill=OUTLINE, width=0.08)
     return ops
 
 
+def wobble_geom(g, amp, seed, step):
+    """Alle Ringe einer Flaeche mit handdraw.wobble leicht zittern lassen (Stilblatt), Loecher bleiben Loecher."""
+    parts = []
+    for i, p in enumerate(geom_parts(g)):
+        ext = HD.wobble(list(p.exterior.coords)[:-1], amp=amp, seed=seed + i * 7, step=step, closed=True)
+        holes = [HD.wobble(list(h.coords)[:-1], amp=amp, seed=seed + i * 7 + 3 + j, step=step, closed=True) for j, h in enumerate(p.interiors)]
+        q = Polygon(ext, holes).buffer(0)
+        if not q.is_empty:
+            parts.append(q)
+    return unary_union(parts)
+
+
+def hut_floor(ops, key, inner, rnd):
+    """Boden je Huette (voller Pass 01.10.): Messe Dielen + Herdplatte, Feldstation Dielen + Flechtteppich
+    + Papiere, Labor Linoleum-Schachbrett + Abfluss + Reinzone, Saegewerk breite Dielen quer + Saegemehl,
+    Lager Estrich + Stellplatzmarkierung + Palette, Bootshaus Dielen mit breiten Fugen + Naesse + Tau +
+    Rettungsring, Wachstube dunkle Dielen + Fussmatte + Kabel, Generator Estrich + Oel + Warnstreifen + Kanal.
+    Alle Raster mit Hand-Unruhe (museum_art.wobbly_tiles)."""
+    x0, y0, x1, y1 = inner
+    region = box(*inner)
+    t = PLANK_TINT.get(key, 1.0)
+    cols = [shade(c, t) for c in C["diele"]]
+    fuge = shade(C["diele_fuge"], t)
+    seed = sum(ord(ch) for ch in key)
+
+    def planks(pw=0.28, plen=1.6, vertical=False, fuge_w=0.025, tint=1.0):
+        A.wobbly_tiles(ops, region, x0, y0, x1, y1, plen, pw, [shade(c, tint) for c in cols], shade(fuge, tint), seed=seed,
+                       bond="random", fuge_w=fuge_w, jitter=0.02, tone=0.05, chips=0.0, cracks=0.0, amp=0.003,
+                       vertical=vertical, knots=0.18, grain=0.35)
+
+    def concrete(base, dark):
+        ops.rect(x0, y0, x1, y1, fill=base)
+        A.speckle(ops, region, int((x1 - x0) * (y1 - y0) * 28), [dark, shade(base, 1.08)], 0.01, 0.03, seed=seed)
+        for k in range(3):
+            ax, ay = rnd.uniform(x0 + 0.5, x1 - 0.5), rnd.uniform(y0 + 0.5, y1 - 0.5)
+            pts = [(ax, ay), (ax + rnd.uniform(-0.5, 0.5), ay + rnd.uniform(-0.4, 0.4)), (ax + rnd.uniform(-0.9, 0.9), ay + rnd.uniform(-0.6, 0.6))]
+            A.crack_line(ops, pts, alpha(shade(base, 0.6), 220), seed=seed + k)
+
+    if key == "messe":
+        planks()
+        # Herdplatte: graue Steinplatten unter und vor dem Herd (Herd bei -4,4..-2,6 / -1,4..-0,3)
+        slab = box(x0 + 0.25, y0 + 0.25, x0 + 2.9, y0 + 2.25)
+        A.wobbly_tiles(ops, slab, x0 + 0.25, y0 + 0.25, x0 + 2.9, y0 + 2.25, 0.5, 0.4, [C["fels"], shade(C["fels"], 0.92), shade(C["fels"], 1.08)],
+                       C["fels_dunkel"], seed=seed + 5, bond=0.5, fuge_w=0.03, jitter=0.04, tone=0.05, chips=0.1, cracks=0.08, amp=0.004)
+        ops.rect(x0 + 0.25, y0 + 0.25, x0 + 2.9, y0 + 2.25, outline=OUTLINE, width=0.035)
+        # Holzscheite neben dem Herd und Asche davor
+        for k in range(4):
+            lx, ly = x0 + 0.4 + (k % 2) * 0.3, y0 + 1.7 + (k // 2) * 0.22
+            ops.line([(lx, ly), (lx + 0.45, ly + 0.03)], fill=OUTLINE, width=0.1)
+            ops.line([(lx, ly), (lx + 0.45, ly + 0.03)], fill=C["stamm"], width=0.07)
+            ops.ellipse(lx, ly, 0.035, 0.05, fill=C["stirnholz"], outline=OUTLINE, width=0.012)
+        ops.poly(HD.wobble_ellipse(x0 + 1.4, y0 + 0.5, 0.35, 0.18, amp=0.03, seed=seed + 9), fill=alpha((40, 36, 34, 255), 90))
+    elif key == "feldstation":
+        planks()
+        # Flechtteppich (oval, konzentrische Ringe) unter dem Kartentisch, Papiere am Boden
+        rcx, rcy = (x0 + x1) / 2, y0 + 4.7
+        for k, (rx, col) in enumerate(((2.35, "#8a6a4a"), (2.1, "#c9b27a"), (1.85, "#6b8c45"), (1.6, "#c9b27a"), (1.35, "#8a6a4a"), (1.1, "#c9b27a"), (0.85, "#a8403a"), (0.6, "#c9b27a"))):
+            ops.poly(HD.wobble_ellipse(rcx, rcy, rx, rx * 0.62, amp=0.01, seed=seed + k), fill=alpha(hexc(col), 225))
+        ops.poly(HD.wobble_ellipse(rcx, rcy, 2.35, 2.35 * 0.62, amp=0.01, seed=seed), outline=alpha(hexc("#5a3a22"), 200), width=0.03)
+        for k, (px_, py_, ang) in enumerate(((x1 - 1.3, y0 + 0.9, 0.2), (x0 + 1.2, y0 + 0.5, -0.3), (x1 - 2.2, y0 + 1.3, 0.1))):
+            ca, sa = math.cos(ang), math.sin(ang)
+            w, h = 0.21, 0.3
+            pts = [(px_ + dx * ca - dy * sa, py_ + dx * sa + dy * ca) for dx, dy in ((-w, -h), (w, -h), (w, h), (-w, h))]
+            ops.poly(pts, fill=hexc("#efe4c8"), outline=OUTLINE, width=0.015)
+            for j in range(4):
+                a_ = (px_ + (-w + 0.04) * ca - (-h + 0.07 + j * 0.06) * sa, py_ + (-w + 0.04) * sa + (-h + 0.07 + j * 0.06) * ca)
+                b_ = (px_ + (w - 0.04 - (j % 2) * 0.05) * ca - (-h + 0.07 + j * 0.06) * sa, py_ + (w - 0.04 - (j % 2) * 0.05) * sa + (-h + 0.07 + j * 0.06) * ca)
+                ops.line([a_, b_], fill=alpha(hexc("#3b3630"), 150), width=0.01)
+    elif key == "labor":
+        # Linoleum-Schachbrett (Stilblatt-Raster), Abfluss, Reinzone um den Scanner, Gummimatte vor der Bank
+        lino = (hexc("#d8dcd0"), hexc("#b4c6b2"))
+        A.wobbly_tiles(ops, region, x0, y0, x1, y1, 0.5, 0.5, list(lino), hexc("#8a9488"), seed=seed, checker=lino,
+                       fuge_w=0.015, jitter=0.015, tone=0.03, chips=0.04, cracks=0.03, amp=0.003)
+        gx, gy = x1 - 1.5, y0 + 0.9
+        ops.ellipse(gx, gy, 0.2, 0.2, fill=hexc("#7b8288"), outline=OUTLINE, width=0.03)
+        for k in range(3):
+            ops.line([(gx - 0.13, gy - 0.08 + k * 0.08), (gx + 0.13, gy - 0.08 + k * 0.08)], fill=hexc("#2e3338"), width=0.02)
+        A.dashed(ops, [(x0 + 3.0, y0 + 0.4), (x0 + 3.0, y0 + 3.0), (x0 + 5.2, y0 + 3.0), (x0 + 5.2, y0 + 0.4), (x0 + 3.0, y0 + 0.4)],
+                 alpha(hexc("#3f9e9e"), 200), width=0.05, dash=0.3, gap=0.15)
+        mat = HD.wobble_rect(x0 + 0.5, y1 - 2.1, x0 + 2.3, y1 - 1.35, amp=0.005, seed=seed + 3, step=0.1)
+        ops.poly(mat, fill=hexc("#3b4046"), outline=OUTLINE, width=0.025)
+        for k in range(7):
+            ops.line([(x0 + 0.6 + k * 0.25, y1 - 2.0), (x0 + 0.6 + k * 0.25, y1 - 1.45)], fill=alpha((255, 255, 255, 255), 40), width=0.02)
+        ops.ellipse(x0 + 6.6, y0 + 2.4, 0.09, 0.09, fill=hexc("#d84a4a"), outline=OUTLINE, width=0.015)   # Warnmarke am Boden
+        ops.ellipse(x0 + 6.6, y0 + 2.4, 0.04, 0.04, fill=hexc("#f0f0ea"))
+    elif key == "saegewerk":
+        planks(pw=0.34, plen=2.2, vertical=True, fuge_w=0.03, tint=0.95)
+        # Saegemehl: weiche helle Haufen suedlich des Saegetischs, Spaene verstreut, Kreidelinie
+        # Haufen dicht am Saegeblatt (Tischmitte), nach aussen kleiner und loser
+        bx_ = x0 + 6.0
+        for k in range(9):
+            sx = bx_ + rnd.gauss(0, 1.4)
+            sy = y0 + 2.45 + rnd.uniform(-0.15, 0.35) - abs(sx - bx_) * 0.08
+            scale = max(0.35, 1.0 - abs(sx - bx_) * 0.22)
+            ops.poly(HD.wobble_ellipse(sx, sy, rnd.uniform(0.25, 0.5) * scale, rnd.uniform(0.14, 0.26) * scale, amp=0.03, seed=seed + k), fill=alpha(hexc("#d8c08a"), 150))
+            if k % 2 == 0:
+                ops.poly(HD.wobble_ellipse(sx - 0.05, sy + 0.04, rnd.uniform(0.12, 0.25) * scale, rnd.uniform(0.07, 0.12) * scale, amp=0.02, seed=seed + 20 + k), fill=alpha(hexc("#e8d4a0"), 150))
+        for _ in range(45):
+            px_, py_ = rnd.uniform(x0 + 0.4, x1 - 0.4), rnd.uniform(y0 + 0.3, y0 + 3.5)
+            ops.ellipse(px_, py_, rnd.uniform(0.02, 0.045), rnd.uniform(0.012, 0.025), fill=alpha(hexc("#d8b07a"), 200))
+        ops.line(HD.wobble([(x0 + 0.5, y0 + 1.0), (x1 - 0.5, y0 + 1.05)], amp=0.01, seed=seed + 40, step=0.2), fill=alpha(hexc("#f0f0ea"), 150), width=0.02)
+        A.oil_stain(ops, x1 - 1.4, y0 + 1.6, 0.3, 0.18, seed=seed + 41, a=90)
+    elif key == "lager":
+        concrete(hexc("#8c8880"), hexc("#6e6a62"))
+        mark = alpha(hexc("#d4b13c"), 200)
+        # Stellplatzmarkierungen um die Kistenstapel, Gassenlinie, Palette, Strichliste an der Wand
+        for bx0, by0, bx1, by1 in ((x0 + 0.2, y0 + 0.4, x0 + 3.8, y0 + 2.0), (x1 - 3.8, y0 + 0.4, x1 - 0.2, y0 + 2.0), (x0 + 3.6, y0 + 2.6, x1 - 3.6, y0 + 4.4)):
+            A.dashed(ops, [(bx0, by0), (bx1, by0), (bx1, by1), (bx0, by1), (bx0, by0)], mark, width=0.05, dash=0.35, gap=0.18)
+        ops.line(HD.wobble([(x0 + 0.3, y1 - 1.4), (x1 - 0.3, y1 - 1.4)], amp=0.006, seed=seed + 2, step=0.3), fill=mark, width=0.06)
+        px0, py0 = x1 - 3.2, y1 - 1.2
+        ops.rect(px0, py0, px0 + 1.2, py0 + 0.8, fill=hexc("#9a7a52"), outline=OUTLINE, width=0.03)
+        for k in range(5):
+            ops.line([(px0 + 0.1 + k * 0.25, py0 + 0.05), (px0 + 0.1 + k * 0.25, py0 + 0.75)], fill=hexc("#6e5234"), width=0.03)
+        ops.rect(px0 + 0.05, py0 + 0.36, px0 + 1.15, py0 + 0.44, fill=hexc("#6e5234"))
+        for k in range(9):
+            ops.line([(x0 + 0.4 + k * 0.08 + (k // 5) * 0.1, y1 - 0.5), (x0 + 0.4 + k * 0.08 + (k // 5) * 0.1, y1 - 0.3)], fill=alpha(hexc("#f0f0ea"), 160), width=0.015)
+        A.tool_rag(ops, x0 + 1.6, y1 - 0.9, seed=seed + 3, col=hexc("#9aa3a6"))
+    elif key == "bootshaus":
+        planks(fuge_w=0.045, tint=0.97)
+        # Naesse um das Boot (Boot bei 9,5..13,5 / -12,4..-10,2), Pfuetzen mit Lichtkante, Tau, Rettungsring
+        wet = HD.wobble_ellipse(x0 + 3.5, y0 + 1.5, 2.9, 1.6, amp=0.1, seed=seed + 1)
+        ops.poly(wet, fill=alpha(hexc("#2a3a44"), 42))
+        for k, (px_, py_) in enumerate(((x0 + 6.3, y0 + 1.3), (x0 + 1.0, y0 + 3.4), (x1 - 1.4, y1 - 1.0))):
+            rx, ry = rnd.uniform(0.2, 0.35), rnd.uniform(0.12, 0.2)
+            ops.poly(HD.wobble_ellipse(px_, py_, rx, ry, amp=0.015, seed=seed + 10 + k), fill=alpha(hexc("#3d5a6e"), 150), outline=alpha(C["erde_rand"], 200), width=0.025)
+            ops.line([(px_ - rx * 0.5, py_ + ry * 0.35), (px_ - rx * 0.1, py_ + ry * 0.35)], fill=alpha(C["wasser_licht"], 180), width=0.03)
+        cx_, cy_ = x0 + 0.85, y0 + 0.75   # westlich des Boots (bei x1 - 1 sass der Vent darueber)
+        spiral = [(cx_ + (0.05 + 0.028 * k) * math.cos(k * 0.5), cy_ + (0.05 + 0.028 * k) * 0.75 * math.sin(k * 0.5)) for k in range(26)]
+        ops.line(spiral, fill=OUTLINE, width=0.075)
+        ops.line(spiral, fill=hexc("#d8cfb0"), width=0.045)
+        ops.line(spiral[-6:], fill=alpha(hexc("#8a7a5a"), 150), width=0.02)
+        rcx, rcy = x0 + 0.8, y1 - 0.9
+        ops.ellipse(rcx, rcy, 0.3, 0.3, fill=hexc("#e05040"), outline=OUTLINE, width=0.03)
+        for a in (0, 90, 180, 270):
+            ops.poly([(rcx + 0.3 * math.cos(math.radians(a - 15)), rcy + 0.3 * math.sin(math.radians(a - 15))),
+                      (rcx + 0.3 * math.cos(math.radians(a + 15)), rcy + 0.3 * math.sin(math.radians(a + 15))),
+                      (rcx + 0.14 * math.cos(math.radians(a + 15)), rcy + 0.14 * math.sin(math.radians(a + 15))),
+                      (rcx + 0.14 * math.cos(math.radians(a - 15)), rcy + 0.14 * math.sin(math.radians(a - 15)))], fill=hexc("#f0f0ea"))
+        ops.ellipse(rcx, rcy, 0.14, 0.14, fill=shade(cols[0], 0.9), outline=OUTLINE, width=0.025)
+        ops.ellipse(rcx - 0.12, rcy + 0.12, 0.06, 0.04, fill=alpha((255, 255, 255, 255), 90))
+        A.tool_bucket(ops, x1 - 0.7, y1 - 1.6, r=0.13, h=0.26)
+    elif key == "wachstube":
+        planks(tint=0.9)
+        # Fussmatte an der Nordtuer (-24..-21,5), Kabel von der Monitorwand, Kaffeering
+        mat = HD.wobble_rect(x0 + 2.65, y1 - 0.62, x0 + 4.35, y1 - 0.12, amp=0.005, seed=seed + 3, step=0.1)
+        ops.poly(mat, fill=hexc("#5a4630"), outline=OUTLINE, width=0.025)
+        for k in range(8):
+            ops.line([(x0 + 2.8 + k * 0.2, y1 - 0.55), (x0 + 2.8 + k * 0.2, y1 - 0.2)], fill=alpha(hexc("#8a6a45"), 180), width=0.025)
+        A.floor_cable(ops, [(x0 + 0.85, y0 + 2.2), (x0 + 1.4, y0 + 1.6), (x0 + 1.6, y0 + 0.9), (x0 + 2.3, y0 + 0.5)], seed=seed + 4)
+        ops.ellipse(x0 + 5.6, y0 + 1.1, 0.07, 0.07, outline=alpha(hexc("#5a3a22"), 150), width=0.018)
+    elif key == "generator":
+        concrete(hexc("#6e6a62"), hexc("#55524c"))
+        # Warnstreifen VOR dem Aggregat (-14,9..-11,9 / -11,4..-9,8; sein Sprite verdeckt den Boden noerdlich
+        # der Standlinie), Oelflecken, Kabelkanal zum Sicherungskasten
+        A.hazard(ops, x0 + 0.4, y0 + 0.3, x0 + 3.8, y0 + 0.55)
+        A.oil_stain(ops, x0 + 4.6, y0 + 1.7, 0.45, 0.24, seed=seed + 1, a=120)
+        A.oil_stain(ops, x0 + 4.9, y0 + 1.2, 0.3, 0.18, seed=seed + 2, a=100)
+        A.cable_duct(ops, [(x0 + 3.5, y0 + 2.5), (x0 + 3.5, y0 + 3.8), (x0 + 0.55, y0 + 3.8)], w=0.14)
+        for k in range(2):
+            ops.ellipse(x1 - 1.0 - k * 0.5, y0 + 0.7, 0.18, 0.13, outline=alpha((20, 18, 16, 255), 90), width=0.03)
+        A.tool_wrench(ops, x1 - 1.6, y0 + 2.0, 0.6, L=0.26)
+        A.tool_rag(ops, x1 - 2.3, y0 + 1.4, seed=seed + 5, col=hexc("#a8403a"))
+    else:
+        planks()
+
+
+def draw_far_shore(ops, water, rnd):
+    """Gegenufer am Ostrand des Bachs (voller Pass): das Wasser reicht bis zum Kartenrand (x 25,5), rechts
+    davon ist im Spiel Schwarz. Deshalb ab x ~24,8 ein schmales Uferband (Schlamm, Sand, Steine, Schilf,
+    Wurzeln) und ab x ~25,1 Baumkronen, so weit BOUNDS reicht. Das Kanu (AtlasFerry) faehrt bis x 24,4 und
+    bleibt frei."""
+    wx0, wy0, wx1, wy1 = water.bounds
+    sx = wx1 - 0.72
+    line = HD.wobble([(sx, wy0 - 0.3), (sx, wy1 + 0.3)], amp=0.07, seed=610, step=0.25)
+    band = Polygon([(wx1 + 0.5, wy0 - 0.3)] + line + [(wx1 + 0.5, wy1 + 0.3)])
+    fill(ops, band, hexc("#5a4630"))
+    inner = Polygon([(wx1 + 0.5, wy0 - 0.3)] + [(x + 0.16, y) for x, y in line] + [(wx1 + 0.5, wy1 + 0.3)])
+    fill(ops, inner, alpha(hexc("#a28a68"), 200))
+    A.speckle(ops, band.intersection(box(BX0, BY0, BX1, BY1)), 160, [alpha(hexc("#7c5e3c"), 180), alpha(hexc("#c9b088"), 150)], 0.015, 0.035, seed=611)
+    ops.line(line, fill=alpha(hexc("#1b3f5c"), 255), width=0.07)
+    ops.line([(x - 0.07, y) for x, y in line], fill=alpha(hexc("#8fc4e8"), 120), width=0.04)
+    # Wurzeln am Gegenufer
+    for i in range(int((wy1 - wy0) * 1.2)):
+        py_ = rnd.uniform(wy0, wy1)
+        px_ = sx + rnd.uniform(0.25, 0.5)
+        ops.line([(px_, py_), (px_ - 0.2, py_ + rnd.uniform(-0.08, 0.08))], fill=C["wurzel"], width=0.05)
+    # Kronen: Mitte ausserhalb der Karte, nur der Westrand ragt herein
+    y = wy1 + 0.6
+    ci = 0
+    while y > wy0 - 0.8:
+        r = rnd.uniform(0.9, 1.35)
+        cx = wx1 - 0.38 + r + rnd.uniform(0.0, 0.25)
+        col = rnd.choice(C["krone"])
+        pts = HD.wobble_ellipse(cx, y, r, r, amp=r * 0.035, seed=700 + ci)
+        ops.poly(pts, fill=col, outline=OUTLINE, width=0.05)
+        ops.ellipse(cx - r * 0.55, y + r * 0.2, r * 0.3, r * 0.28, fill=alpha(C["krone_licht"], 130))
+        y -= rnd.uniform(0.95, 1.25)
+        ci += 1
+    # Steine halb im Wasser und Schilf am Gegenufer
+    yy = wy0 + 0.5
+    i = 0
+    while yy < wy1 - 0.3:
+        if rnd.random() < 0.6:
+            r = rnd.uniform(0.08, 0.16)
+            px_ = sx + rnd.uniform(-0.12, 0.2)
+            if px_ < sx + 0.02:
+                ops.ellipse(px_, yy - 0.02, r * 1.7, r * 1.1, outline=alpha(hexc("#8fc4e8"), 140), width=0.025)
+            ops.poly(HD.wobble_ellipse(px_, yy, r, r * 0.72, amp=0.006, seed=720 + i), fill=C["fels"], outline=OUTLINE, width=0.03)
+            ops.ellipse(px_ - r * 0.3, yy + r * 0.22, r * 0.42, r * 0.26, fill=shade(C["fels"], 1.2))
+        if rnd.random() < 0.5:
+            cx_ = sx + rnd.uniform(-0.05, 0.25)
+            n = rnd.randint(3, 6)
+            for k in range(n):
+                bx = cx_ + (k - n / 2) * 0.06 + rnd.uniform(-0.02, 0.02)
+                h = rnd.uniform(0.3, 0.55)
+                tip = (bx + rnd.uniform(-0.1, 0.1), yy + 0.3 + h)
+                ops.line([(bx, yy + 0.3), ((bx + tip[0]) / 2 + rnd.uniform(-0.03, 0.03), yy + 0.3 + h * 0.5), tip],
+                         fill=rnd.choice([C["schilf"], shade(C["schilf"], 0.85)]), width=0.026)
+                if k % 2 == 1 and rnd.random() < 0.6:
+                    ops.ellipse(tip[0], tip[1] - 0.05, 0.026, 0.065, fill=C["schilf_kolben"], outline=OUTLINE, width=0.01)
+        yy += rnd.uniform(0.6, 1.1)
+        i += 1
+
+
+def draw_water(ops, water, rnd):
+    """See (Stilblatt): flache Farbflaechen in drei Tiefenstufen mit welligen Grenzen, kurze Wellenstriche
+    (hell oben, dunkel darunter), Mondbahn, Seerosen nahe am Ufer."""
+    wx0, wy0, wx1, wy1 = water.bounds
+    fill(ops, water, C["wasser"])
+    # Tiefenstufen: flach (hell) am Westufer, tief (dunkel) im Osten, Grenzen wellig
+    shallow = HD.wobble([(wx0 + 1.3, wy0 - 0.5), (wx0 + 1.3, wy1 + 0.5)], amp=0.35, seed=301, step=0.4)
+    fill(ops, Polygon([(wx0 - 0.5, wy0 - 0.5)] + shallow + [(wx0 - 0.5, wy1 + 0.5)]).intersection(water), alpha(C["wasser_licht"], 60))
+    deep = HD.wobble([(wx1 - 1.6, wy0 - 0.5), (wx1 - 1.6, wy1 + 0.5)], amp=0.3, seed=302, step=0.4)
+    fill(ops, Polygon([(wx1 + 0.5, wy0 - 0.5)] + deep + [(wx1 + 0.5, wy1 + 0.5)]).intersection(water), alpha(hexc("#1b3f5c"), 110))
+    # Mondbahn: laenglicher Schein mit hellen Querstrichen
+    mx = wx0 + 3.0
+    for k in range(3):
+        ops.glow(mx, (wy0 + wy1) / 2 + (k - 1) * 1.6, 1.6, A.MOON, 0.16)
+    # Wellen: kurze gebogene Striche, Licht oben + Schatten darunter (zwei Stufen, keine Verlaeufe)
+    yy = wy0 + 0.35
+    k = 0
+    while yy < wy1 - 0.2:
+        xx = wx0 + rnd.uniform(0.3, 1.0)
+        while xx < wx1 - 0.3:
+            ln = rnd.uniform(0.35, 0.9)
+            near_moon = abs(xx + ln / 2 - mx) < 0.9
+            pts = HD.wobble([(xx, yy), (xx + ln, yy)], amp=0.03, seed=k, step=0.08)
+            if water.contains(Point(xx, yy)) and water.contains(Point(xx + ln, yy)):
+                ops.line(pts, fill=alpha(hexc("#1b3f5c"), 150), width=0.045)
+                ops.line([(x, y + 0.035) for x, y in pts], fill=alpha(C["wasser_licht"] if not near_moon else hexc("#dbe9f5"), 230 if near_moon else 200), width=0.04)
+            xx += ln + rnd.uniform(0.6, 1.6)
+            k += 1
+        yy += rnd.uniform(0.45, 0.8)
+    # Seerosen nahe am Ufer (Kreis mit Kerbe, Lichtkante, eine Bluete)
+    for i in range(7):
+        px_, py_ = wx0 + rnd.uniform(0.5, 1.5), rnd.uniform(wy0 + 0.6, wy1 - 0.6)
+        if not water.buffer(-0.3).contains(Point(px_, py_)) or near_dock(py_, 1.3):
+            continue
+        r = rnd.uniform(0.14, 0.22)
+        a0 = rnd.uniform(0, math.tau)
+        pts = [(px_ + math.cos(a0 + t * (math.tau - 0.9) / 20 + 0.45) * r, py_ + math.sin(a0 + t * (math.tau - 0.9) / 20 + 0.45) * r * 0.85) for t in range(21)]
+        pts = [(px_, py_)] + pts
+        ops.poly(HD.wobble(pts, amp=0.006, seed=400 + i, step=0.05, closed=True), fill=hexc("#4f8a3a"), outline=OUTLINE, width=0.025)
+        ops.ellipse(px_ - r * 0.3, py_ + r * 0.25, r * 0.35, r * 0.22, fill=alpha(hexc("#7ab85a"), 160))
+        if i % 3 == 0:
+            for t in range(6):
+                a = t * math.tau / 6
+                ops.ellipse(px_ + math.cos(a) * r * 0.3, py_ + r * 0.1 + math.sin(a) * r * 0.25, r * 0.16, r * 0.12, fill=hexc("#f8e8f0"), outline=OUTLINE, width=0.012)
+            ops.ellipse(px_, py_ + r * 0.1, r * 0.1, r * 0.08, fill=hexc("#f2c23a"))
+
+
+def near_dock(y, d):
+    """Liegt die Hoehe y naeher als d an der Mitte eines Stegs (W.DOCKS)?"""
+    return any(abs(y - (k[2] + k[4]) / 2) < d for k in W.DOCKS)
+
+
+def draw_shore(ops, water, walk, forest, rnd):
+    """Uferband (Stilblatt): wo Lichtung oder Hof an das Wasser stossen, ein schmaler Streifen Schlamm und
+    Sand mit welliger Wasserkante, der in das Wasser hineinragt (die Kollision bleibt die gerade Kante
+    bei x = 20,3: der Spieler haelt vor dem Schlamm). Steine halb im Wasser mit Ring, Schilfgruppen am
+    Ufer und im Flachwasser, am Waldufer dunkle Wurzeln."""
+    wx0, wy0, wx1, wy1 = water.bounds
+    dock = unary_union([G.shape(k) for k in W.DOCKS])
+    shore_x = wx0
+    # welliger Verlauf der Wasserkante (langsame Welle + feine Unruhe), ueber die ganze Westkante
+    line = HD.wobble([(shore_x + 0.32, wy0 - 0.3), (shore_x + 0.32, wy1 + 0.3)], amp=0.2, seed=310, step=0.25)
+    band = Polygon([(shore_x - 0.08, wy0 - 0.3)] + line + [(shore_x - 0.08, wy1 + 0.3)]).difference(dock.buffer(0.02))
+    mud = alpha(hexc("#5a4630"), 255)
+    sand = hexc("#a28a68")
+    # nur wo an Land tatsaechlich begehbare Flaeche liegt (Lichtung/Hof); am Waldufer Wurzeln statt Sand
+    land = walk.buffer(0.6)
+    sandy = band.intersection(land.buffer(0.3))
+    rooty = band.difference(land)
+    fill(ops, sandy, mud)
+    inner = Polygon([(shore_x - 0.08, wy0 - 0.3)] + [(x - 0.12, y) for x, y in line] + [(shore_x - 0.08, wy1 + 0.3)]).difference(dock.buffer(0.02))
+    fill(ops, inner.intersection(land.buffer(0.3)), alpha(sand, 200))
+    A.speckle(ops, sandy, 160, [alpha(hexc("#7c5e3c"), 180), alpha(hexc("#c9b088"), 150)], 0.015, 0.035, seed=311)
+    # nasser Schlamm: sparsame Schraffur als Akzent (Stilblatt)
+    for seg in HD.hatch(sandy.difference(inner), spacing=0.09, angle=-30, seed=312, density=0.35, length=(0.06, 0.14)):
+        ops.line(seg, fill=alpha(hexc("#3a2a18"), 110), width=0.015)
+    fill(ops, rooty, alpha(hexc("#3a2a18"), 255))
+    for part in geom_parts(rooty):
+        for _ in range(int(part.area * 6)):
+            px_, py_ = rnd.uniform(part.bounds[0], part.bounds[2]), rnd.uniform(part.bounds[1], part.bounds[3])
+            if part.contains(Point(px_, py_)):
+                ops.line([(px_ - 0.1, py_), (px_ + 0.15, py_ + rnd.uniform(-0.08, 0.08))], fill=C["wurzel"], width=0.05)
+    # Wasserkante: dunkler Strich mit leicht schwankender Staerke, darunter ein heller Saum im Wasser
+    for part in geom_parts(band):
+        edge = [(x, y) for x, y in part.exterior.coords if x > shore_x + 0.02]
+        if len(edge) > 3:
+            ops.line(edge, fill=alpha(hexc("#1b3f5c"), 255), width=0.07)
+            ops.line([(x + 0.07, y) for x, y in edge], fill=alpha(hexc("#8fc4e8"), 120), width=0.04)
+    # Steine: am Ufer und halb im Wasser (Ring im Wasser), mit Lichtkante oben links
+    yy = wy0 + 0.4
+    i = 0
+    while yy < wy1 - 0.3:
+        if not near_dock(yy, 1.1) and land.contains(Point(shore_x - 0.3, yy)) and rnd.random() < 0.7:
+            r = rnd.uniform(0.09, 0.2)
+            sx = shore_x + rnd.uniform(0.0, 0.45)
+            in_water = sx > shore_x + 0.25
+            if in_water:
+                ops.ellipse(sx, yy - 0.02, r * 1.7, r * 1.1, outline=alpha(hexc("#8fc4e8"), 140), width=0.025)
+            ops.ellipse(sx + 0.03, yy - 0.04, r, r * 0.72, fill=alpha((10, 20, 30, 255), 110))
+            ops.poly(HD.wobble_ellipse(sx, yy, r, r * 0.72, amp=0.006, seed=320 + i), fill=C["fels"], outline=OUTLINE, width=0.03)
+            ops.ellipse(sx - r * 0.3, yy + r * 0.22, r * 0.42, r * 0.26, fill=shade(C["fels"], 1.2))
+            ops.ellipse(sx + r * 0.3, yy - r * 0.2, r * 0.4, r * 0.2, fill=alpha(C["fels_dunkel"], 170))
+            i += 1
+        yy += rnd.uniform(0.45, 0.9)
+    # Schilfgruppen: 4 bis 7 Halme, Kolben, teils im Flachwasser
+    yy = wy0 + 0.3
+    j = 0
+    while yy < wy1 - 0.3:
+        if not near_dock(yy, 1.0) and rnd.random() < 0.6:
+            cx_ = shore_x + rnd.choice((-0.15, 0.1, 0.4, 0.55))
+            if cx_ < shore_x and not land.contains(Point(cx_, yy)):
+                yy += 0.5
+                continue
+            n = rnd.randint(4, 7)
+            if cx_ > shore_x + 0.2:
+                ops.ellipse(cx_, yy - 0.05, 0.3, 0.12, outline=alpha(hexc("#8fc4e8"), 110), width=0.02)
+            for k in range(n):
+                bx = cx_ + (k - n / 2) * 0.07 + rnd.uniform(-0.02, 0.02)
+                h = rnd.uniform(0.35, 0.6)
+                tip = (bx + rnd.uniform(-0.12, 0.12), yy + h)
+                ops.line([(bx, yy - 0.04), ((bx + tip[0]) / 2 + rnd.uniform(-0.03, 0.03), yy + h * 0.5), tip], fill=rnd.choice([C["schilf"], shade(C["schilf"], 0.85), shade(C["schilf"], 1.15)]), width=0.028)
+                if k % 2 == 1 and rnd.random() < 0.7:
+                    ops.ellipse(tip[0], tip[1] - 0.05, 0.028, 0.07, fill=C["schilf_kolben"], outline=OUTLINE, width=0.01)
+            j += 1
+        yy += rnd.uniform(0.5, 1.0)
+
+
+def draw_dock(ops, water, rnd, dock):
+    """Bootssteg (ueber dem Wasser, begehbar): Schatten und Spiegelung im Wasser, Bohlen mit zittrigen
+    Fugen und eigenem Ton, vier Pfaehle, Poller, Leine. Kein gemaltes Boot: das Kanu legt zur Laufzeit an
+    (AtlasFerry "canoe", User 01.10.)."""
+    dx0, dy0, dx1, dy1 = dock[1:5]
+    wood, wood_d = hexc("#9a6a3e"), hexc("#6e4a2a")
+    # Schatten + Spiegelung (Streifen unter dem Steg)
+    ops.rect(dx0 + 0.1, dy0 - 0.16, dx1 + 0.1, dy1 - 0.1, fill=(0, 0, 0, 80))
+    for k in range(5):
+        ops.line([(dx0 + 0.4 + k * 0.6, dy0 - 0.22), (dx0 + 0.75 + k * 0.6, dy0 - 0.22)], fill=alpha(hexc("#8fc4e8"), 100), width=0.03)
+    # Bohlen quer zum Steg
+    ops.poly(HD.wobble_rect(dx0, dy0, dx1, dy1, amp=0.006, seed=330, step=0.1), fill=wood, outline=OUTLINE, width=0.06)
+    xx = dx0 + 0.02
+    k = 0
+    while xx < dx1 - 0.05:
+        w = rnd.uniform(0.24, 0.34)
+        t = rnd.uniform(0.9, 1.08)
+        ops.rect(xx, dy0 + 0.03, min(dx1 - 0.02, xx + w), dy1 - 0.03, fill=shade(wood, t))
+        if k > 0:
+            ops.line(HD.wobble([(xx, dy0 + 0.02), (xx, dy1 - 0.02)], amp=0.004, seed=340 + k, step=0.08), fill=wood_d, width=0.025)
+        ops.line([(xx + 0.02, dy1 - 0.06), (min(dx1 - 0.02, xx + w) - 0.02, dy1 - 0.06)], fill=alpha(shade(wood, 1.25), 150), width=0.02)   # Lichtkante
+        if rnd.random() < 0.3:
+            ops.ellipse(xx + w / 2, rnd.uniform(dy0 + 0.3, dy1 - 0.3), 0.03, 0.02, fill=alpha(wood_d, 200))
+        xx += w
+        k += 1
+    for px_ in (dx0 + 0.9, dx1 - 0.15):                                   # Pfaehle
+        for py_ in (dy0 + 0.12, dy1 - 0.12):
+            ops.ellipse(px_, py_, 0.12, 0.12, fill=hexc("#5a3d24"), outline=OUTLINE, width=0.03)
+            ops.ellipse(px_, py_, 0.07, 0.07, fill=hexc("#c9a46a"))
+            ops.ellipse(px_, py_, 0.035, 0.035, outline=alpha(wood_d, 200), width=0.012)
+    ops.line([(dx1 - 0.35, dy0 + 0.4), (dx1 - 0.1, dy0 + 0.22), (dx1 - 0.18, dy0 + 0.1)], fill=hexc("#d8cfb0"), width=0.04)   # aufgeschossene Leine
+
+
+def draw_paths(ops, paths, outdoor, grass, rnd):
+    """Wege (Stilblatt): Erde mit welligem Rand (zittriger Umriss statt Buffer-Band), abgelaufene dunklere
+    Mittelspur, Fahrspuren, Pfuetzen mit Lichtkante, Randsteine mit Umriss, Grasbueschel, die vom Rand
+    hereinwachsen. Rueckgabe: die (gezitterte) Wegflaeche fuer die weiteren Schritte."""
+    wob_parts = []
+    for i, part in enumerate(geom_parts(paths)):
+        pts = HD.wobble(list(part.exterior.coords)[:-1], amp=0.06, seed=500 + i, step=0.25, closed=True)
+        g = Polygon(pts).buffer(0)
+        if not g.is_empty:
+            wob_parts.append(g)
+    wob = unary_union(wob_parts).intersection(outdoor).buffer(0)
+    fill(ops, wob.buffer(0.16).intersection(outdoor), C["erde_rand"])
+    fill(ops, wob, C["erde"])
+    # Umriss leicht zittrig und in der Staerke schwankend (Pen-Ersatz: zwei Linien verschiedener Breite)
+    for i, part in enumerate(geom_parts(wob)):
+        ring = list(part.exterior.coords)
+        ops.line(ring, fill=alpha(shade(C["erde_rand"], 0.8), 220), width=0.04)
+    A.speckle(ops, wob, 1400, [C["erde2"], C["kiesel"]], 0.02, 0.06, seed=9)
+    # trockene, hellere Flecken (flach, zittriger Rand) und feuchte dunkle Senken
+    for i in range(70):
+        p = Point(rnd.uniform(BX0, BX1), rnd.uniform(BY0, BY1))
+        if wob.buffer(-0.3).contains(p):
+            rx, ry = rnd.uniform(0.25, 0.6), rnd.uniform(0.15, 0.3)
+            dry = rnd.random() < 0.6
+            ops.poly(HD.wobble_ellipse(p.x, p.y, rx, ry, amp=0.03, seed=540 + i),
+                     fill=alpha(hexc("#a8865c"), 90) if dry else alpha(shade(C["erde2"], 0.8), 90))
+    # abgelaufene Mitte: dunkler, festgetretener Streifen mit welligem Rand
+    for i, pts in enumerate(W.PATHS):
+        lane = HD.wobble(pts, amp=0.08, seed=520 + i, step=0.3)
+        g = LineString(lane).buffer(0.42, 8).intersection(wob)
+        fill(ops, g, alpha(shade(C["erde2"], 0.9), 150))
+        # vereinzelt eine Wurzel quer ueber den Weg (Stilblatt: Schraffur nur als seltener Akzent)
+        if i % 4 == 1:
+            ls = LineString(pts)
+            q = ls.interpolate(ls.length * 0.45)
+            dx, dy = (pts[-1][0] - pts[0][0]), (pts[-1][1] - pts[0][1])
+            n = math.hypot(dx, dy) or 1.0
+            nx, ny = -dy / n, dx / n
+            root = HD.wobble([(q.x + nx * 1.1, q.y + ny * 1.1), (q.x - nx * 1.1, q.y - ny * 1.1)], amp=0.06, seed=560 + i, step=0.15)
+            ops.line(root, fill=C["wurzel"], width=0.09)
+            ops.line(root, fill=alpha(shade(C["wurzel"], 1.45), 200), width=0.03)
+            for seg in HD.hatch(LineString(root).buffer(0.16).intersection(wob), spacing=0.07, angle=60, seed=i, density=0.5, length=(0.08, 0.16)):
+                ops.line(seg, fill=alpha(C["wurzel"], 90), width=0.015)
+    for pts in W.PATHS:   # Fahrspuren
+        ls = LineString(pts)
+        for off in (-0.45, 0.45):
+            tr = ls.parallel_offset(off, "left") if ls.length > 0.5 else None
+            if tr is not None and not tr.is_empty and tr.geom_type == "LineString":
+                seg = tr.intersection(wob.buffer(-0.2))
+                for q in ([seg] if seg.geom_type == "LineString" else list(getattr(seg, "geoms", []))):
+                    if q.geom_type == "LineString" and q.length > 0.3:
+                        ops.line(HD.wobble(list(q.coords), amp=0.02, seed=int(q.length * 10), step=0.2), fill=alpha(shade(C["erde2"], 0.85), 200), width=0.12)
+    # Pfuetzen mit heller Lichtkante
+    for _ in range(10):
+        p = Point(rnd.uniform(BX0, BX1), rnd.uniform(BY0, BY1))
+        if wob.buffer(-0.5).contains(p):
+            rx, ry = rnd.uniform(0.25, 0.45), rnd.uniform(0.15, 0.25)
+            ops.poly(HD.wobble_ellipse(p.x, p.y, rx, ry, amp=0.015, seed=int(p.x * 7)), fill=alpha(hexc("#3d5a6e"), 160), outline=alpha(C["erde_rand"], 220), width=0.03)
+            ops.line([(p.x - rx * 0.5, p.y + ry * 0.35), (p.x - rx * 0.1, p.y + ry * 0.35)], fill=alpha(C["wasser_licht"], 180), width=0.03)
+    # Randsteine und Grasbueschel entlang des Wegrands
+    for i, part in enumerate(geom_parts(wob)):
+        ring = part.exterior
+        s = 0.3
+        while s < ring.length:
+            p = ring.interpolate(s)
+            if outdoor.buffer(-0.2).contains(p):
+                if rnd.random() < 0.35:
+                    r = rnd.uniform(0.05, 0.1)
+                    ops.ellipse(p.x, p.y, r, r * 0.7, fill=rnd.choice([C["fels"], C["kiesel"]]), outline=alpha(C["erde_rand"], 230), width=0.02)
+                    ops.ellipse(p.x - r * 0.25, p.y + r * 0.2, r * 0.4, r * 0.25, fill=alpha((255, 255, 255, 255), 70))
+                elif rnd.random() < 0.5:
+                    for k in range(3):
+                        ops.line([(p.x + (k - 1) * 0.05, p.y), (p.x + (k - 1) * 0.1, p.y + 0.16)], fill=C["halm"], width=0.025)
+            s += rnd.uniform(0.35, 0.8)
+    return wob
+
+
+GRAIN = 0.0   # Papierkorn (Stilblatt 3 bis 5 %): bei JPEG q93 kostet 3 % Korn rund +80 % Dateigroesse (Messung
+              # 01.10. am Museum: 4,5 -> 9,0 MB), das sprengt das 15-%-Budget der Bodenkacheln; deshalb aus
+
+
+def hut_lanes(doors):
+    """Abnutzungsspuren in den Huetten: Trampelpfad von jeder Tuer 2 m in den Raum (bis zur Raummitte
+    verschmierte es die Teppiche). Dielen und Estrich laufen sich hell (blank), Linoleum im Labor dunkel."""
+    lanes = []
+    for key, side, a, b, kind, o in doors:
+        c = o.centroid
+        end = {"N": (c.x, c.y - 2.0), "S": (c.x, c.y + 2.0), "E": (c.x - 2.0, c.y), "W": (c.x + 2.0, c.y)}[side]
+        lanes.append(([(c.x, c.y), end], key != "labor"))
+    return lanes
+
+
 def render_floor(walk, water, shells, doors, rooms):
     ops = build_floor_ops(walk, water, shells, doors, rooms)
     img = ops.render(BX0, BY0, BX1, BY1, FLOOR_PPM, A.VOID)
+    img = A.apply_wear(img, walk, BX0, BY0, BX1, BY1, lanes=hut_lanes(doors))
     img = A.ambient_occlusion(img, walk, BX0, BY0, BX1, BY1)
+    if GRAIN:
+        img = HD.paper_grain(img, GRAIN, seed=4, scale=2)
     img = img.filter(ImageFilter.GaussianBlur(0.7))
     PREVIEW.mkdir(exist_ok=True)
     img.resize((img.width // 4, img.height // 4), Image.LANCZOS).save(PREVIEW / "floor_preview.jpg", quality=88)
@@ -1260,6 +1695,9 @@ def emit(walk, water, rooms, doors, tiles, props, consoles, blocks=()):
     for x, y, hor, ln in trees:
         a(f"        ({x:.3f}f, {y:.3f}f, {'true' if hor else 'false'}, {ln:.2f}f),")
     a("    };")
+    a("    /// <summary>Kanu (AtlasFerry): Use-Punkte an den Stegen, Fahrweg von A (Bootssteg) nach B (Wasserwerk).</summary>")
+    a(f"    public static readonly Vector2 CanoeA = {v2(W.CANOE_A)}, CanoeB = {v2(W.CANOE_B)};")
+    a("    public static readonly Vector2[] CanoePath = new Vector2[] { " + ", ".join(v2(p) for p in W.CANOE_PATH) + " };")
     a("    /// <summary>Beschriftungen der Minimap (Weltmeter): Mitte, halbe Breite/Hoehe. Die Sabotage- und")
     a("    /// Tuerknoepfe weichen ihnen aus (AtlasMuseumBuilder.AvoidLabels).</summary>")
     a("    public static readonly (float X, float Y, float HalfW, float HalfH)[] MapLabels =\n    {")

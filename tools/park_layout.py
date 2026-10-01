@@ -26,7 +26,7 @@
 # Die 13 Skeld-Tueren: senkrecht (O/W-Waende) 7, waagerecht (N/S) 6. Eine Oeffnung darf mit einem
 # fuenften Feld ihre Tuergruppe selbst angeben (Kuehlhaus-Westtor gehoert zur Storage-Gruppe).
 
-BOUNDS = (-23.0, -23.0, 26.0, 20.5)
+BOUNDS = (-23.0, -23.0, 26.0, 23.0)          # oben 2,5 m mehr: Riesenrad-Lichtung + Stichstrecke (01.10.)
 WALL = 0.5
 PATH_W = 2.8
 DOOR_W = 2.5
@@ -67,7 +67,7 @@ BUILDINGS = [
 # ------------------------------------------------------------------ offene Flaechen
 CORNER = 2.0
 CLEARINGS = [
-    ("ferriswheel", "Ferris Wheel", "Nav", (-6, 8.5, 5, 17.5)),
+    ("ferriswheel", "Ferris Wheel", "Nav", (-6, 8.5, 5, 19.9)),     # bis 19,9: das ganze Rad steht auf der Lichtung
     ("lighttower", "Show Control", "Shields", (8.5, 9, 15, 17.3)),
     ("coaster", "Coaster Station", "Reactor", (9, -3, 21, 6)),
     # Durchgang mit Mechanik: Kanal mit zwei Bruecken zwischen Bahnhof und Kuehlhaus
@@ -103,6 +103,8 @@ RAIL = [
     ("rect", 6.8, 7.3, 24.5, 8.5),       # Sued-Schenkel (am Bahnhof entlang)
     ("rect", 23.3, 8.5, 24.5, 19.0),     # Ost-Schenkel
     ("rect", 8.0, 17.8, 23.3, 19.0),     # Nord-Schenkel
+    ("rect", 6.8, 19.0, 8.0, 21.4),      # Westschenkel nach Norden verlaengert (Pendelwagen, User 01.10.)
+    ("rect", -5.8, 20.4, 6.8, 21.4),     # Stichstrecke noerdlich hinter dem Riesenrad zum Bahnsteig B
 ]
 CROSSINGS = [   # key, Luecke im Band (rect), Richtung der Schranke
     ("C1", ("rect", 6.8, 11.0, 8.0, 14.2), "vertical"),
@@ -132,6 +134,12 @@ FIXED = {
     "Electrical/SwitchConsole/0": (1.3, -17.2),
     "Comms/FixCommsConsole/0": (21.5, 15.6),
     "MedBay/MedScanner/0": (19.5, -18.0),
+    # Riesenrad (Lichtung seit 01.10. bis 19,9): Nordrand nur links und rechts des Rads, Bahnsteig B frei
+    "Nav/ChartCourseConsole/0": (3.6, 19.35),
+    "Nav/StabilizeSteeringConsole/0": (-2.9, 19.35),
+    "Nav/DivertPowerConsole/1": (4.45, 10.56),
+    "Nav/FixWiringConsole/3": (-2.18, 9.05),
+    "Nav/UploadDataConsole/0": (-5.44, 10.32),
 }
 
 # Vents: drei Ringe quer ueber die Karte, dazu zwei Querverbindungen ueber den dritten Nachbarn
@@ -190,3 +198,21 @@ CANAL_LINE = [(21.5, -8.0), (9.5, -8.0)]                                        
 GHOST_RIDE = [(-15.0, -4.2), (-15.0, -5.0), (-13.6, -5.0), (-13.6, -7.3), (-16.4, -7.3), (-16.4, -9.8),
               (-15.0, -9.8), (-15.0, -10.9)]                                     # Wagen durch den Zickzack
 GHOST_MONITOR = (-18.8, -12.6)          # Foto-Monitor an der Werkstatt-Nordwand, westlich des Tunnelausgangs
+
+# ------------------------------------------------------------------ Attraktionen zum Benutzen (AtlasParkFun, User 01.10.)
+# Hau den Lukas an der Westwand der Schiessbude: Standlinie (Fuss des Sockels), Kollider, Use-Punkt
+LUKAS = (-19.5, 11.1)
+LUKAS_RECT = ("rect", -19.95, 11.1, -19.05, 11.75)
+LUKAS_USE = (-18.5, 11.3)
+# Maskottchen-Kostuem: Garderobenstaender an der Werkstatt-Ostwand (die Nordwestecke gehoert dem Foto-Monitor)
+COSTUME_RACK = (-13.2, -14.4)
+COSTUME_USE = (-14.3, -14.4)
+# Riesenrad-Gondel: Einstieg suedlich des Rads (Abstand zur FixWiring-Konsole bei -2,2/9,1)
+WHEEL_HUB_LIFT = 4.2 * 0.55 + 1.3       # park_art "riesenrad": Nabe = Mitte + (0, 4,2 K + 1,3)
+WHEEL_R = 3.0
+WHEEL_BOARD = (0.4, 9.2)
+# Achterbahn-Pendelwagen: Bahnsteig (Use-Punkt), Halt auf der Strecke, Fahrweg A -> B
+SHUTTLE_A = ((17.2, 5.3), (17.2, 7.9))              # Coaster Station, Suedschenkel
+SHUTTLE_B = ((-4.6, 19.2), (-5.2, 20.9))            # Riesenrad-Nordwestecke, Stichstrecke
+SHUTTLE_PATH = [(17.2, 7.9), (7.4, 7.9), (7.4, 20.9), (-5.2, 20.9)]
+

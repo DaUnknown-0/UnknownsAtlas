@@ -146,37 +146,38 @@ public static class AtlasMuseumData
         ("hochregal", 0, 2170, 1672, 928, 499, 21.200f, -4.100f, -3.800f, 21.500f, 26.700f),
         ("lieferwagen", 0, 0, 2918, 512, 1178, 24.200f, 0.100f, 0.400f, 24.500f, 27.100f),
         ("dino", 0, 806, 1646, 1152, 525, -3.100f, 2.800f, 3.100f, -2.200f, 3.200f),
-        ("spieluhr", 0, 1284, 547, 185, 300, 1.020f, 1.620f, 1.920f, 1.320f, 1.880f),
-        ("nachtlicht", 0, 1471, 547, 185, 300, -10.980f, -4.180f, -3.880f, -10.680f, -10.120f),
+        ("spieluhr", 0, 1638, 547, 185, 300, 1.020f, 1.620f, 1.920f, 1.320f, 1.880f),
+        ("nachtlicht", 0, 1825, 547, 185, 300, -10.980f, -4.180f, -3.880f, -10.680f, -10.120f),
         ("vitrine", 0, 2510, 1269, 288, 365, 3.300f, 6.700f, 7.000f, 3.600f, 4.800f),
         ("vitrine", 0, 2800, 1269, 288, 365, -5.100f, -0.200f, 0.100f, -4.800f, -3.600f),
         ("vitrine", 0, 3090, 1269, 288, 365, 3.300f, -0.200f, 0.100f, 3.600f, 4.800f),
         ("tresorvitrine", 0, 2732, 2315, 416, 601, -1.300f, 14.200f, 14.500f, -1.000f, 1.000f),
-        ("tischvitrine", 0, 2184, 888, 352, 312, -4.100f, 12.100f, 12.400f, -3.800f, -2.200f),
-        ("tischvitrine", 0, 2538, 888, 352, 312, 1.900f, 12.100f, 12.400f, 2.200f, 3.800f),
+        ("tischvitrine", 0, 2458, 888, 352, 312, -4.100f, 12.100f, 12.400f, -3.800f, -2.200f),
+        ("tischvitrine", 0, 2812, 888, 352, 312, 1.900f, 12.100f, 12.400f, 2.200f, 3.800f),
         ("infotheke", 0, 1476, 2220, 800, 696, -2.500f, -9.900f, -9.600f, -2.200f, 2.200f),
         ("vitrine", 0, 3380, 1269, 288, 365, -4.900f, -4.500f, -4.200f, -4.600f, -3.400f),
         ("vitrine", 0, 3670, 1269, 288, 365, 3.100f, -4.500f, -4.200f, 3.400f, 4.600f),
-        ("bank", 0, 1658, 632, 384, 215, -7.300f, -5.500f, -5.200f, -7.000f, -5.200f),
-        ("bank", 0, 2044, 632, 384, 215, 4.900f, -5.500f, -5.200f, 5.200f, 7.000f),
+        ("bank", 0, 2012, 632, 384, 215, -7.300f, -5.500f, -5.200f, -7.000f, -5.200f),
+        ("bank", 0, 2398, 632, 384, 215, 4.900f, -5.500f, -5.200f, 5.200f, 7.000f),
         ("tresen_kasse", 0, 514, 856, 640, 344, -6.700f, -13.000f, -12.700f, -6.400f, -3.000f),
         ("admintisch", 0, 0, 849, 512, 351, -14.100f, -8.200f, -7.900f, -13.800f, -11.200f),
         ("klima", 0, 1058, 1209, 384, 425, -20.200f, -6.700f, -6.400f, -19.900f, -18.100f),
-        ("tischvitrine", 0, 2892, 888, 352, 312, -19.700f, 6.200f, 6.500f, -19.400f, -17.800f),
-        ("tischvitrine", 0, 3246, 888, 352, 312, -19.700f, 2.200f, 2.500f, -19.400f, -17.800f),
-        ("tischvitrine", 0, 3600, 888, 352, 312, -19.700f, -1.800f, -1.500f, -19.400f, -17.800f),
+        ("tischvitrine", 0, 3166, 888, 352, 312, -19.700f, 6.200f, 6.500f, -19.400f, -17.800f),
+        ("tischvitrine", 0, 3520, 888, 352, 312, -19.700f, 2.200f, 2.500f, -19.400f, -17.800f),
+        ("tischvitrine", 0, 0, 535, 352, 312, -19.700f, -1.800f, -1.500f, -19.400f, -17.800f),
         ("stele", 0, 2010, 1229, 256, 405, -17.400f, 0.100f, 0.400f, -17.100f, -16.100f),
-        ("bank", 0, 2430, 632, 384, 215, -12.100f, 3.450f, 3.750f, -11.800f, -10.000f),
-        ("vermittlungstisch", 0, 1446, 874, 736, 326, 9.700f, 11.200f, 11.500f, 10.000f, 14.000f),
+        ("bank", 0, 2784, 632, 384, 215, -12.100f, 3.450f, 3.750f, -11.800f, -10.000f),
+        ("vermittlungstisch", 0, 1720, 874, 736, 326, 9.700f, 11.200f, 11.500f, 10.000f, 14.000f),
         ("schwungrad", 0, 3150, 2315, 416, 601, 12.300f, 4.700f, 5.000f, 12.600f, 14.600f),
-        ("werktisch", 0, 0, 544, 816, 303, 8.700f, -0.700f, -0.400f, 9.000f, 13.500f),
-        ("werktisch", 0, 818, 544, 464, 303, 16.700f, -0.700f, -0.400f, 17.000f, 19.300f),
+        ("werktisch", 0, 354, 544, 816, 303, 8.700f, -0.700f, -0.400f, 9.000f, 13.500f),
+        ("werktisch", 0, 1172, 544, 464, 303, 16.700f, -0.700f, -0.400f, 17.000f, 19.300f),
         ("glaswand", 0, 3274, 3344, 128, 752, 12.200f, -6.300f, -6.000f, 12.500f, 12.700f),
         ("kiste", 0, 1156, 865, 288, 335, 25.200f, -5.700f, -5.400f, 25.500f, 26.700f),
         ("lampe", 0, 3568, 2342, 134, 574, 27.080f, 6.480f, 6.780f, 27.380f, 27.620f),
         ("dino_rex", 0, 708, 3160, 2176, 936, -6.300f, 2.780f, 3.080f, -2.200f, 3.200f),
-        ("dino_rex_jaw", 0, 3223, 767, 350, 80, -5.556f, 6.011f, 3.080f, -2.200f, 3.200f),
-        ("dino_rex_head", 0, 2816, 636, 405, 211, -5.744f, 6.236f, 3.080f, -2.200f, 3.200f),
+        ("dino_rex_jaw", 0, 3577, 767, 350, 80, -5.556f, 6.011f, 3.080f, -2.200f, 3.200f),
+        ("dino_rex_head", 0, 3170, 636, 405, 211, -5.744f, 6.236f, 3.080f, -2.200f, 3.200f),
+        ("staffelei", 0, 1446, 873, 272, 327, -8.850f, 6.700f, 7.000f, -8.550f, -7.450f),
     };
     public const int PropAtlasCount = 1;
 
@@ -281,6 +282,11 @@ public static class AtlasMuseumData
     /// <summary>Gelenke des T. rex in Weltmetern (AtlasRex): Halsgelenk = Drehpunkt des Kopfes,
     /// Kiefergelenk, Augenhoehle.</summary>
     public static readonly Vector2 RexNeck = new(-3.275f, 6.826f), RexJaw = new(-3.475f, 6.408f), RexEye = new(-4.100f, 7.225f);
+    /// <summary>Portraet auf der Staffelei in der Galerie (Stilblatt): Augenmitten in Weltkoordinaten der
+    /// Bildebene, Halbachsen des Augenweiss; Pupillen-Sprite assets/task_museum_pupil.png (PropPixelsPerMeter,
+    /// Pivot Mitte), Standlinie PortraitBaseY (Pupillen knapp davor einsortieren).</summary>
+    public static readonly Vector2[] PortraitEyes = { new(-8.077f, 7.708f), new(-7.923f, 7.708f) };
+    public const float PortraitEyeRx = 0.056f, PortraitEyeRy = 0.041f, PortraitBaseY = 7.000f;
     /// <summary>Gaenge als Hallway-Raeume (nur AllRooms, nicht FastRooms).</summary>
     public static readonly Vector2[][] Hallways =
     {

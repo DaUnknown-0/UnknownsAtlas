@@ -63,8 +63,9 @@ def build():
     outdoor = unary_union(outdoor).buffer(0.6, 16).buffer(-0.6, 16)
     water = unary_union([shape(s) for s in W.WATER])
     outdoor = outdoor.difference(water)
-    outdoor = unary_union([outdoor, shape(W.DOCK)])   # Steg ueber dem Wasser
-    water = water.difference(shape(W.DOCK))
+    docks = unary_union([shape(d) for d in W.DOCKS])
+    outdoor = unary_union([outdoor, docks])           # Stege ueber dem Wasser
+    water = water.difference(docks)
 
     shells, inners, openings, doors = [], [], [], []
     for key, _n, _s, inner, dl in W.BUILDINGS:

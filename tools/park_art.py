@@ -13,6 +13,7 @@
 import math
 import random
 
+import handdraw as HD
 import museum_art as A
 from museum_art import K, OUTLINE, Prop, alpha, hexc, lift, shade
 
@@ -216,22 +217,9 @@ def draw(kind, shape, idx, ppm):
         for sx in (-1, 1):                                              # A-Stuetzen
             c.line([(cx + sx * 1.6, cy - 0.2), hub], fill=OUTLINE, width=0.2)
             c.line([(cx + sx * 1.6, cy - 0.2), hub], fill=steel, width=0.12)
-        for k in range(16):
-            a = math.radians(k * 22.5)
-            c.line([hub, (hub[0] + R * math.cos(a), hub[1] + R * math.sin(a))], fill=alpha(steel, 220), width=0.04)
-        c.ellipse(hub[0], hub[1], R, R, outline=OUTLINE, width=0.14)
-        c.ellipse(hub[0], hub[1], R, R, outline=steel, width=0.08)
-        c.ellipse(hub[0], hub[1], R - 0.25, R - 0.25, outline=alpha(steel, 200), width=0.04)
-        bulbs(c, [(hub[0] + R * math.cos(math.radians(k * 15)), hub[1] + R * math.sin(math.radians(k * 15))) for k in range(24)], 0.05, 0.3)
-        for k in range(8):                                             # Gondeln unter den Aufhaengepunkten
-            a = math.radians(k * 45 + 22.5)
-            gx, gy = hub[0] + R * math.cos(a), hub[1] + R * math.sin(a)
-            col = (RED, hexc("#3aa0a0"), GOLD)[k % 3]
-            c.line([(gx, gy), (gx, gy - 0.25)], fill=OUTLINE, width=0.04)
-            c.poly([(gx - 0.4, gy - 0.25), (gx + 0.4, gy - 0.25), (gx + 0.32, gy - 0.35), (gx - 0.32, gy - 0.35)], fill=CREAM, outline=OUTLINE, width=0.03)
-            c.rect(gx - 0.34, gy - 0.8, gx + 0.34, gy - 0.35, fill=col, outline=OUTLINE, width=0.035)
-            c.rect(gx - 0.26, gy - 0.55, gx + 0.26, gy - 0.4, fill=shade(col, 0.6))
-        c.ellipse(hub[0], hub[1], 0.3, 0.3, fill=GOLD, outline=OUTLINE, width=0.04)
+        # Kranz, Speichen, Gluehbirnen und Gondeln drehen zur Laufzeit (AtlasParkFun, gen_park_fun.wheel):
+        # Mitte = hub, Radius R. Hier nur das Gestell und eine Lagerschale fuer die Nabe.
+        c.ellipse(hub[0], hub[1], 0.36, 0.36, fill=shade(steel, 0.8), outline=OUTLINE, width=0.04)
 
     elif kind == "theke":
         # Schiessbuden-Theke: gestreifte Front, Holzplatte, angekettete Luftgewehre
@@ -349,23 +337,63 @@ def draw(kind, shape, idx, ppm):
     return p.c.finish(), p.c.x0, p.c.y0, p.base_y
 
 
+POOL_RX, POOL_RY = 2.1, 1.25       # Lichtkegel der Laterne auf dem Boden (Halbachsen in m; voller Pass: groesser)
+POOL_STRENGTH = 0.62               # und kraeftiger (Stilblatt 0,5 war im Spiel zu schwach)
+
+
+def light_pool(c, cx, cy, rx, ry, color, strength=0.5, seed=1):
+    """Warmer Lichtkegel auf dem Boden (Stilblatt): weicher elliptischer Verlauf plus ein flacher,
+    leicht zittriger Kern (Cel-Shading: zwei Stufen statt Fotoverlauf)."""
+    from PIL import Image, ImageDraw
+    w, h = c.px(rx * 2), c.px(ry * 2)
+    if w < 4 or h < 4:
+        return
+    g = Image.new("L", (w, h), 0)
+    gd = ImageDraw.Draw(g)
+    steps = 20
+    for i in range(steps):
+        f = i / steps
+        ex, ey = (1 - f) * w / 2, (1 - f) * h / 2
+        gd.ellipse([w / 2 - ex, h / 2 - ey, w / 2 + ex, h / 2 + ey], fill=int(255 * strength * (f ** 1.5)))
+    layer = Image.new("RGBA", (w, h), color[:3] + (0,))
+    layer.putalpha(g)
+    x, y = c.p(cx - rx, cy + ry)
+    cx0, cy0 = max(0, int(x)), max(0, int(y))
+    cx1, cy1 = min(c.w, int(x) + w), min(c.h, int(y) + h)
+    if cx1 > cx0 and cy1 > cy0:
+        c.img.alpha_composite(layer.crop((cx0 - int(x), cy0 - int(y), cx1 - int(x), cy1 - int(y))), (cx0, cy0))
+    core = HD.wobble_ellipse(cx, cy - ry * 0.05, rx * 0.55, ry * 0.55, amp=0.02, seed=seed)
+    c.poly(core, fill=alpha(color, int(255 * strength * 0.35)))
+
+
 def lamppost(ppm, on):
-    """Laternenpfahl am Weg: Standlinie im Ursprung. Rueckgabe (Bild, Pivot-x, Pivot-y als Anteil)."""
-    p = Prop(-0.3, -0.12, 0.3, 0.12, 3.2, ppm)
+    """Laternenpfahl am Weg: Standlinie im Ursprung. Rueckgabe (Bild, Pivot-x, Pivot-y als Anteil).
+    Stilblatt: der warme Lichtkegel auf dem Boden liegt im EIN-Sprite (gleiche Leinwand wie AUS, damit
+    der Pivot fuer beide stimmt). So geht er mit der Laterne bei Park Blackout aus, ohne dass C# eine
+    weitere Ebene braucht; der prozedurale Lichtfleck aus AtlasParkWorld bleibt zusaetzlich darunter."""
+    p = Prop(-POOL_RX, -POOL_RY, POOL_RX, POOL_RY, 3.2, ppm)
     c = p.c
-    c.soft_shadow([(-0.08, -0.1), (0.14, -0.1), (0.14, 0.06), (-0.08, 0.06)], 90, 0.05)
     iron = hexc("#2c2830")
-    c.ellipse(0, 0, 0.12, 0.06, fill=iron, outline=OUTLINE, width=0.02)
+    if on:
+        light_pool(c, 0.12, -0.05, POOL_RX, POOL_RY, WARM, POOL_STRENGTH, seed=3)
+    c.soft_shadow([(-0.08, -0.1), (0.14, -0.1), (0.14, 0.06), (-0.08, 0.06)], 90, 0.05)
+    c.poly(HD.wobble_ellipse(0, 0, 0.13, 0.065, amp=0.004, seed=4), fill=iron, outline=OUTLINE, width=0.02)
     top = 2.7 * K
-    c.line([(0, 0), (0, top)], fill=OUTLINE, width=0.08)
-    c.line([(0, 0), (0, top)], fill=iron, width=0.045)
+    mast = HD.wobble([(0, 0), (0, top)], amp=0.004, seed=5, step=0.1)
+    c.line(mast, fill=OUTLINE, width=0.085)
+    c.line(mast, fill=iron, width=0.05)
+    c.line([(-0.012, 0.1), (-0.012, top - 0.1)], fill=shade(iron, 1.9), width=0.012)                       # Lichtkante
+    c.ellipse(0, 0.32, 0.05, 0.03, fill=iron, outline=OUTLINE, width=0.02)                                # Zierring
     c.line([(0, top), (0.2, top + 0.08)], fill=OUTLINE, width=0.05)
+    c.line([(0, top - 0.12), (0.12, top + 0.02)], fill=OUTLINE, width=0.03)                                # Strebe
     head = (0.2, top - 0.02)
     lit = BULB if on else hexc("#4a4438")
     if on:
         c.glow(head[0], head[1], 0.5, WARM, 0.7)
     c.poly([(head[0] - 0.09, head[1] + 0.05), (head[0] + 0.09, head[1] + 0.05), (head[0] + 0.07, head[1] - 0.14), (head[0] - 0.07, head[1] - 0.14)],
            fill=lit, outline=OUTLINE, width=0.02)
+    if on:
+        c.ellipse(head[0], head[1] - 0.04, 0.035, 0.045, fill=hexc("#fff6dc"))
     c.poly([(head[0] - 0.12, head[1] + 0.05), (head[0] + 0.12, head[1] + 0.05), (head[0], head[1] + 0.14)], fill=RED, outline=OUTLINE, width=0.02)
     img = c.finish()
     return img, (0 - c.x0) / (c.x1 - c.x0), (0 - c.y0) / (c.y1 - c.y0)

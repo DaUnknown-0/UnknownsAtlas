@@ -23,6 +23,7 @@ from shapely.geometry import Polygon, Point, LineString, box as sbox
 from shapely.ops import unary_union
 from shapely.affinity import translate
 
+import handdraw as HD
 import museum_layout as L
 
 K = 0.55            # Hoehe -> Bild-oben (schraege Aufsicht); 0,72 liess Tresen ganze Spieler schlucken
@@ -405,6 +406,403 @@ def tiles(ops, region, x0, y0, x1, y1, tw, th, colors, fuge, offset_rows=False, 
         row += 1
 
 
+def herringbone(ops, region, cx, cy, pw, n, cols, fuge, seed=1, angle=45.0):
+    """Fischgraet-Parkett (Stilblatt): Staebe pw x n*pw in zwei Richtungen, lueckenlos (Zickzack-Reihen,
+    Reihenversatz (1, 1) im achsparallelen Raster, dann um `angle` gedreht), auf region zugeschnitten.
+    Jeder Stab eigener Ton, leichtes Zittern im Umriss, Lichtkante an der Nord-/Westseite."""
+    rnd = random.Random(seed)
+    a = math.radians(angle)
+    ca, sa = math.cos(a), math.sin(a)
+
+    def T(u, v):
+        x, y = u * pw, v * pw
+        return (cx + x * ca - y * sa, cy + x * sa + y * ca)
+
+    x0, y0, x1, y1 = region.bounds
+    reach = int(math.hypot(x1 - x0, y1 - y0) / pw / (n + 1)) + 3
+    planks = []
+    for k in range(-reach, reach + 1):
+        for m in range(-reach * (n + 1), reach * (n + 1) + 1):
+            ox, oy = m, m
+            A = [(k * (n + 1) + ox, k * (1 - n) + oy), (k * (n + 1) + n + ox, k * (1 - n) + oy),
+                 (k * (n + 1) + n + ox, k * (1 - n) + 1 + oy), (k * (n + 1) + ox, k * (1 - n) + 1 + oy)]
+            B = [(k * (n + 1) + n + ox, k * (1 - n) + 1 - n + oy), ((k + 1) * (n + 1) + ox, k * (1 - n) + 1 - n + oy),
+                 ((k + 1) * (n + 1) + ox, k * (1 - n) + 1 + oy), (k * (n + 1) + n + ox, k * (1 - n) + 1 + oy)]
+            planks.append(A)
+            planks.append(B)
+    bbox = sbox(x0 - 0.5, y0 - 0.5, x1 + 0.5, y1 + 0.5)
+    i = 0
+    for pl in planks:
+        wpts = [T(u, v) for u, v in pl]
+        g = Polygon(wpts)
+        if not g.intersects(bbox):
+            continue
+        g = g.intersection(region)
+        if g.is_empty:
+            continue
+        i += 1
+        col = rnd.choice(cols)
+        for part in ([g] if g.geom_type == "Polygon" else [q for q in getattr(g, "geoms", []) if q.geom_type == "Polygon"]):
+            pts = HD.wobble(list(part.exterior.coords)[:-1], amp=0.004, seed=seed * 100 + i, step=0.08, closed=True)
+            ops.poly(pts, fill=col)
+            ops.line(pts + [pts[0]], fill=fuge, width=0.018)
+        # Lichtkante entlang der nordwestlichen Laengskante, Schattenkante gegenueber
+        full = Polygon(wpts)
+        for e in range(4):
+            a_, b_ = wpts[e], wpts[(e + 1) % 4]
+            if math.hypot(b_[0] - a_[0], b_[1] - a_[1]) < n * pw * 0.9:
+                continue
+            strip = Polygon(HD.edge_strip(wpts, e, pw * 0.14)).intersection(region)
+            mx, my = (a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2
+            north = (my - full.centroid.y) - (mx - full.centroid.x) > 0
+            if not strip.is_empty and strip.geom_type == "Polygon":
+                ops.poly(list(strip.exterior.coords)[:-1], fill=(255, 255, 255, 30) if north else (0, 0, 0, 34))
+
+
+def painting(c, x0, y0, x1, y1, motif, rnd, frame=True):
+    """Kleines Gemaelde im Among-Us-Look: Goldrahmen mit Zittern, erkennbares Motiv aus wenigen flachen
+    Formen. c = OpList (Boden) oder Canvas (Objekt), beide haben rect/ellipse/poly/line."""
+    if frame:
+        fr = HD.wobble_rect(x0, y0, x1, y1, amp=0.004, seed=int(x0 * 100 + y0 * 7), step=0.04)
+        c.poly(fr, fill=hexc("#c9a24c"), outline=OUTLINE, width=0.018)
+        c.poly(HD.wobble_rect(x0 + 0.03, y0 + 0.03, x1 - 0.03, y1 - 0.03, amp=0.003, seed=int(x0 * 50), step=0.04), outline=hexc("#8a6a28"), width=0.01)
+        x0, y0, x1, y1 = x0 + 0.045, y0 + 0.045, x1 - 0.045, y1 - 0.045
+    w, h = x1 - x0, y1 - y0
+    mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+    if motif == "berg":
+        c.rect(x0, y0, x1, y1, fill=hexc("#5f8fc8"))
+        c.rect(x0, y0 + h * 0.55, x1, y1, fill=hexc("#8fb8e0"))
+        c.ellipse(x0 + w * 0.78, y0 + h * 0.78, w * 0.08, w * 0.08, fill=hexc("#fff3c4"))
+        c.poly([(x0, y0 + h * 0.25), (mx - w * 0.05, y0 + h * 0.85), (x1, y0 + h * 0.3)], fill=hexc("#6a6f80"), outline=OUTLINE, width=0.01)
+        c.poly([(mx - w * 0.2, y0 + h * 0.62), (mx - w * 0.05, y0 + h * 0.85), (mx + w * 0.12, y0 + h * 0.65), (mx + w * 0.02, y0 + h * 0.68), (mx - w * 0.08, y0 + h * 0.6)], fill=hexc("#f4f4f8"))
+        c.rect(x0, y0, x1, y0 + h * 0.25, fill=hexc("#4f7f4a"))
+    elif motif == "schiff":
+        c.rect(x0, y0, x1, y1, fill=hexc("#d9b26a"))
+        c.rect(x0, y0, x1, y0 + h * 0.45, fill=hexc("#2f5f8a"))
+        c.line([(x0 + w * 0.1, y0 + h * 0.3), (x0 + w * 0.4, y0 + h * 0.32)], fill=hexc("#5f9fd0"), width=0.012)
+        c.poly([(mx - w * 0.3, y0 + h * 0.45), (mx + w * 0.32, y0 + h * 0.45), (mx + w * 0.22, y0 + h * 0.3), (mx - w * 0.22, y0 + h * 0.3)], fill=hexc("#5a3a22"), outline=OUTLINE, width=0.01)
+        c.line([(mx, y0 + h * 0.45), (mx, y0 + h * 0.92)], fill=OUTLINE, width=0.012)
+        c.poly([(mx + 0.01, y0 + h * 0.5), (mx + w * 0.3, y0 + h * 0.55), (mx + 0.01, y0 + h * 0.88)], fill=hexc("#f4f0e4"), outline=OUTLINE, width=0.01)
+        c.ellipse(x0 + w * 0.2, y0 + h * 0.8, w * 0.07, w * 0.07, fill=hexc("#fff3c4"))
+    elif motif == "sonnenblume":
+        c.rect(x0, y0, x1, y1, fill=hexc("#3f6fa0"))
+        c.line([(mx, y0 + h * 0.1), (mx, y0 + h * 0.55)], fill=hexc("#4f8a3a"), width=0.02)
+        c.ellipse(mx + w * 0.1, y0 + h * 0.28, w * 0.1, h * 0.06, fill=hexc("#4f8a3a"))
+        for k in range(10):
+            a = k * math.tau / 10
+            c.ellipse(mx + math.cos(a) * w * 0.22, y0 + h * 0.62 + math.sin(a) * h * 0.2, w * 0.1, h * 0.07, fill=hexc("#f2c23a"), outline=OUTLINE, width=0.008)
+        c.ellipse(mx, y0 + h * 0.62, w * 0.14, h * 0.13, fill=hexc("#6a4a22"), outline=OUTLINE, width=0.01)
+    elif motif == "crew":
+        col = rnd.choice([hexc("#c51111"), hexc("#132ed1"), hexc("#117f2d"), hexc("#ed54ba"), hexc("#f07613")])
+        c.rect(x0, y0, x1, y1, fill=hexc("#2a2a36"))
+        c.ellipse(mx, y0 + h * 0.3, w * 0.28, h * 0.32, fill=col, outline=OUTLINE, width=0.012)
+        c.rect(mx - w * 0.28, y0, mx + w * 0.28, y0 + h * 0.3, fill=col)
+        c.rect(mx - w * 0.4, y0 + h * 0.15, mx - w * 0.26, y0 + h * 0.5, fill=col, outline=OUTLINE, width=0.01)
+        c.ellipse(mx + w * 0.1, y0 + h * 0.5, w * 0.18, h * 0.1, fill=hexc("#9ad6e8"), outline=OUTLINE, width=0.01)
+    elif motif == "abstrakt":
+        c.rect(x0, y0, x1, y1, fill=hexc("#f0ece0"))
+        c.rect(x0, y0 + h * 0.5, mx - w * 0.1, y1, fill=hexc("#d33a2a"))
+        c.rect(mx + w * 0.1, y0, x1, y0 + h * 0.45, fill=hexc("#2f4fa0"))
+        c.rect(mx - w * 0.1, y0, mx + w * 0.1, y0 + h * 0.3, fill=hexc("#f2c23a"))
+        c.line([(x0, y0 + h * 0.5), (x1, y0 + h * 0.5)], fill=OUTLINE, width=0.012)
+        c.line([(mx - w * 0.1, y0), (mx - w * 0.1, y1)], fill=OUTLINE, width=0.012)
+        c.line([(mx + w * 0.1, y0), (mx + w * 0.1, y0 + h * 0.5)], fill=OUTLINE, width=0.012)
+    elif motif == "obst":
+        c.rect(x0, y0, x1, y1, fill=hexc("#6a4a3a"))
+        c.rect(x0, y0, x1, y0 + h * 0.35, fill=hexc("#a07a50"))
+        c.poly([(mx - w * 0.32, y0 + h * 0.45), (mx + w * 0.32, y0 + h * 0.45), (mx + w * 0.22, y0 + h * 0.25), (mx - w * 0.22, y0 + h * 0.25)], fill=hexc("#d9d2c0"), outline=OUTLINE, width=0.01)
+        for dx, col in ((-0.16, "#d33a2a"), (0.0, "#f2c23a"), (0.16, "#5fa040")):
+            c.ellipse(mx + w * dx, y0 + h * 0.52, w * 0.1, h * 0.1, fill=hexc(col), outline=OUTLINE, width=0.01)
+    elif motif == "nacht":
+        c.rect(x0, y0, x1, y1, fill=hexc("#1c2448"))
+        for _ in range(9):
+            c.ellipse(rnd.uniform(x0 + 0.02, x1 - 0.02), rnd.uniform(y0 + 0.02, y1 - 0.02), 0.006, 0.006, fill=hexc("#e8f0ff"))
+        c.ellipse(x0 + w * 0.7, y0 + h * 0.68, w * 0.12, w * 0.12, fill=hexc("#fff3c4"))
+        c.ellipse(x0 + w * 0.76, y0 + h * 0.72, w * 0.1, w * 0.1, fill=hexc("#1c2448"))
+
+
+    # Motive des vollen Passes (2026-10-01): Papyrus (Aegypten), Blaupause (Technik), Sternbild (Planetarium),
+    # Saurier-Plakat (Foyer/Rotunde), Lehrtafel (Mineralien), Plakat (Telefon)
+    if motif == "papyrus":
+        c.rect(x0, y0, x1, y1, fill=hexc("#d8c79a"))
+        c.rect(x0, y0, x1, y0 + h * 0.08, fill=hexc("#b8a070"))
+        c.rect(x0, y1 - h * 0.08, x1, y1, fill=hexc("#b8a070"))
+        for i in range(4):
+            cx_ = x0 + w * (0.18 + i * 0.21)
+            k = (i + int(x0 * 3)) % 3
+            if k == 0:
+                c.ellipse(cx_, my + h * 0.1, w * 0.05, h * 0.09, fill=hexc("#2f4f8a"), outline=OUTLINE, width=0.008)
+                c.rect(cx_ - w * 0.02, y0 + h * 0.2, cx_ + w * 0.02, my, fill=hexc("#3f2e1c"))
+            elif k == 1:
+                c.poly([(cx_ - w * 0.06, y0 + h * 0.22), (cx_ + w * 0.06, y0 + h * 0.22), (cx_, y0 + h * 0.72)], fill=hexc("#b8843a"), outline=OUTLINE, width=0.008)
+            else:
+                c.line([(cx_, y0 + h * 0.2), (cx_, y0 + h * 0.75)], fill=hexc("#3f2e1c"), width=0.012)
+                c.ellipse(cx_, y0 + h * 0.6, w * 0.04, h * 0.05, fill=hexc("#d33a2a"))
+        c.line([(x0 + w * 0.08, y0 + h * 0.15), (x1 - w * 0.08, y0 + h * 0.15)], fill=hexc("#3f2e1c"), width=0.008)
+    elif motif == "blaupause":
+        c.rect(x0, y0, x1, y1, fill=hexc("#2f5f8a"))
+        for i in range(1, 5):
+            c.line([(x0 + w * i / 5, y0), (x0 + w * i / 5, y1)], fill=alpha(hexc("#8fb8e0"), 70), width=0.006)
+            c.line([(x0, y0 + h * i / 5), (x1, y0 + h * i / 5)], fill=alpha(hexc("#8fb8e0"), 70), width=0.006)
+        c.ellipse(mx + w * 0.12, my, w * 0.22, h * 0.3, outline=hexc("#dff3ff"), width=0.012)
+        c.ellipse(mx + w * 0.12, my, w * 0.05, h * 0.07, outline=hexc("#dff3ff"), width=0.01)
+        c.rect(x0 + w * 0.1, my - h * 0.12, mx - w * 0.1, my + h * 0.12, outline=hexc("#dff3ff"), width=0.012)
+        c.line([(mx - w * 0.1, my), (mx - w * 0.1 + w * 0.08, my)], fill=hexc("#dff3ff"), width=0.012)
+        c.line([(x0 + w * 0.1, y0 + h * 0.15), (x1 - w * 0.1, y0 + h * 0.15)], fill=hexc("#dff3ff"), width=0.008)
+    elif motif == "sternbild":
+        c.rect(x0, y0, x1, y1, fill=hexc("#1c2448"))
+        pts = [(x0 + w * fx, y0 + h * fy) for fx, fy in ((0.15, 0.3), (0.3, 0.5), (0.45, 0.45), (0.6, 0.65), (0.8, 0.55), (0.72, 0.8), (0.9, 0.75))]
+        c.line(pts, fill=alpha(hexc("#9fb8e8"), 200), width=0.008)
+        for p in pts:
+            c.ellipse(p[0], p[1], 0.012, 0.012, fill=hexc("#f4f8ff"))
+        for _ in range(7):
+            c.ellipse(rnd.uniform(x0 + 0.02, x1 - 0.02), rnd.uniform(y0 + 0.02, y1 - 0.02), 0.005, 0.005, fill=hexc("#cfe0ff"))
+    elif motif == "saurier":
+        c.rect(x0, y0, x1, y1, fill=hexc("#efe4c8"))
+        c.rect(x0, y1 - h * 0.2, x1, y1, fill=hexc("#8e2f2f"))
+        bone = hexc("#3b3630")
+        c.line([(x0 + w * 0.12, y0 + h * 0.35), (x0 + w * 0.4, y0 + h * 0.5), (x0 + w * 0.65, y0 + h * 0.52), (x0 + w * 0.82, y0 + h * 0.66)], fill=bone, width=0.014)
+        for i in range(5):
+            tx = x0 + w * (0.3 + i * 0.08)
+            c.line([(tx, y0 + h * 0.5), (tx + w * 0.02, y0 + h * 0.3)], fill=bone, width=0.008)
+        c.ellipse(x0 + w * 0.84, y0 + h * 0.68, w * 0.09, h * 0.08, fill=bone)
+        c.line([(x0 + w * 0.6, y0 + h * 0.5), (x0 + w * 0.56, y0 + h * 0.25)], fill=bone, width=0.012)
+        c.line([(x0 + w * 0.4, y0 + h * 0.48), (x0 + w * 0.38, y0 + h * 0.25)], fill=bone, width=0.012)
+    elif motif == "lehrtafel":
+        c.rect(x0, y0, x1, y1, fill=hexc("#f0ece0"))
+        c.rect(x0, y1 - h * 0.18, x1, y1, fill=hexc("#1f3d42"))
+        for i, col in enumerate(("#9d6cc7", "#e0b04a", "#3f9e6e")):
+            cx_ = x0 + w * (0.22 + i * 0.28)
+            c.poly([(cx_ - w * 0.08, y0 + h * 0.25), (cx_ + w * 0.08, y0 + h * 0.25), (cx_ + w * 0.03, y0 + h * 0.62), (cx_ - w * 0.03, y0 + h * 0.62)], fill=hexc(col), outline=OUTLINE, width=0.008)
+            c.line([(cx_ - w * 0.08, y0 + h * 0.16), (cx_ + w * 0.08, y0 + h * 0.16)], fill=hexc("#3b3630"), width=0.006)
+    elif motif == "plakat":
+        col = rnd.choice([hexc("#c8702e"), hexc("#2f4fa0"), hexc("#3f6b45")])
+        c.rect(x0, y0, x1, y1, fill=hexc("#efd9a8"))
+        c.ellipse(mx, my + h * 0.08, w * 0.3, h * 0.28, fill=col, outline=OUTLINE, width=0.01)
+        c.ellipse(mx, my + h * 0.08, w * 0.16, h * 0.15, fill=hexc("#efd9a8"))
+        c.ellipse(mx, my + h * 0.08, w * 0.06, h * 0.06, fill=col)
+        c.rect(x0 + w * 0.12, y0 + h * 0.1, x1 - w * 0.12, y0 + h * 0.17, fill=hexc("#3b3630"))
+        c.rect(x0 + w * 0.2, y0 + h * 0.2, x1 - w * 0.2, y0 + h * 0.24, fill=hexc("#3b3630"))
+
+
+MOTIFS = ["berg", "schiff", "sonnenblume", "crew", "abstrakt", "obst", "nacht"]
+
+
+# ------------------------------------------------------ Stilblatt-Helfer (voller Pass 2026-10-01)
+
+def wobbly_tiles(ops, region, x0, y0, x1, y1, tw, th, cols, fuge, seed=1, bond=0.0, fuge_w=0.025, jitter=0.025,
+                 checker=None, tone=0.06, chips=0.12, cracks=0.05, gaps=0.0, bevel=True, amp=0.004, crack_col=None,
+                 vertical=False, knots=0.0, grain=0.0):
+    """Plattenraster mit Hand-Unruhe (Stilblatt): Rasterlinien leicht verschoben (Nachbarn teilen sich die
+    Fuge, nichts ueberlappt), jede Platte mit zittrigem Umriss, eigenem Ton, Lichtkante Nord/West und
+    Schattenkante Sued/Ost, vereinzelt abgeschlagene Ecken, Risse und fehlende Platten (Fugenmoertel).
+    checker = (A, B) wechselt im Schachbrett statt zufaellig; bond = Versatz je zweiter Reihe (0..1) oder
+    "random" (Dielen: jede Reihe eigener Versatz); vertical = Reihen laufen senkrecht (Dielen quer);
+    knots/grain = Anteil Platten mit Astknoten bzw. Maserungslinie (Holz)."""
+    rnd = random.Random(seed)
+    ops.geom(region, fill=fuge)
+    if vertical:
+        # im gedrehten Rahmen rechnen (u = y, v = x) und beim Zeichnen zuruecktauschen
+        x0, y0, x1, y1 = y0, x0, y1, x1
+    T = (lambda p: (p[1], p[0])) if vertical else (lambda p: p)
+    rows = int(math.ceil((y1 - y0) / th)) + 1
+    ncol = int(math.ceil((x1 - x0) / tw)) + 3
+    waves = [HD.Noise1(seed * 11 + r, period=max(1.0, x1 - x0), waves=3, lo=1, hi=3) for r in range(rows + 1)]
+    ys = [y0 + r * th + rnd.uniform(-jitter, jitter) * th for r in range(rows + 1)]
+    wa = th * jitter * 0.6
+    crack_col = crack_col or alpha(shade(fuge, 0.8), 200)
+    for r in range(rows):
+        off = rnd.uniform(0, tw) if bond == "random" else (bond * tw * (r % 2)) % tw
+        xs = [x0 - tw + c * tw - off + rnd.uniform(-jitter, jitter) * tw for c in range(ncol + 1)]
+        for c in range(ncol):
+            xa, xb = xs[c], xs[c + 1]
+            if xb < x0 - 0.01 or xa > x1 + 0.01:
+                continue
+            quad = [(xa, ys[r] + waves[r](xa - x0) * wa), (xb, ys[r] + waves[r](xb - x0) * wa),
+                    (xb, ys[r + 1] + waves[r + 1](xb - x0) * wa), (xa, ys[r + 1] + waves[r + 1](xa - x0) * wa)]
+            j = fuge_w / 2
+            quad = [(quad[0][0] + j, quad[0][1] + j), (quad[1][0] - j, quad[1][1] + j),
+                    (quad[2][0] - j, quad[2][1] - j), (quad[3][0] + j, quad[3][1] - j)]
+            if gaps and rnd.random() < gaps:
+                continue
+            pts = HD.chip(quad, rnd, 0.2) if (chips and rnd.random() < chips) else quad
+            wob = HD.wobble(pts, amp=amp, seed=seed * 1000 + r * 97 + c, step=0.06, closed=True)
+            quad_w = [T(p) for p in quad]
+            g = Polygon([T(p) for p in wob]).buffer(0).intersection(region)
+            if g.is_empty:
+                continue
+            col = checker[(r + c) % 2] if checker else rnd.choice(cols)
+            col = shade(col, 1 + rnd.uniform(-tone, tone))
+            ops.geom(g, fill=col)
+            if bevel:
+                lw = min(tw, th) * 0.07
+                for side, fcol in ((2, (255, 255, 255, 30)), (3, (255, 255, 255, 20)), (0, (0, 0, 0, 36)), (1, (0, 0, 0, 24))):
+                    strip = Polygon(HD.edge_strip(quad_w, side, lw)).intersection(g)
+                    if not strip.is_empty:
+                        ops.geom(strip, fill=fcol)
+            if cracks and rnd.random() < cracks:
+                ln = LineString([T(p) for p in HD.crack(quad, rnd)]).intersection(g)
+                if ln.geom_type == "LineString" and ln.length > 0.05:
+                    ops.line(list(ln.coords), fill=crack_col, width=0.012)
+            if knots and rnd.random() < knots:
+                kx, ky = rnd.uniform(xa + 0.15, xb - 0.15), rnd.uniform(ys[r] + 0.06, ys[r + 1] - 0.06)
+                kp = T((kx, ky))
+                if g.contains(Point(kp)):
+                    rk = min(0.05, th * 0.18)
+                    ops.ellipse(kp[0], kp[1], rk if not vertical else rk * 0.7, rk * 0.7 if not vertical else rk, fill=alpha(shade(col, 0.55), 200))
+                    ops.ellipse(kp[0], kp[1], rk * 0.5 if not vertical else rk * 0.35, rk * 0.35 if not vertical else rk * 0.5, fill=alpha(shade(col, 1.15), 200))
+            if grain and rnd.random() < grain:
+                gy = rnd.uniform(ys[r] + 0.05, ys[r + 1] - 0.05)
+                gx0, gx1 = rnd.uniform(xa + 0.1, xa + (xb - xa) * 0.5), rnd.uniform(xa + (xb - xa) * 0.55, xb - 0.1)
+                ln = LineString([T((gx0, gy)), T((gx1, gy + rnd.uniform(-0.02, 0.02)))]).intersection(g)
+                if ln.geom_type == "LineString" and ln.length > 0.05:
+                    ops.line(list(ln.coords), fill=alpha(shade(col, 0.72), 90), width=0.014)
+
+
+def oil_stain(ops, cx, cy, rx, ry, seed=1, a=120):
+    """Oelfleck (Stilblatt-Flaechenlogik): dunkler zittriger Fleck, dunklerer Kern, ein violetter Schimmerbogen."""
+    ops.poly(HD.wobble_ellipse(cx, cy, rx, ry, amp=rx * 0.12, seed=seed), fill=alpha((18, 16, 22, 255), a))
+    ops.poly(HD.wobble_ellipse(cx + rx * 0.1, cy - ry * 0.1, rx * 0.55, ry * 0.5, amp=rx * 0.08, seed=seed + 7),
+             fill=alpha((10, 10, 14, 255), int(a * 0.7)))
+    ops.line(HD.wobble([(cx - rx * 0.6, cy + ry * 0.35), (cx - rx * 0.2, cy + ry * 0.62), (cx + rx * 0.3, cy + ry * 0.5)],
+                       amp=0.01, seed=seed + 3, step=0.05), fill=alpha(hexc("#8a7ab8"), 80), width=0.025)
+
+
+def cable_duct(ops, pts, w=0.16, col=None, step=0.5):
+    """Kabelkanal auf dem Boden: Blechprofil mit Umriss, Deckelfuge, Lichtkante und Schrauben alle `step` m."""
+    col = col or lift("#5a6068", 1.25)
+    ops.line(pts, fill=OUTLINE, width=w + 0.05)
+    ops.line(pts, fill=col, width=w)
+    ops.line(pts, fill=alpha(shade(col, 0.72), 220), width=0.012)
+    ls = LineString(pts)
+    s = 0.25
+    while s < ls.length:
+        p = ls.interpolate(s)
+        ops.ellipse(p.x, p.y, 0.028, 0.028, fill=hexc("#2e3338"))
+        ops.ellipse(p.x - 0.008, p.y + 0.008, 0.008, 0.008, fill=(255, 255, 255, 150))
+        s += step
+
+
+def dashed(ops, pts, col, width=0.06, dash=0.4, gap=0.3):
+    """Gestrichelte Bodenmarkierung entlang einer Polylinie."""
+    from shapely.ops import substring
+    ls = LineString(pts)
+    s = 0.0
+    while s < ls.length:
+        seg = substring(ls, s, min(ls.length, s + dash))
+        if seg.geom_type == "LineString" and seg.length > 0.02:
+            ops.line(list(seg.coords), fill=col, width=width)
+        s += dash + gap
+
+
+def plaque(ops, x0, y0, x1, y1, title="", brass=True, lines=2, size=0.075):
+    """Beschriftungstafel (flach, auf Boden oder Stirnseite): Messing- oder Cremeplatte mit Umriss, Titel in
+    Kapitaelchen (ASCII, HUD-Font) und angedeuteten Textzeilen."""
+    fill_c = lift("#b08a3c", 1.25) if brass else hexc("#efe4c8")
+    ink_c = hexc("#2a2420") if brass else hexc("#3b3630")
+    ops.poly(HD.wobble_rect(x0, y0, x1, y1, amp=0.003, seed=int(x0 * 31 + y0 * 7), step=0.05), fill=fill_c, outline=OUTLINE, width=0.018)
+    ops.line([(x0 + 0.02, y1 - 0.015), (x1 - 0.02, y1 - 0.015)], fill=alpha((255, 255, 255, 255), 90), width=0.01)
+    mx, h = (x0 + x1) / 2, y1 - y0
+    if title:
+        ops.text(mx, y1 - h * 0.3, title, size, ink_c)
+    for i in range(lines):
+        ly = y0 + h * (0.42 - i * 0.16)
+        if ly < y0 + 0.02:
+            break
+        ops.line([(x0 + 0.05 + (i % 2) * 0.03, ly), (x1 - 0.05 - (i % 2) * 0.05, ly)], fill=alpha(ink_c, 150), width=0.012)
+
+
+def tool_wrench(ops, x, y, ang, L=0.32, col=None):
+    """Schraubenschluessel flach auf dem Boden: Stiel, Maulkopf, Ringende."""
+    col = col or hexc("#b8bcc0")
+    ca, sa = math.cos(ang), math.sin(ang)
+    p0 = (x - ca * L / 2, y - sa * L / 2)
+    p1 = (x + ca * L / 2, y + sa * L / 2)
+    r = L * 0.16
+    ops.line([p0, p1], fill=OUTLINE, width=0.075)
+    ops.line([p0, p1], fill=col, width=0.04)
+    ops.ellipse(p1[0], p1[1], r, r, fill=col, outline=OUTLINE, width=0.015)
+    kx, ky = p1[0] + ca * r * 0.75, p1[1] + sa * r * 0.75
+    ops.poly([(kx - sa * r * 0.4, ky + ca * r * 0.4), (kx + sa * r * 0.4, ky - ca * r * 0.4), (p1[0] + ca * r * 0.1, p1[1] + sa * r * 0.1)],
+             fill=shade(col, 0.45))
+    ops.ellipse(p0[0], p0[1], r * 0.9, r * 0.9, fill=col, outline=OUTLINE, width=0.015)
+    ops.ellipse(p0[0], p0[1], r * 0.4, r * 0.4, fill=shade(col, 0.45), outline=OUTLINE, width=0.01)
+    ops.line([(p0[0] + ca * r, p0[1] + sa * r + 0.012), (p1[0] - ca * r, p1[1] - sa * r + 0.012)], fill=alpha((255, 255, 255, 255), 110), width=0.012)
+
+
+def tool_rag(ops, x, y, seed=1, col=None):
+    """Putzlappen: zittriger Fleck mit zwei Faltenlinien."""
+    col = col or hexc("#c8503a")
+    ops.poly(HD.wobble_ellipse(x, y, 0.2, 0.13, amp=0.03, seed=seed), fill=col, outline=OUTLINE, width=0.02)
+    ops.line(HD.wobble([(x - 0.12, y + 0.02), (x + 0.1, y - 0.03)], amp=0.01, seed=seed + 1, step=0.04), fill=shade(col, 0.7), width=0.014)
+    ops.line(HD.wobble([(x - 0.05, y + 0.08), (x + 0.04, y - 0.08)], amp=0.01, seed=seed + 2, step=0.04), fill=shade(col, 0.7), width=0.012)
+    ops.ellipse(x - 0.06, y + 0.04, 0.05, 0.03, fill=alpha((255, 255, 255, 255), 50))
+
+
+def tool_box(ops, x0, y0, w=0.46, d=0.22, h=0.2, col=None):
+    """Werkzeugkiste mit Hoehe (K): Vorderseite, Deckel, Griffbuegel, Verschluss."""
+    col = col or lift("#8a2a2a", 1.7)
+    x1, y1 = x0 + w, y0 + d
+    ft = y0 + h * K
+    ops.rect(x0 + 0.04, y0 - 0.05, x1 + 0.06, y0 + 0.02, fill=(0, 0, 0, 70))
+    ops.rect(x0, y0, x1, ft, fill=col, outline=OUTLINE, width=0.02)
+    ops.rect(x0, ft, x1, y1 + h * K, fill=shade(col, 1.15), outline=OUTLINE, width=0.02)
+    ops.rect(x0 + 0.02, y0 + 0.015, x1 - 0.02, y0 + 0.035, fill=alpha((0, 0, 0, 255), 60))
+    ops.line([(x0 + 0.03, ft - 0.012), (x1 - 0.03, ft - 0.012)], fill=shade(col, 1.3), width=0.012)
+    mx, my = (x0 + x1) / 2, (ft + y1 + h * K) / 2
+    ops.line([(mx - 0.1, my), (mx - 0.1, my + 0.05), (mx + 0.1, my + 0.05), (mx + 0.1, my)], fill=OUTLINE, width=0.03)
+    ops.rect(mx - 0.03, ft - 0.03, mx + 0.03, ft + 0.02, fill=hexc("#c0c8cc"), outline=OUTLINE, width=0.012)
+
+
+def tool_bucket(ops, cx, cy, r=0.15, h=0.3, col=None):
+    col = col or hexc("#7b8288")
+    zt = cy + h * K
+    ops.ellipse(cx + 0.05, cy - 0.03, r * 1.1, r * 0.6, fill=(0, 0, 0, 70))
+    ops.ellipse(cx, cy, r * 0.9, r * 0.5, fill=shade(col, 0.8), outline=OUTLINE, width=0.02)
+    ops.poly([(cx - r * 0.9, cy), (cx + r * 0.9, cy), (cx + r, zt), (cx - r, zt)], fill=col, outline=OUTLINE, width=0.02)
+    ops.ellipse(cx, zt, r, r * 0.55, fill=shade(col, 1.15), outline=OUTLINE, width=0.02)
+    ops.ellipse(cx, zt, r * 0.8, r * 0.4, fill=hexc("#2e3338"))
+    ops.ellipse(cx - r * 0.2, zt + r * 0.08, r * 0.3, r * 0.12, fill=alpha(hexc("#8fc4e8"), 120))
+    ops.line([(cx - r * 0.95, zt), (cx - r * 0.5, zt + r * 0.9), (cx + r * 0.5, zt + r * 0.9), (cx + r * 0.95, zt)], fill=OUTLINE, width=0.025)
+    ops.line([(cx - r * 0.75, cy + h * K * 0.3), (cx - r * 0.75, zt - 0.02)], fill=alpha((255, 255, 255, 255), 90), width=0.015)
+
+
+def tool_oilcan(ops, x, y, col=None):
+    """Oelkanne: kleiner Zylinder mit Tuelle und Griff."""
+    col = col or lift("#3b4046", 1.9)
+    r, h = 0.09, 0.22
+    zt = y + h * K
+    ops.ellipse(x + 0.03, y - 0.02, r * 1.2, r * 0.6, fill=(0, 0, 0, 70))
+    ops.poly([(x - r, y), (x + r, y), (x + r, zt), (x - r, zt)], fill=col, outline=OUTLINE, width=0.02)
+    ops.ellipse(x, y, r, r * 0.5, fill=shade(col, 0.85), outline=OUTLINE, width=0.015)
+    ops.ellipse(x, zt, r, r * 0.5, fill=shade(col, 1.2), outline=OUTLINE, width=0.02)
+    ops.line([(x + r * 0.5, zt + 0.02), (x + r * 1.9, zt + 0.14)], fill=OUTLINE, width=0.04)
+    ops.line([(x + r * 0.5, zt + 0.02), (x + r * 1.9, zt + 0.14)], fill=hexc("#c0c8cc"), width=0.02)
+    ops.line([(x - r * 0.6, zt + 0.01), (x - r * 1.1, zt + 0.1), (x - r * 0.4, zt + 0.12)], fill=OUTLINE, width=0.02)
+    ops.line([(x - r * 0.6, y + 0.04), (x - r * 0.6, zt - 0.02)], fill=alpha((255, 255, 255, 255), 100), width=0.012)
+
+
+def floor_cable(ops, pts, seed=1, col=None, plug=True):
+    """Kabel auf dem Boden: dunkle Ummantelung mit heller Kernlinie (liest sich sonst wie ein Riss),
+    am Ende eine kleine Anschlussdose."""
+    col = col or hexc("#2a2422")
+    wob = HD.wobble(pts, amp=0.03, seed=seed, step=0.1)
+    ops.line(wob, fill=OUTLINE, width=0.06)
+    ops.line(wob, fill=col, width=0.04)
+    ops.line([(x, y + 0.008) for x, y in wob], fill=alpha(shade(col, 2.2), 120), width=0.012)
+    if plug:
+        ex, ey = wob[-1]
+        ops.rect(ex - 0.07, ey - 0.05, ex + 0.07, ey + 0.05, fill=hexc("#5a6068"), outline=OUTLINE, width=0.015)
+        ops.ellipse(ex, ey, 0.018, 0.018, fill=hexc("#2e3338"))
+
+
+def crack_line(ops, pts, col, seed=1, width=0.014):
+    """Riss im Boden: zittrige Linie mit heller Kante darunter (Lichtkante der Bruchkante)."""
+    wob = HD.wobble(pts, amp=0.02, seed=seed, step=0.08)
+    ops.line([(x, y - 0.012) for x, y in wob], fill=alpha((255, 255, 255, 255), 50), width=width)
+    ops.line(wob, fill=col, width=width)
+
+
 def speckle(ops, region, n, colors, rmin, rmax, seed=3):
     rnd = random.Random(seed)
     minx, miny, maxx, maxy = region.bounds
@@ -423,6 +821,9 @@ def speckle(ops, region, n, colors, rmin, rmax, seed=3):
 # ------------------------------------------------------------- Bodenmuster
 
 def floor_room(ops, key, region):
+    """Bodenmuster je Raum (Entwurfskoordinaten). Voller Pass 2026-10-01: alle Raster mit Hand-Unruhe
+    (wobbly_tiles), Ausstattung der Technikhalle und Werkstatt, Beschriftungstafeln in den Ausstellungsraeumen.
+    Die Abnutzung entlang der Laufwege kommt als weiche Ebene nach dem Rendern (wear_lanes)."""
     fl, _wall = ROOM_ROLE[key]
     base = lift(fl, 1.0 if key == "telefon" else 1.45)
     x0, y0, x1, y1 = region.bounds
@@ -430,27 +831,19 @@ def floor_room(ops, key, region):
 
     if key == "foyer":
         light, dark = lift("#9c948a"), lift("#8a8275", 1.32)
-        # Schachbrett aus Marmorplatten, diagonal wirkt zu unruhig -> gerade 1,0 m
+        # Schachbrett aus Marmorplatten 1,0 m, Raster leicht unruhig, Adern, abgeschlagene Ecken
+        wobbly_tiles(ops, region, x0, y0, x1, y1, 1.0, 1.0, [light], lift("#6e675c", 1.1), seed=7, checker=(light, dark),
+                     fuge_w=0.02, jitter=0.012, tone=0.035, chips=0.08, cracks=0.04)
         rnd = random.Random(7)
-        yy = y0
-        i = 0
-        while yy < y1:
-            xx = x0
-            j = 0
-            while xx < x1:
-                t = sbox(xx, yy, xx + 1, yy + 1).intersection(region)
-                ops.geom(t, fill=light if (i + j) % 2 == 0 else dark)
-                # Ader
-                if rnd.random() < 0.35 and not t.is_empty:
-                    ax = xx + rnd.uniform(0.1, 0.9)
-                    ops.line([(ax, yy + 0.05), (ax + rnd.uniform(-0.3, 0.3), yy + 0.5), (ax + rnd.uniform(-0.2, 0.2), yy + 0.95)],
-                             fill=alpha(lift("#5e584e"), 90), width=0.015)
-                xx += 1; j += 1
-            yy += 1; i += 1
-        # roter Laeufer: Shop-Tuer -> Theke -> Rotunde
+        for _ in range(60):
+            ax, ay = rnd.uniform(x0, x1), rnd.uniform(y0, y1)
+            if region.buffer(-0.2).contains(Point(ax, ay)):
+                ops.line(HD.wobble([(ax, ay), (ax + rnd.uniform(-0.3, 0.3), ay + rnd.uniform(0.3, 0.6))], amp=0.02, seed=int(ax * 13 + ay), step=0.08),
+                         fill=alpha(lift("#5e584e"), 80), width=0.014)
+        # roter Laeufer: Shop-Tuer -> Theke -> Rotunde, Kante zittrig, Messingband
         runner = lift("#5a2a2a", 1.6)
-        ops.rect(-1.1, -13, 1.1, -3, fill=runner)
-        ops.rect(-0.95, -13, 0.95, -3, outline=alpha(lift("#b08a3c"), 200), width=0.04)
+        ops.poly(HD.wobble_rect(-1.1, -13, 1.1, -3, amp=0.006, seed=71, step=0.1), fill=runner)
+        ops.poly(HD.wobble_rect(-0.95, -13, 0.95, -3, amp=0.005, seed=72, step=0.1), outline=alpha(lift("#b08a3c"), 200), width=0.04)
         # Bodenplatte unter dem Notfallknopf (AtlasMuseumLayout.EmergencyButton, noerdlich der Theke)
         bx, by = 0.0, -5.4
         ops.ellipse(bx + 0.05, by - 0.06, 0.66, 0.52, fill=(0, 0, 0, 70))
@@ -461,16 +854,19 @@ def floor_room(ops, key, region):
                      fill=hexc("#1e1e1e"), width=0.06)
         ops.ellipse(bx, by, 0.46, 0.35, fill=lift("#3b4046", 1.35), outline=OUTLINE, width=0.035)
         ops.ellipse(bx - 0.06, by + 0.05, 0.3, 0.2, fill=lift("#3b4046", 1.6))
+        # Bodentafel am Eingang zur Rotunde ("THE VESPER COLLECTION") und Wegweiser-Pfeil
+        plaque(ops, -2.4, -4.2, -1.4, -3.8, "VESPER", brass=True, lines=1, size=0.09)
+        plaque(ops, 1.4, -4.2, 2.4, -3.8, "MUSEUM", brass=True, lines=1, size=0.09)
     elif key == "rotunde":
         speckle(ops, region, 2600, [lift("#8a8378"), lift("#55514a"), lift("#a8a094"), lift("#4e4a44")], 0.015, 0.035, seed=11)
-        # Terrazzo-Intarsie: dunkler Ring zwischen zwei Messingbaendern, Kompassstrahlen, Rosetten
+        # Terrazzo-Intarsie: dunkler Ring zwischen zwei Messingbaendern (leicht zittrig), Kompassstrahlen, Rosetten
         brass = alpha(lift("#b08a3c", 1.1), 235)
         dark_ring = alpha(lift("#4e4a44", 1.25), 200)
-        ring_pts_o = [(math.cos(math.radians(a)) * 5.6, 4 + math.sin(math.radians(a)) * 5.6) for a in range(0, 360, 4)]
-        ring_pts_i = [(math.cos(math.radians(a)) * 4.9, 4 + math.sin(math.radians(a)) * 4.9) for a in range(360, 0, -4)]
-        ops.geom(Polygon(ring_pts_o + ring_pts_i).intersection(region), fill=dark_ring)
-        for r in (5.6, 4.9):
-            ops.ellipse(0, 4, r, r, outline=brass, width=0.06)
+        ring_o = HD.wobble_ellipse(0, 4, 5.6, 5.6, amp=0.012, seed=111)
+        ring_i = HD.wobble_ellipse(0, 4, 4.9, 4.9, amp=0.012, seed=112)
+        ops.geom(Polygon(ring_o, [list(reversed(ring_i))]).intersection(region), fill=dark_ring)
+        for pts in (ring_o, ring_i):
+            ops.line(pts + [pts[0]], fill=brass, width=0.06)
         for i in range(16):
             a = i * math.pi / 8
             ops.line([(math.cos(a) * 4.9, 4 + math.sin(a) * 4.9), (math.cos(a) * 5.6, 4 + math.sin(a) * 5.6)], fill=brass, width=0.045)
@@ -478,36 +874,54 @@ def floor_room(ops, key, region):
                 rx_, ry_ = math.cos(a) * 5.25, 4 + math.sin(a) * 5.25
                 ops.ellipse(rx_, ry_, 0.18, 0.18, fill=alpha(lift("#b08a3c", 1.1), 235))
                 ops.ellipse(rx_, ry_, 0.08, 0.08, fill=alpha(lift("#4e4a44", 1.2), 220))
+        # feine Terrazzo-Felder: unregelmaessige Plattenstoesse (Messing-Trennschienen) als Sechseck um das Podest
+        for k in range(6):
+            a0, a1 = k * math.pi / 3 + 0.2, (k + 1) * math.pi / 3 + 0.2
+            ops.line(HD.wobble([(math.cos(a0) * 4.3, 4 + math.sin(a0) * 4.3), (math.cos(a1) * 4.3, 4 + math.sin(a1) * 4.3)], amp=0.006, seed=120 + k, step=0.1),
+                     fill=alpha(lift("#b08a3c", 1.0), 110), width=0.02)
         # innerer Messingkreis um den Sockel
-        ops.ellipse(0.5, 4, 3.0, 1.2, outline=alpha(lift("#b08a3c", 1.1), 200), width=0.04)   # Podest 5,4 x 1,8 m
+        ops.poly(HD.wobble_ellipse(0.5, 4, 3.0, 1.2, amp=0.008, seed=113), outline=alpha(lift("#b08a3c", 1.1), 200), width=0.04)   # Podest 5,4 x 1,8 m
+        # Bodentafel vor dem Podest: Name des Exponats
+        plaque(ops, -1.5, 2.55, -0.1, 2.95, "CRETACEOUS", brass=True, lines=2, size=0.085)
         # Mondfleck durch den Oculus
         ops.glow(-0.6, 3.4, 3.2, MOON, 0.35)
     elif key == "galerie":
-        # Fischgraet vereinfacht: Staebe 0,18 x 0,9 in versetzten Reihen
-        cols = [lift("#63462d"), lift("#573d27"), lift("#7c5a3c"), lift("#6a4a30")]
-        tiles(ops, region, x0, y0, x1, y1, 0.9, 0.18, cols, lift("#4e3521", 1.2), offset_rows=True, seed=5, fuge_w=0.02)
-        # Laeufer in der Achse
-        ops.rect(x0, 3.2, x1, 4.8, fill=alpha(lift("#5b2430", 1.5), 235))
-        ops.rect(x0, 3.3, x1, 4.7, outline=alpha(lift("#a8843c"), 200), width=0.035)
+        # Fischgraet-Parkett (Stilblatt): echte Zickzack-Reihen, Staebe 0,18 x 0,9, leicht zittrig
+        cols = [lift("#63462d"), lift("#573d27"), lift("#7c5a3c"), lift("#6a4a30"), lift("#5e4228")]
+        herringbone(ops, region, (x0 + x1) / 2, (y0 + y1) / 2, 0.18, 5, cols, alpha(lift("#3e2a18", 1.2), 220), seed=5)
+        # Laeufer in der Achse, Kante leicht zittrig, Fransen
+        run = HD.wobble_rect(x0, 3.2, x1, 4.8, amp=0.006, seed=21, step=0.1)
+        ops.poly(run, fill=alpha(lift("#5b2430", 1.5), 235))
+        ops.poly(HD.wobble_rect(x0, 3.32, x1, 4.68, amp=0.005, seed=22, step=0.1), outline=alpha(lift("#a8843c"), 200), width=0.035)
         ops.glow(-13.7, 4.0, 4.5, MOON, 0.22)
         # Bilderleuchten: warme Lichtkegel an den Stellwaenden
         for sx in (-17.3, -12.8):
             for sy in (1.6, 6.4):
                 for side in (-0.55, 0.55):
                     ops.glow(sx + side, sy, 1.1, WARM, 0.2)
+        # Bodentafel vor der Staffelei
+        plaque(ops, -8.65, 6.5, -7.95, 6.76, "FOUNDER", brass=False, lines=1, size=0.065)
     elif key == "aegypten":
         cols = [lift("#8a7048"), lift("#8a6f47"), lift("#a0855a", 1.3)]
-        tiles(ops, region, x0, y0, x1, y1, 1.2, 0.8, cols, lift("#6a5436", 1.2), offset_rows=True, seed=9)
+        wobbly_tiles(ops, region, x0, y0, x1, y1, 1.2, 0.8, cols, lift("#6a5436", 1.2), seed=9, bond=0.5, fuge_w=0.03,
+                     jitter=0.03, tone=0.05, chips=0.14, cracks=0.07)
         # Mittelgang als Sandsteinband mit Ornament
-        ops.rect(-27.0, y0, -26.2, y1, fill=alpha(lift("#b8843a", 1.1), 120))
+        ops.poly(HD.wobble_rect(-27.0, y0, -26.2, y1, amp=0.006, seed=91, step=0.12), fill=alpha(lift("#b8843a", 1.1), 120))
         for yy in range(int(y0) + 1, int(y1)):
             ops.poly([(-26.6, yy - 0.25), (-26.35, yy), (-26.6, yy + 0.25), (-26.85, yy)], fill=alpha(lift("#3f2e1c", 1.3), 160))
+        # Sandspuren an den Sarkophagen (hellere, zittrige Flecken) und Bodentafeln vor den Exponaten
+        rnd = random.Random(92)
+        for cx_, cy_ in ((-27.4, 4.5), (-27.4, -1.5), (-24.8, 5.9), (-24.8, 1.9), (-24.8, -2.1)):
+            ops.poly(HD.wobble_ellipse(cx_ + rnd.uniform(-0.2, 0.2), cy_, 0.5, 0.25, amp=0.04, seed=93 + int(cy_ * 3)), fill=alpha(lift("#c9a46a", 1.1), 55))
+        plaque(ops, -27.65, 2.75, -26.95, 3.05, "KV-7", brass=False, lines=1, size=0.08)
+        plaque(ops, -27.65, -3.25 + 2.3, -26.95, -3.25 + 2.6, "KV-9", brass=False, lines=1, size=0.08)
+        plaque(ops, -23.1, -0.3, -22.3, 0.0, "STELE", brass=False, lines=1, size=0.07)
         # warmes Grablicht an den Sarkophagen und der Sphinx
         for gx, gy in ((-28.1, 4.5), (-28.1, -1.5), (-25.7, 9.0)):
             ops.glow(gx, gy, 2.0, WARM, 0.3)
     elif key == "planetarium":
         speckle(ops, region, 900, [alpha(hexc("#cfe0ff"), 170), alpha(hexc("#cfe0ff"), 90)], 0.012, 0.03, seed=13)
-        # Teppichringe (flach, begehbar): zwei Boegen mit Luecken nach S und E. Bewusst OHNE
+        # Teppichringe (flach, begehbar): zwei Boegen mit Luecken nach S und E, Kanten leicht zittrig. Bewusst OHNE
         # Umriss und Sitz-Buckel, sonst lesen sie sich als Baenke, durch die man laufen kann.
         ring = alpha(lift("#2b3552", 1.5), 150)
         edge = alpha(lift("#6f86c8", 1.2), 170)
@@ -515,16 +929,28 @@ def floor_room(ops, key, region):
             for a0, a1 in ((20, 250), (290, 330)):
                 pts_o = [(-14.45 + (r + 0.25) * math.cos(math.radians(a)), 15.7 + (r + 0.25) * math.sin(math.radians(a))) for a in range(a0, a1 + 1, 5)]
                 pts_i = [(-14.45 + (r - 0.25) * math.cos(math.radians(a)), 15.7 + (r - 0.25) * math.sin(math.radians(a))) for a in range(a1, a0 - 1, -5)]
+                pts_o = HD.wobble(pts_o, amp=0.008, seed=130 + int(r * 10) + a0, step=0.1)
+                pts_i = HD.wobble(pts_i, amp=0.008, seed=131 + int(r * 10) + a0, step=0.1)
                 ops.poly(pts_o + pts_i, fill=ring)
                 ops.line(pts_o, fill=edge, width=0.025)
                 ops.line(pts_i, fill=edge, width=0.025)
                 for a in range(a0 + 6, a1 - 2, 12):
                     sx = -14.45 + r * math.cos(math.radians(a)); sy = 15.7 + r * math.sin(math.radians(a))
                     ops.ellipse(sx, sy, 0.05, 0.05, fill=alpha(hexc("#cfe0ff"), 150))
+        # Tierkreis-Zeichen als helle Bodenlinien um den Projektor (Sternbildlinien)
+        rnd = random.Random(14)
+        for k in range(5):
+            a = k * math.tau / 5 + 0.4
+            px_, py_ = -14.45 + 1.4 * math.cos(a), 15.7 + 1.4 * math.sin(a)
+            pts = [(px_ + rnd.uniform(-0.3, 0.3), py_ + rnd.uniform(-0.3, 0.3)) for _ in range(4)]
+            ops.line(pts, fill=alpha(hexc("#9fb8e8"), 120), width=0.012)
+            for p in pts:
+                ops.ellipse(p[0], p[1], 0.02, 0.02, fill=alpha(hexc("#f4f8ff"), 220))
+        plaque(ops, -15.3, 13.45, -14.3, 13.85, "ORRERY", brass=False, lines=1, size=0.08)
         ops.glow(-14.45, 15.7, 2.0, hexc("#cfe0ff"), 0.25)
     elif key == "mineralien":
         cols = [lift("#33383c", 1.6), lift("#464c51", 1.35), lift("#2d3135", 1.7)]
-        # Rautenmuster: diagonale Platten
+        # Rautenmuster: diagonale Platten, jede mit leichtem Zittern und eigenem Ton
         rnd = random.Random(17)
         step = 1.0
         for i in range(-30, 30):
@@ -532,26 +958,37 @@ def floor_room(ops, key, region):
                 cx, cy = i * step, 11 + j * step
                 cx2 = cx + (step / 2 if j % 2 else 0)
                 d = step / 2
-                q = Polygon([(cx2, cy - d), (cx2 + d, cy), (cx2, cy + d), (cx2 - d, cy)]).intersection(region)
+                raw = [(cx2, cy - d), (cx2 + d, cy), (cx2, cy + d), (cx2 - d, cy)]
+                if not Polygon(raw).intersects(region):
+                    continue
+                q = Polygon(HD.wobble(raw, amp=0.005, seed=170 + i * 61 + j, step=0.07, closed=True)).buffer(0).intersection(region)
                 if not q.is_empty:
-                    ops.geom(q, fill=rnd.choice(cols), outline=alpha(lift("#22262a", 1.4), 255), width=0.025)
+                    ops.geom(q, fill=shade(rnd.choice(cols), 1 + rnd.uniform(-0.05, 0.05)), outline=alpha(lift("#22262a", 1.4), 255), width=0.025)
         for gx, gy in ((0, 15.5), (-4, 19.6), (0, 19.6), (4, 19.6), (-3, 12.8), (3, 12.8)):
             ops.glow(gx, gy - 0.6, 1.6, WARM, 0.3)
+        plaque(ops, -0.5, 13.1, 0.5, 13.5, "VAULT", brass=True, lines=1, size=0.08)
     elif key == "telefon":
         cols = [lift("#a05630", 1.0), lift("#a8562a", 0.95)]
-        tiles(ops, region, x0, y0, x1, y1, 2.0, 1.0, cols, lift("#8e4823", 1.1), seed=21)
+        wobbly_tiles(ops, region, x0, y0, x1, y1, 2.0, 1.0, cols, lift("#8e4823", 1.1), seed=21, bond=0.5, fuge_w=0.025,
+                     jitter=0.02, tone=0.04, chips=0.06, cracks=0.03)
         # Siebziger-Rundteppich (flach, begehbar) in der freien Raummitte: Ringe in Orange, Creme, Braun
         rcx, rcy = 15.0, 17.4
-        for r, col in ((1.6, "#c8702e"), (1.4, "#efd9a8"), (1.22, "#8e4823"), (1.0, "#c8702e"), (0.75, "#efd9a8"), (0.5, "#8e4823"), (0.25, "#e0b04a")):
-            ops.ellipse(rcx, rcy, r, r, fill=alpha(lift(col, 1.05), 215))
-        ops.ellipse(rcx, rcy, 1.6, 1.6, outline=alpha(lift("#5a2a12", 1.2), 200), width=0.03)
+        for k, (r, col) in enumerate(((1.6, "#c8702e"), (1.4, "#efd9a8"), (1.22, "#8e4823"), (1.0, "#c8702e"), (0.75, "#efd9a8"), (0.5, "#8e4823"), (0.25, "#e0b04a"))):
+            ops.poly(HD.wobble_ellipse(rcx, rcy, r, r, amp=0.008, seed=210 + k), fill=alpha(lift(col, 1.05), 215))
+        ops.poly(HD.wobble_ellipse(rcx, rcy, 1.6, 1.6, amp=0.008, seed=210), outline=alpha(lift("#5a2a12", 1.2), 200), width=0.03)
         # kleine Kreise als Echo des Teppichs an den Waenden
         for cx_, cy_ in ((10.6, 14.0), (16.8, 14.1), (10.4, 18.6)):
             ops.ellipse(cx_, cy_, 0.5, 0.5, fill=alpha(lift("#c8702e", 1.2), 90))
             ops.ellipse(cx_, cy_, 0.28, 0.28, fill=alpha(lift("#efd9a8", 1.0), 110))
+        # Telefonkabel am Boden (vom Vermittlungstisch zur Westwand) und Bodentafel
+        floor_cable(ops, [(10.0, 16.0), (9.4, 16.3), (9.2, 17.2)], seed=212)
+        plaque(ops, 11.5, 14.6, 12.5, 15.0, "EXCHANGE", brass=False, lines=1, size=0.07)
         ops.glow(rcx, rcy, 2.4, WARM, 0.22)
     elif key == "technikhalle":
-        # Riffelblech: kurze diagonale Rippen
+        # Riffelblech-Platten 2,0 x 2,5 m mit zittrigen Stoessen, Rippen, Schrauben an den Platten-Ecken
+        plate = [lift("#4d5258", 1.45), lift("#50555b", 1.42), lift("#4a4f55", 1.48)]
+        wobbly_tiles(ops, region, x0, y0, x1, y1, 2.0, 2.5, plate, lift("#363a3f", 1.2), seed=23, bond=0.0, fuge_w=0.03,
+                     jitter=0.006, tone=0.03, chips=0.0, cracks=0.0, amp=0.003)
         rib_a, rib_b = lift("#6a7178", 1.3), lift("#363a3f", 1.3)
         yy = y0 + 0.15
         r = 0
@@ -565,33 +1002,96 @@ def floor_room(ops, key, region):
                     ops.line([(xx - 0.06, yy + 0.03), (xx + 0.06, yy - 0.03)], fill=rib_b, width=0.035)
                 xx += 0.3; c += 1
             yy += 0.3; r += 1
-        # Plattenstoesse
-        for xx in range(8, 21, 2):
-            ops.line([(xx, y0), (xx, y1)], fill=lift("#363a3f", 1.2), width=0.03)
+        for px_ in range(9, 20, 2):
+            for py_ in (3.5, 6.0, 8.5):
+                if region.buffer(-0.1).contains(Point(px_, py_)):
+                    ops.ellipse(px_, py_, 0.035, 0.035, fill=hexc("#2e3338"), outline=alpha(OUTLINE, 160), width=0.01)
+                    ops.ellipse(px_ - 0.01, py_ + 0.01, 0.01, 0.01, fill=(255, 255, 255, 150))
         # Warnstreifen um Maschinen
         hazard(ops, 8.7, 4.6, 14.9, 4.9)
         hazard(ops, 14.7, 5.2, 19.3, 5.45)
+        # Besucherweg: gelbe Bodenmarkierung (gestrichelt), Abzweige zum Rolltor, zur Werkstatt und zur Telefonzentrale
+        mark = alpha(hexc("#d4b13c"), 200)
+        dashed(ops, [(7.3, 3.6), (19.3, 3.6)], mark, width=0.06, dash=0.45, gap=0.3)
+        dashed(ops, [(15.2, 3.4), (15.2, 1.15)], mark, width=0.06, dash=0.45, gap=0.3)
+        dashed(ops, [(8.1, 3.8), (8.1, 8.6), (13.2, 8.6), (13.2, 9.35)], mark, width=0.06, dash=0.45, gap=0.3)
+        for ax, ay, dx in ((11.0, 3.6, 1), (17.0, 3.6, -1)):
+            ops.poly([(ax - 0.12 * dx, ay - 0.1), (ax + 0.12 * dx, ay), (ax - 0.12 * dx, ay + 0.1)], fill=mark)
+        # Kabelkanaele: vom Schwungrad zur Suedwand, von der Turbine zur Ostwand
+        cable_duct(ops, [(13.9, 4.55), (13.9, 1.05)])
+        cable_duct(ops, [(18.5, 5.15), (18.5, 4.3), (19.45, 4.3)])
+        # Oelflecken unter den Maschinen und vor der Turbine
+        oil_stain(ops, 12.4, 4.2, 0.42, 0.22, seed=231, a=110)
+        oil_stain(ops, 16.1, 4.65, 0.55, 0.26, seed=232, a=120)
+        oil_stain(ops, 9.6, 8.1, 0.3, 0.18, seed=233, a=90)
+        # Werkzeug am Boden: Kiste, Schluessel, Lappen, Eimer, Oelkanne
+        tool_box(ops, 10.35, 4.0)
+        tool_wrench(ops, 11.25, 3.95, -0.3)
+        tool_rag(ops, 9.9, 3.85, seed=234)
+        tool_oilcan(ops, 11.95, 4.15)
+        tool_bucket(ops, 7.6, 7.3)
+        tool_wrench(ops, 7.75, 6.6, 1.25, L=0.26)
+        tool_rag(ops, 8.7, 9.0, seed=235, col=hexc("#9aa3a6"))
+        # Beschriftungstafeln der Exponate (Messing, am Boden vor den Maschinen)
+        plaque(ops, 10.3, 4.33, 11.9, 4.58, "STEAM ENGINE 1887", brass=True, lines=1, size=0.075)
+        plaque(ops, 15.6, 4.9, 16.9, 5.15, "TURBINE", brass=True, lines=1, size=0.075)
+        plaque(ops, 12.9, 7.4, 13.9, 7.65, "FLYWHEEL", brass=True, lines=1, size=0.07)
         # Ausstellungsbeleuchtung
         for gx, gy in ((11, 5.2), (16.2, -0.9), (17, 6.2)):
             ops.glow(gx, gy, 2.4, WARM, 0.28)
     elif key == "werkstatt":
-        cols = [lift("#9aa3a6", 1.3), lift("#929a9d", 1.3)]
-        tiles(ops, region, x0, y0, x1, y1, 0.5, 0.5, cols, lift("#7b8488", 1.2), seed=23, fuge_w=0.02)
-        # Scanner-Podest
-        ops.rect(15, -9.5, 17, -7.5, fill=lift("#8b949a", 1.25), outline=OUTLINE, width=0.04)
+        cols = [lift("#9aa3a6", 1.3), lift("#929a9d", 1.3), lift("#a0a8aa", 1.28)]
+        wobbly_tiles(ops, region, x0, y0, x1, y1, 0.5, 0.5, cols, lift("#7b8488", 1.2), seed=23, fuge_w=0.02,
+                     jitter=0.02, tone=0.03, chips=0.05, cracks=0.03, amp=0.003)
+        # Scanner-Podest mit Klebeband-Markierung (gelb/schwarz gestrichelt) und Kabel zur Ostwand
+        ops.poly(HD.wobble_rect(15, -9.5, 17, -7.5, amp=0.004, seed=241, step=0.1), fill=lift("#8b949a", 1.25), outline=OUTLINE, width=0.04)
         ops.ellipse(16, -8.5, 0.8, 0.8, outline=alpha(hexc("#6fd6ff"), 220), width=0.05)
         ops.glow(16, -8.5, 2.2, hexc("#d8e6ec"), 0.35)
+        tape = alpha(hexc("#d4b13c"), 220)
+        for pts in ([(14.6, -9.85), (14.6, -7.15), (17.4, -7.15)], [(17.4, -7.15), (17.4, -9.85), (14.6, -9.85)]):
+            dashed(ops, pts, tape, width=0.05, dash=0.25, gap=0.12)
+        floor_cable(ops, [(17.0, -8.3), (18.2, -8.0), (19.35, -8.1)], seed=242)
+        # Restaurierungsplatz: Abdecktuch mit einem Gemaelde in Arbeit, Pinsel, Farbtoepfe, Farbtropfen
+        cloth = HD.wobble_rect(9.5, -8.9, 11.9, -7.3, amp=0.02, seed=243, step=0.15)
+        ops.poly(cloth, fill=lift("#d8cfb0", 1.0), outline=alpha(shade(lift("#d8cfb0"), 0.7), 220), width=0.02)
+        ops.line(HD.wobble([(9.7, -8.1), (11.7, -8.0)], amp=0.02, seed=244, step=0.1), fill=alpha(shade(lift("#d8cfb0"), 0.8), 160), width=0.015)
+        rnd = random.Random(245)
+        for _ in range(14):
+            px_, py_ = rnd.uniform(9.6, 11.8), rnd.uniform(-8.8, -7.4)
+            ops.ellipse(px_, py_, rnd.uniform(0.02, 0.05), rnd.uniform(0.015, 0.04), fill=alpha(rnd.choice([hexc("#d33a2a"), hexc("#2f4fa0"), hexc("#f2c23a"), hexc("#4f8a3a")]), 180))
+        painting(ops, 10.2, -8.65, 11.1, -7.95, "berg", rnd)
+        ops.rect(10.55, -8.4, 10.8, -8.1, fill=alpha(lift("#d8cfb0"), 200))   # noch unrestaurierte Stelle
+        for k, col in enumerate(("#d33a2a", "#2f4fa0", "#f2c23a")):
+            ops.ellipse(11.4 + k * 0.17, -8.55, 0.07, 0.07, fill=hexc(col), outline=OUTLINE, width=0.015)
+            ops.ellipse(11.4 + k * 0.17, -8.55, 0.04, 0.04, fill=shade(hexc(col), 1.25))
+        for k in range(3):
+            bx = 11.3 + k * 0.1
+            ops.line([(bx, -7.75), (bx + 0.05, -7.45)], fill=hexc("#6b4a2e"), width=0.018)
+            ops.line([(bx + 0.05, -7.45), (bx + 0.065, -7.37)], fill=rnd.choice([hexc("#d33a2a"), hexc("#2f4fa0")]), width=0.025)
+        tool_wrench(ops, 13.4, -9.3, 0.9, L=0.24)
+        tool_rag(ops, 12.1, -9.4, seed=246, col=hexc("#5f8fc8"))
+        tool_bucket(ops, 18.9, -9.4, r=0.13, h=0.26)
+        # Lupe und Pinsel am Boden vor dem Analysetisch
+        ops.ellipse(13.9, -5.1, 0.1, 0.1, fill=alpha(hexc("#bfe3f5"), 120), outline=OUTLINE, width=0.02)
+        ops.line([(13.98, -5.18), (14.2, -5.4)], fill=OUTLINE, width=0.035)
+        plaque(ops, 15.4, -7.05, 16.6, -6.75, "SCAN STATION", brass=False, lines=1, size=0.07)
     elif key == "depot":
         speckle(ops, region, 1500, [lift("#66635e"), lift("#3e3c39", 1.4)], 0.01, 0.03, seed=29)
         for xx in (23.5, 26.5):
-            ops.line([(xx, y0), (xx, y1)], fill=lift("#423f3b", 1.3), width=0.03)
+            ops.line(HD.wobble([(xx, y0), (xx, y1)], amp=0.006, seed=290 + int(xx), step=0.15), fill=lift("#423f3b", 1.3), width=0.03)
         for yy in range(-20, -6, 3):
-            ops.line([(x0, yy), (x1, yy)], fill=lift("#423f3b", 1.3), width=0.03)
-        # Gassenmarkierung
+            ops.line(HD.wobble([(x0, yy), (x1, yy)], amp=0.006, seed=300 + yy, step=0.15), fill=lift("#423f3b", 1.3), width=0.03)
+        # Risse im Estrich, Gassenmarkierung, Reifenspuren vom Rolltor
+        crack_line(ops, [(22.3, -12.8), (23.4, -12.2), (24.0, -11.7)], alpha(lift("#2e2c29", 1.2), 220), seed=291)
+        crack_line(ops, [(26.9, -7.6), (26.2, -8.3)], alpha(lift("#2e2c29", 1.2), 220), seed=292)
         for gy in (-11.4, -15.4):
-            ops.line([(22.9, gy), (28.3, gy)], fill=alpha(hexc("#d4b13c"), 170), width=0.06)
-        ops.line([(21.9, -19.2), (21.9, -7.0)], fill=alpha(hexc("#d4b13c"), 170), width=0.06)
+            ops.line(HD.wobble([(22.9, gy), (28.3, gy)], amp=0.005, seed=293 + int(gy), step=0.2), fill=alpha(hexc("#d4b13c"), 170), width=0.06)
+        ops.line(HD.wobble([(21.9, -19.2), (21.9, -7.0)], amp=0.005, seed=294, step=0.2), fill=alpha(hexc("#d4b13c"), 170), width=0.06)
+        for off in (-0.35, 0.35):
+            ops.line(HD.wobble([(23.0 + off, -6.3), (23.2 + off, -8.0), (24.0 + off, -10.3), (25.0 + off, -12.2)], amp=0.03, seed=295 + int(off * 10), step=0.3),
+                     fill=alpha((20, 20, 24, 255), 60), width=0.16)
         hazard(ops, 21.8, -19.95, 22.8, -19.6)
+        plaque(ops, 22.2, -7.55, 23.3, -7.25, "LOADING DOCK", brass=False, lines=1, size=0.065)
     elif key == "sicherheit":
         # Noppenboden
         noppe = lift("#313539", 1.9)
@@ -602,24 +1102,30 @@ def floor_room(ops, key, region):
                 ops.ellipse(xx, yy, 0.05, 0.05, fill=noppe)
                 xx += 0.4
             yy += 0.4
+        # Kabel von der Monitorwand am Boden entlang, Kaffeering, Bodentafel
+        floor_cable(ops, [(-28.9, -15.0), (-28.2, -15.3), (-27.4, -14.9), (-26.7, -15.2)], seed=251)
+        floor_cable(ops, [(-28.9, -14.2), (-28.4, -14.6), (-27.9, -14.3)], seed=252, col=hexc("#2f4f8a"), plug=False)
+        ops.ellipse(-25.6, -19.0, 0.07, 0.07, outline=alpha(hexc("#5a3a22"), 150), width=0.018)
         ops.glow(-28.5, -16.8, 2.2, hexc("#b7c4c8"), 0.3)
     elif key == "haustechnik":
         speckle(ops, region, 700, [lift("#5c574f"), lift("#433f39", 1.3)], 0.01, 0.03, seed=31)
-        for (ox, oy, r) in ((-24.2, -9.3, 0.5), (-27.0, -11.4, 0.35)):
-            ops.ellipse(ox, oy, r, r * 0.7, fill=alpha((20, 20, 24, 255), 70))
+        oil_stain(ops, -24.2, -9.3, 0.5, 0.32, seed=311, a=90)
+        oil_stain(ops, -27.0, -11.4, 0.35, 0.22, seed=312, a=90)
+        crack_line(ops, [(-28.0, -6.0), (-27.2, -6.5), (-26.9, -7.3)], alpha(lift("#2e2c29", 1.2), 220), seed=313)
+        crack_line(ops, [(-23.5, -11.2), (-23.0, -10.5)], alpha(lift("#2e2c29", 1.2), 220), seed=314)
         hazard(ops, -28.6, -11.6, -28.3, -8.6, vertical=True)
+        # Kabelkanal vom Schaltschrank zum Kessel, Sperrzone um den Kessel
+        cable_duct(ops, [(-28.55, -10.1), (-27.5, -10.1), (-27.5, -9.1)], w=0.14)
+        dashed(ops, [(-28.3, -7.7), (-26.7, -7.7), (-26.7, -9.3)], alpha(hexc("#d4b13c"), 180), width=0.05, dash=0.3, gap=0.2)
         ops.ellipse(-25.5, -9.5, 0.22, 0.22, fill=lift("#7b8288"), outline=OUTLINE, width=0.03)  # Gully
+        for k in range(3):
+            ops.line([(-25.65, -9.42 + k * 0.08 - 0.08), (-25.35, -9.42 + k * 0.08 - 0.08)], fill=hexc("#2e3338"), width=0.02)
+        tool_bucket(ops, -23.2, -6.0, r=0.14, h=0.28)
+        tool_rag(ops, -23.7, -5.7, seed=315, col=hexc("#9aa3a6"))
     elif key == "shop":
         cols = [lift("#7ea89a", 1.2), lift("#5a7f72", 1.35)]
-        rnd = random.Random(37)
-        yy, i = y0, 0
-        while yy < y1:
-            xx, j = x0, 0
-            while xx < x1:
-                t = sbox(xx, yy, xx + 0.6, yy + 0.6).intersection(region)
-                ops.geom(t, fill=cols[(i + j) % 2])
-                xx += 0.6; j += 1
-            yy += 0.6; i += 1
+        wobbly_tiles(ops, region, x0, y0, x1, y1, 0.6, 0.6, cols, lift("#4c6b60", 1.2), seed=37, checker=(cols[0], cols[1]),
+                     fuge_w=0.02, jitter=0.02, tone=0.035, chips=0.05, cracks=0.02, amp=0.003)
         # Cafe-Bereich: Holzboden
         cafe = sbox(1.5, -20.4, 9, -16.2).intersection(region)
         ops.geom(cafe, fill=lift("#a08a68", 1.2))
@@ -633,19 +1139,25 @@ def floor_room(ops, key, region):
         speckle(ops, region, 1800, [lift("#474a4f", 1.2), lift("#2e3034", 1.4)], 0.01, 0.03, seed=41)
         mark = alpha(lift("#b8ac70"), 150)
         for yy in (-0.1, 6.4):    # Parkbucht des Lieferwagens (y 0,4..5,9)
-            ops.line([(26, yy), (29, yy)], fill=mark, width=0.1)
-        ops.line([(27, -5.5), (27, -2.5)], fill=mark, width=0.1)
+            ops.line(HD.wobble([(26, yy), (29, yy)], amp=0.006, seed=410 + int(yy * 10), step=0.2), fill=mark, width=0.1)
+        ops.line(HD.wobble([(27, -5.5), (27, -2.5)], amp=0.006, seed=411, step=0.2), fill=mark, width=0.1)
+        # Reifenspuren vom Lieferwagen zum Rolltor-Vorplatz, Risse im Hofbeton
+        for off in (-0.4, 0.4):
+            ops.line(HD.wobble([(27.3 + off, 1.0), (26.8 + off, 7.2), (25.6 + off, 8.6)], amp=0.03, seed=412 + int(off * 10), step=0.3),
+                     fill=alpha((20, 20, 24, 255), 55), width=0.18)
+        crack_line(ops, [(25.3, 2.2), (25.9, 2.9), (26.1, 3.8)], alpha(lift("#2e2c29", 1.2), 220), seed=413)
         # Rampe (Deck 0): Betonrampe mit Rillen und Warnkante
         ops.rect(21.5, -2, 24.5, 8, fill=lift("#6a6864", 1.25))
         yy = -2
         while yy < 8:
-            ops.line([(21.5, yy), (24.5, yy)], fill=lift("#5d5c58", 1.15), width=0.025)
+            ops.line(HD.wobble([(21.5, yy), (24.5, yy)], amp=0.004, seed=420 + int(yy * 2), step=0.2), fill=lift("#5d5c58", 1.15), width=0.025)
             yy += 0.5
         ops.rect(21.5, -6, 24.5, -2, fill=lift("#5d5c58", 1.3))           # Karrenschraege
         for i in range(8):
             ops.line([(21.5, -6 + i * 0.5), (24.5, -6 + i * 0.5)], fill=lift("#4f4e4a", 1.2), width=0.03)
         hazard(ops, 24.3, -2, 24.55, 6, vertical=True)
         hazard(ops, 21.5, 7.8, 24.5, 8.05)
+        oil_stain(ops, 23.0, 4.4, 0.3, 0.18, seed=414, a=80)
         # Treppe Rampe -> Hof
         for i in range(3):
             ops.rect(24.5 + i * 0.5, 6, 25.0 + i * 0.5, 8, fill=shade(lift("#6a6864", 1.2), 1 - i * 0.12), outline=OUTLINE, width=0.03)
@@ -785,7 +1297,9 @@ def wall_faces(ops, walk, rooms, corridors):
                 wall = lift(ROOM_ROLE[owner][1], 1.5)
             else:
                 wall = lift(GANG_WALL, 1.3)
-            face = Polygon([(x0, y0), (x1, y1), (x1, y1 + face_h), (x0, y0 + face_h)]).intersection(solid.buffer(0.001))
+            # Oberkante der Stirnseite mit leichtem Zittern (Stilblatt); Innenwaende beschneidet die Wandmasse
+            top_edge = HD.wobble([(x1, y1 + face_h), (x0, y0 + face_h)], amp=0.006, seed=int(abs(x0 * 7 + y0 * 3)), step=0.1)
+            face = Polygon([(x0, y0), (x1, y1)] + top_edge).buffer(0).intersection(solid.buffer(0.001))
             if face.is_empty:
                 continue
             ops.geom(face, fill=wall)
@@ -802,15 +1316,67 @@ def wall_faces(ops, walk, rooms, corridors):
             top = Polygon([(x0, y0 + face_h - 0.05), (x1, y1 + face_h - 0.05), (x1, y1 + face_h), (x0, y0 + face_h)]).intersection(face)
             ops.geom(top, fill=shade(wall, 1.25))
             # sichtbare Hoehe: Innenwaende (0,5 m) schneiden die Stirnseite; Deko darf nicht auf den
-            # Boden des Nachbarraums ragen
-            probe = LineString([(mx, my), (mx, my + face_h)]).intersection(solid)
-            fh_eff = min(face_h, probe.length) if not probe.is_empty else face_h
-            face_decor(ops, owner, x0, y0, x1, y1, fh_eff, wall)
+            # Boden des Nachbarraums ragen. Voller Pass: je Teilstueck gleicher Hoehe eigene Deko (ein
+            # Segment kann aussen 0,95 und am Nachbarraum 0,5 m hoch sein; eine Tafel lag sonst im Planetarium)
+            runs = []
+            n = max(1, int(ln / 0.25))
+            for k in range(n):
+                t0, t1 = k / n, (k + 1) / n
+                px_ = x0 + dx * (t0 + t1) / 2
+                probe = LineString([(px_, my), (px_, my + face_h)]).intersection(solid)
+                fh_k = round(min(face_h, probe.length) if not probe.is_empty else face_h, 2)
+                if runs and abs(runs[-1][2] - fh_k) < 0.03:
+                    runs[-1][1] = t1
+                else:
+                    runs.append([t0, t1, fh_k])
+            for t0, t1, fh_k in runs:
+                if (t1 - t0) * ln > 0.3:
+                    face_decor(ops, owner, x0 + dx * t0, y0, x0 + dx * t1, y1, fh_k, wall)
             # Kontaktschatten auf dem Boden
             sh = Polygon([(x0, y0), (x1, y1), (x1, y1 - 0.28), (x0, y0 - 0.28)]).intersection(walk)
             ops.geom(sh, fill=(0, 0, 0, 55))
             sh2 = Polygon([(x0, y0), (x1, y1), (x1, y1 - 0.12), (x0, y0 - 0.12)]).intersection(walk)
             ops.geom(sh2, fill=(0, 0, 0, 45))
+
+
+def wall_poster(ops, x, p0, w, p1, motif, rnd, label=True):
+    """Gerahmtes Bild auf einer Stirnseite mit Schlagschatten, Bilderleuchte auf der Krone und kleinem
+    Beschriftungsschild rechts daneben (Ausstellungsraeume, voller Pass)."""
+    ops.rect(x + 0.02, p0 - 0.02, x + w + 0.02, p1 - 0.02, fill=(0, 0, 0, 60))
+    painting(ops, x, p0, x + w, p1, motif, rnd)
+    ops.glow(x + w / 2, p1 - 0.05, 0.35, WARM, 0.25)
+    ops.rect(x + w / 2 - 0.06, p1 + 0.005, x + w / 2 + 0.06, p1 + 0.03, fill=hexc("#c9a24c"), outline=OUTLINE, width=0.01)
+    if label:
+        ops.rect(x + w + 0.05, p0 + 0.02, x + w + 0.2, p0 + 0.09, fill=hexc("#efe4c8"), outline=OUTLINE, width=0.008)
+        ops.line([(x + w + 0.07, p0 + 0.065), (x + w + 0.17, p0 + 0.065)], fill=alpha(hexc("#3b3630"), 170), width=0.008)
+        ops.line([(x + w + 0.07, p0 + 0.04), (x + w + 0.14, p0 + 0.04)], fill=alpha(hexc("#3b3630"), 140), width=0.006)
+
+
+def wall_pipe(ops, a, b, y, r=0.035, col=None, brackets=0.8):
+    """Rohrleitung auf einer Stirnseite: Umriss, Lichtkante, Schellen."""
+    col = col or lift("#7b8288", 1.3)
+    ops.rect(a, y - r, b, y + r, fill=col, outline=OUTLINE, width=0.015)
+    ops.line([(a, y + r * 0.45), (b, y + r * 0.45)], fill=shade(col, 1.3), width=0.014)
+    xx = a + 0.3
+    while xx < b - 0.1:
+        ops.rect(xx - 0.03, y - r - 0.015, xx + 0.03, y + r + 0.015, fill=hexc("#3b4046"), outline=OUTLINE, width=0.01)
+        xx += brackets
+
+
+def wall_gauge(ops, x, y, r=0.07):
+    ops.ellipse(x, y, r, r, fill=hexc("#efe4c8"), outline=OUTLINE, width=0.018)
+    ops.ellipse(x, y, r * 0.75, r * 0.75, outline=alpha(hexc("#3b3630"), 120), width=0.008)
+    ops.line([(x, y), (x + r * 0.5, y + r * 0.45)], fill=hexc("#d33a2a"), width=0.014)
+    ops.ellipse(x, y, r * 0.12, r * 0.12, fill=hexc("#3b3630"))
+
+
+def wall_valve(ops, x, y, r=0.08):
+    ops.ellipse(x, y, r, r, outline=OUTLINE, width=0.045)
+    ops.ellipse(x, y, r, r, outline=hexc("#d33a2a"), width=0.028)
+    for a in range(0, 180, 60):
+        ca, sa = math.cos(math.radians(a)) * r, math.sin(math.radians(a)) * r
+        ops.line([(x - ca, y - sa), (x + ca, y + sa)], fill=hexc("#d33a2a"), width=0.018)
+    ops.ellipse(x, y, r * 0.22, r * 0.22, fill=hexc("#3b4046"), outline=OUTLINE, width=0.01)
 
 
 def face_decor(ops, owner, x0, y0, x1, y1, fh, wall):
@@ -819,13 +1385,18 @@ def face_decor(ops, owner, x0, y0, x1, y1, fh, wall):
     a, b = sorted((x0, x1))
     y = y0
     if owner == "galerie":
-        # kleine goldgerahmte Bilder auf der Bespannung
+        # Stilblatt: gerahmte Gemaelde mit erkennbaren Motiven, dazwischen Bilderleuchten; die Stirnseite
+        # ist nur 0,5 m hoch (Innenwand), die Bilder nutzen 0,34 m davon. Voller Pass: Schild je Bild.
         rnd = random.Random(int(a * 10))
-        x = a + 0.6
-        while x < b - 0.6:
-            ops.rect(x - 0.25, y + 0.12, x + 0.25, y + 0.42, fill=hexc("#a8843c"), outline=OUTLINE, width=0.02)
-            ops.rect(x - 0.19, y + 0.16, x + 0.19, y + 0.38, fill=rnd.choice([hexc("#3f6f9a"), hexc("#7a8a4a"), hexc("#b0603a"), hexc("#c9b27a")]))
-            x += 1.6
+        x = a + 0.55
+        k = 0
+        while x + 0.5 < b - 0.3:
+            motif = MOTIFS[(k + int(a)) % len(MOTIFS)]
+            w = 0.5 if motif != "crew" else 0.38
+            p0, p1 = y + 0.09, y + min(fh - 0.06, 0.43)
+            wall_poster(ops, x, p0, w, p1, motif, rnd, label=True)
+            x += w + 0.45
+            k += 1
     elif owner == "aegypten":
         ops.rect(a, y + 0.22, b, y + 0.36, fill=hexc("#b8843a"))
         x = a + 0.15
@@ -838,6 +1409,14 @@ def face_decor(ops, owner, x0, y0, x1, y1, fh, wall):
             else:
                 ops.poly([(x - 0.05, y + 0.24), (x + 0.05, y + 0.24), (x, y + 0.34)], fill=hexc("#2f4f8a"))
             x += 0.18; i += 1
+        # Papyrus-Bilder ueber dem Fries (nur an Aussenwaenden mit genug Hoehe), dazu eine Tafel
+        if fh > 0.75:
+            rnd = random.Random(int(a * 5))
+            x = a + 0.6
+            while x + 0.55 < b - 0.3:
+                wall_poster(ops, x, y + 0.42, 0.55, y + fh - 0.1, "papyrus", rnd, label=False)
+                x += 1.6
+            plaque(ops, b - 0.75, y + 0.44, b - 0.25, y + 0.62, "DYNASTY", brass=False, lines=1, size=0.055)
     elif owner == "technikhalle" or owner == "hof":
         # Ziegelsockel
         yy = y + 0.08
@@ -848,7 +1427,71 @@ def face_decor(ops, owner, x0, y0, x1, y1, fh, wall):
                 ops.rect(xx, yy, min(b, xx + 0.24), yy + 0.1, fill=lift("#6e4a3a", 1.5), outline=lift("#7d7568", 1.3), width=0.012)
                 xx += 0.24
             yy += 0.1; r += 1
-    elif owner == "werkstatt" or owner == "shop":
+        if owner == "technikhalle" and b - a > 0.8:
+            # Dampfleitung mit Schellen, Ventilrad und Manometer ueber dem Sockel; an hohen Aussenwaenden eine
+            # Blaupause im Rahmen und ein Schild mit der Hallennummer
+            py = y + min(fh - 0.09, 0.405)
+            wall_pipe(ops, a, b, py, r=0.035)
+            if b - a > 2.0:
+                wall_valve(ops, a + (b - a) * 0.3, py, r=0.07)
+                wall_gauge(ops, a + (b - a) * 0.72, py + 0.01, r=0.06)
+            if fh > 0.75:
+                rnd = random.Random(int(a * 3))
+                x = a + 0.5
+                while x + 0.6 < b - 0.3:
+                    wall_poster(ops, x, y + 0.52, 0.6, y + fh - 0.1, "blaupause", rnd, label=False)
+                    x += 1.8
+                if b - a > 1.5:
+                    plaque(ops, b - 0.65, y + 0.56, b - 0.2, y + 0.74, "HALL 3", brass=False, lines=0, size=0.07)
+        elif owner == "hof" and fh > 0.75:
+            # Hof: Rohr, Nummernschild der Laderampe (nur am langen Wandstueck, sonst doppelt)
+            wall_pipe(ops, a, b, y + 0.42, r=0.03, col=lift("#5a6068", 1.3))
+            if b - a > 4.0:
+                plaque(ops, a + 0.3, y + 0.55, a + 0.95, y + 0.75, "DOCK 1", brass=False, lines=0, size=0.07)
+    elif owner == "werkstatt":
+        # Lochwand mit Werkzeug-Silhouetten, Feuerloescher, Erste-Hilfe-Kasten
+        ops.rect(a + 0.1, y + 0.1, b - 0.1, y + fh - 0.06, fill=lift("#8a8f93", 1.2), outline=OUTLINE, width=0.012)
+        rnd = random.Random(int(a * 17))
+        xx = a + 0.2
+        while xx < b - 0.25:
+            for py in (y + 0.16, y + 0.26, y + 0.36):
+                if py < y + fh - 0.1:
+                    ops.ellipse(xx, py, 0.008, 0.008, fill=shade(lift("#8a8f93", 1.2), 0.7))
+            xx += 0.1
+        tools = ["hammer", "zange", "saege", "schluessel", "pinsel"]
+        xx = a + 0.3
+        k = 0
+        while xx + 0.2 < b - 0.5:
+            t = tools[(k + int(a)) % len(tools)]
+            t0, t1 = y + 0.13, y + min(fh - 0.1, 0.4)
+            mid = (t0 + t1) / 2
+            if t == "hammer":
+                ops.line([(xx + 0.08, t0), (xx + 0.08, t1 - 0.04)], fill=hexc("#6b4a2e"), width=0.025)
+                ops.rect(xx + 0.01, t1 - 0.08, xx + 0.15, t1 - 0.02, fill=hexc("#5a6068"), outline=OUTLINE, width=0.01)
+            elif t == "zange":
+                ops.line([(xx + 0.04, t0), (xx + 0.08, mid), (xx + 0.05, t1)], fill=hexc("#d33a2a"), width=0.022)
+                ops.line([(xx + 0.12, t0), (xx + 0.08, mid), (xx + 0.11, t1)], fill=hexc("#d33a2a"), width=0.022)
+                ops.line([(xx + 0.05, t1), (xx + 0.11, t1)], fill=hexc("#5a6068"), width=0.012)
+            elif t == "saege":
+                ops.poly([(xx, t1 - 0.02), (xx + 0.2, t1 - 0.02), (xx + 0.2, mid), (xx, mid + 0.03)], fill=hexc("#c0c8cc"), outline=OUTLINE, width=0.01)
+                ops.rect(xx + 0.14, t0, xx + 0.2, mid, fill=hexc("#6b4a2e"), outline=OUTLINE, width=0.01)
+            elif t == "schluessel":
+                ops.line([(xx + 0.03, t0 + 0.02), (xx + 0.13, t1 - 0.03)], fill=OUTLINE, width=0.035)
+                ops.line([(xx + 0.03, t0 + 0.02), (xx + 0.13, t1 - 0.03)], fill=hexc("#c0c8cc"), width=0.02)
+                ops.ellipse(xx + 0.13, t1 - 0.03, 0.03, 0.03, fill=hexc("#c0c8cc"), outline=OUTLINE, width=0.01)
+            else:
+                ops.line([(xx + 0.08, t0), (xx + 0.08, mid + 0.02)], fill=hexc("#6b4a2e"), width=0.02)
+                ops.rect(xx + 0.05, mid + 0.02, xx + 0.11, t1 - 0.02, fill=hexc("#efe4c8"), outline=OUTLINE, width=0.01)
+            xx += 0.32 if t == "saege" else 0.24
+            k += 1
+        # Feuerloescher und Erste-Hilfe-Kasten am Ostende
+        ops.rect(b - 0.42, y + 0.09, b - 0.3, y + 0.33, fill=hexc("#d33a2a"), outline=OUTLINE, width=0.012)
+        ops.rect(b - 0.4, y + 0.33, b - 0.32, y + 0.37, fill=hexc("#3b4046"))
+        ops.line([(b - 0.4, y + 0.12), (b - 0.4, y + 0.3)], fill=alpha((255, 255, 255, 255), 90), width=0.012)
+        ops.rect(b - 0.27, y + 0.18, b - 0.13, y + 0.32, fill=hexc("#f0f0ea"), outline=OUTLINE, width=0.012)
+        ops.rect(b - 0.215, y + 0.21, b - 0.185, y + 0.29, fill=hexc("#d33a2a"))
+        ops.rect(b - 0.24, y + 0.235, b - 0.16, y + 0.265, fill=hexc("#d33a2a"))
+    elif owner == "shop":
         xx = a
         while xx < b:
             ops.line([(xx, y + 0.08), (xx, y + 0.3)], fill=shade(wall, 0.85), width=0.012)
@@ -859,34 +1502,66 @@ def face_decor(ops, owner, x0, y0, x1, y1, fh, wall):
         while xx < b:
             ops.line([(xx, y + 0.1), (xx, y + fh - 0.06)], fill=shade(wall, 0.8), width=0.015)
             xx += 1.0
+        # Plakate (Foyer: Saurier-Ausstellung, Telefon: Siebziger-Plakat) und Wanduhr in der Zentrale
+        rnd = random.Random(int(a * 9 + y))
+        x = a + 0.7
+        k = 0
+        while x + 0.42 < b - 0.4:
+            motif = "saurier" if owner == "foyer" else ("plakat" if k % 2 == 0 else "crew")
+            wall_poster(ops, x, y + 0.1, 0.42, y + min(fh - 0.07, 0.44), motif, rnd, label=False)
+            x += 2.2
+            k += 1
+        if owner == "telefon" and b - a > 1.5:
+            cx_ = b - 0.4
+            ops.ellipse(cx_, y + 0.3, 0.1, 0.1, fill=hexc("#efe4c8"), outline=OUTLINE, width=0.018)
+            ops.line([(cx_, y + 0.3), (cx_, y + 0.37)], fill=hexc("#3b3630"), width=0.012)
+            ops.line([(cx_, y + 0.3), (cx_ + 0.05, y + 0.28)], fill=hexc("#3b3630"), width=0.012)
+        if owner == "foyer" and b - a > 2.5:
+            plaque(ops, a + 0.15, y + 0.12, a + 0.55, y + 0.4, "INFO", brass=False, lines=3, size=0.06)
     elif owner == "planetarium":
         rnd = random.Random(99)
         for _ in range(int((b - a) * 3)):
             ops.ellipse(rnd.uniform(a, b), y + rnd.uniform(0.12, 0.42), 0.012, 0.012, fill=hexc("#cfe0ff"))
+        x = a + 0.6
+        while x + 0.5 < b - 0.4:
+            wall_poster(ops, x, y + 0.1, 0.5, y + min(fh - 0.07, 0.44), "sternbild", rnd, label=True)
+            x += 1.9
     elif owner == "rotunde":
-        # Marmorfelder mit Messingrahmen auf der Bespannung
+        # Marmorfelder mit Messingrahmen auf der Bespannung, jedes zweite Feld ein Gemaelde
         brass = lift("#b08a3c", 1.2)
         marble = shade(wall, 1.1)
+        rnd = random.Random(int(a * 4))
         xx = a + 0.15
+        k = 0
         while xx + 0.5 < b - 0.1:
             w = min(0.7, b - 0.1 - xx)
             p0, p1 = y + 0.12, y + max(0.3, fh - 0.1)
-            ops.rect(xx, p0, xx + w, p1, fill=marble, outline=brass, width=0.02)
-            ops.line([(xx + 0.1, p0 + 0.04), (xx + w - 0.15, p1 - 0.05)], fill=alpha(shade(marble, 0.85), 160), width=0.015)
+            if k % 2 == 0 and w >= 0.5:
+                wall_poster(ops, xx + 0.08, p0 + 0.02, w - 0.16, p1 - 0.04, ["saurier", "berg", "schiff"][(k + int(abs(a))) % 3], rnd, label=False)
+            else:
+                ops.rect(xx, p0, xx + w, p1, fill=marble, outline=brass, width=0.02)
+                ops.line([(xx + 0.1, p0 + 0.04), (xx + w - 0.15, p1 - 0.05)], fill=alpha(shade(marble, 0.85), 160), width=0.015)
             xx += w + 0.12
+            k += 1
     elif owner == "mineralien":
-        # beleuchtete Wandnischen mit Kristallstufen
+        # beleuchtete Wandnischen mit Kristallstufen, dazwischen eine Lehrtafel
         rnd = random.Random(int(a * 13))
         xx = a + 0.35
+        k = 0
         while xx + 0.5 < b - 0.2:
             n0, n1 = y + 0.4, y + max(0.6, fh - 0.1)
-            ops.rect(xx, n0, xx + 0.5, n1, fill=hexc("#1e2a2e"), outline=OUTLINE, width=0.02)
-            ops.glow(xx + 0.25, (n0 + n1) / 2, 0.4, WARM, 0.35)
-            col = rnd.choice([hexc("#9d6cc7"), hexc("#e0b04a"), hexc("#d9e4ec"), hexc("#3f9e6e"), hexc("#5f9bd0")])
-            for dx, hh in ((0.15, 0.12), (0.25, 0.2), (0.33, 0.14)):
-                ops.poly([(xx + dx - 0.04, n0 + 0.04), (xx + dx + 0.04, n0 + 0.04), (xx + dx + 0.01, n0 + 0.04 + hh), (xx + dx - 0.01, n0 + 0.04 + hh)],
-                         fill=col, outline=OUTLINE, width=0.012)
+            if k == 2:
+                wall_poster(ops, xx, n0, 0.5, n1, "lehrtafel", rnd, label=False)
+            else:
+                ops.rect(xx, n0, xx + 0.5, n1, fill=hexc("#1e2a2e"), outline=OUTLINE, width=0.02)
+                ops.glow(xx + 0.25, (n0 + n1) / 2, 0.4, WARM, 0.35)
+                col = rnd.choice([hexc("#9d6cc7"), hexc("#e0b04a"), hexc("#d9e4ec"), hexc("#3f9e6e"), hexc("#5f9bd0")])
+                for dx, hh in ((0.15, 0.12), (0.25, 0.2), (0.33, 0.14)):
+                    ops.poly([(xx + dx - 0.04, n0 + 0.04), (xx + dx + 0.04, n0 + 0.04), (xx + dx + 0.01, n0 + 0.04 + hh), (xx + dx - 0.01, n0 + 0.04 + hh)],
+                             fill=col, outline=OUTLINE, width=0.012)
+                ops.rect(xx + 0.15, n0 - 0.12, xx + 0.35, n0 - 0.05, fill=hexc("#efe4c8"), outline=OUTLINE, width=0.008)
             xx += 0.9
+            k += 1
     elif owner is None and a > -22.1 and b < -8.4 and -17 < y < -16:
         # Suedgang West: Fensterband zum Lichthof (Rasen + Himmel im Glas)
         xx = max(a, -21.5) + 0.35
@@ -924,6 +1599,9 @@ def face_decor(ops, owner, x0, y0, x1, y1, fh, wall):
         while xx < b:
             ops.poly([(xx, hz), (min(b, xx + 0.1), hz), (min(b, xx + 0.2), hz + 0.08), (min(b, xx + 0.1), hz + 0.08)], fill=hexc("#d4b13c"))
             xx += 0.2
+        if b - a > 2.0:
+            wall_gauge(ops, a + (b - a) * 0.5, y + fh * 0.5 + 0.11, r=0.06)
+            wall_valve(ops, a + (b - a) * 0.25, y + fh * 0.74, r=0.07)
     elif owner == "sicherheit":
         # Bildschirmleiste (Kamerabilder) + blaues Lichtband
         ops.rect(a, y + fh - 0.07, b, y + fh - 0.02, fill=hexc("#5f9bd0"))
@@ -1020,21 +1698,109 @@ def build_floor_ops(walk):
     crown_rim(ops, walk, building)
     wall_faces(ops, walk, rooms, L.CORRIDORS)
 
-    # Kronenkante: helle Linie entlang der Oberkante der Stirnseiten gibt der Wand Volumen
+    # Kronenkante: Umriss entlang aller Raumkanten mit minimalem Zittern (Stilblatt: ca. 1 px), damit die
+    # Wandkrone handgezeichnet wirkt; die Kollider bleiben die geraden Kanten (Abweichung 6 mm)
+    k = 0
     for p in ([walk] if walk.geom_type == "Polygon" else list(walk.geoms)):
         for ring in [list(p.exterior.coords)] + [list(h.coords) for h in p.interiors]:
-            ops.line(ring, fill=OUTLINE, width=0.09)
-    ops.poly(list(building.exterior.coords)[:-1], outline=OUTLINE, width=0.09)
+            wob = HD.wobble(ring, amp=0.006, seed=900 + k, step=0.1, closed=True)
+            ops.line(wob + [wob[0]], fill=OUTLINE, width=0.09)
+            k += 1
+    wob = HD.wobble(list(building.exterior.coords)[:-1], amp=0.008, seed=899, step=0.12, closed=True)
+    ops.poly(wob, outline=OUTLINE, width=0.09)
 
     exit_signs(ops)
     return ops
+
+
+# Abnutzung entlang der Laufwege (voller Pass): je Raum eine Spur von jeder Oeffnung zur Raummitte (oder zu
+# einem festen Knoten), als weiche Ebene NACH dem Rendern. Helle Spuren = blank gelaufen (Metall, Parkett,
+# Stein), dunkle Spuren = Schmutz (helle Boeden, Teppich).
+WEAR_LIGHT = {"technikhalle", "sicherheit", "haustechnik", "planetarium", "mineralien", "depot", "hof", "galerie", "rotunde"}
+WEAR_HUB = {"rotunde": (0.0, 1.6), "foyer": (0.0, -4.4), "planetarium": (-13.5, 11.8), "technikhalle": (8.4, 3.6),
+            "galerie": (-11.0, 4.0), "aegypten": (-20.5, 2.0), "hof": (24.0, 4.5), "depot": (23.6, -3.5)}
+GRAIN = 0.0           # Papierkorn (Stilblatt: 3 bis 5 %): Messung 01.10. bei JPEG q94: 3 % Korn (2 px) 4,5 -> 9,0 MB
+                      # Kacheln (+80 %), 2 % mit 3-px-Korn bei q90 noch 6,0 MB; das 15-%-Budget der Bodenkacheln
+                      # (Museum + Wald) laesst kein Korn zu, deshalb aus (Wert > 0 schaltet es wieder ein)
+
+
+def wear_lanes(walk):
+    """Rueckgabe: [(Punktliste in Weltmetern, hell?)] fuer alle Raeume, aus den Oeffnungen abgeleitet."""
+    lanes = []
+    openings = [Polygon(p) for _k, p in L.OPENINGS]
+    seen = set()
+    for key, name, _sys, poly, _c in L.ROOMS:
+        style = L.ROOM_DEFS[key][2]
+        g = unary_union([Polygon(p) for p, _c in L.HOF_FLOORS]) if key == "hof" else Polygon(poly)
+        hub = WEAR_HUB.get(style, (g.representative_point().x, g.representative_point().y))
+        light = style in WEAR_LIGHT
+        for o in openings:
+            if not o.buffer(0.05).intersects(g):
+                continue
+            c = o.centroid
+            k = (round(c.x, 1), round(c.y, 1), key)
+            if k in seen:
+                continue
+            seen.add(k)
+            # Knick: erst senkrecht zur Oeffnung in den Raum, dann zum Knoten
+            ox0, oy0, ox1, oy1 = o.bounds
+            if ox1 - ox0 > oy1 - oy0:
+                mid = (c.x, c.y + (1.2 if hub[1] > c.y else -1.2))
+            else:
+                mid = (c.x + (1.2 if hub[0] > c.x else -1.2), c.y)
+            lanes.append(([(c.x, c.y), mid, hub], light))
+    # Rotunde: Rundweg um das Podest
+    ring = [(0.5 + 3.9 * math.cos(a * math.tau / 24), 4 + 2.1 * math.sin(a * math.tau / 24)) for a in range(25)]
+    lanes.append((ring, True))
+    # Gaenge: gerade durch
+    for _k, poly in L.CORRIDORS:
+        gx0, gy0, gx1, gy1 = Polygon(poly).bounds
+        lanes.append(([(gx0, (gy0 + gy1) / 2), (gx1, (gy0 + gy1) / 2)], True))
+    return lanes
+
+
+def apply_wear(img, walk, x0, y0, x1, y1, lanes=None):
+    """Weiche Abnutzungsspuren (lanes: [(Punkte, hell?)], Standard: wear_lanes des Museums) auf das fertige
+    Bodenbild, nur innerhalb der begehbaren Flaeche. gen_wald nutzt dieselbe Ebene fuer die Huetten."""
+    ppm = img.width / (x1 - x0)
+    P = lambda x, y: ((x - x0) * ppm, (y1 - y) * ppm)
+    layers = {True: Image.new("RGBA", img.size, (0, 0, 0, 0)), False: Image.new("RGBA", img.size, (0, 0, 0, 0))}
+    draws = {k: ImageDraw.Draw(v, "RGBA") for k, v in layers.items()}
+    rnd = random.Random(77)
+    for i, (pts, light) in enumerate(lanes if lanes is not None else wear_lanes(walk)):
+        wob = HD.wobble(pts, amp=0.12, seed=700 + i, step=0.4)
+        col = (255, 240, 220, 34) if light else (20, 16, 12, 40)
+        draws[light].line([P(*p) for p in wob], fill=col, width=int(1.3 * ppm), joint="curve")
+        draws[light].line([P(*p) for p in wob], fill=col[:3] + (18,), width=int(0.6 * ppm), joint="curve")
+        # Kratzer und Schlieren in Laufrichtung (kurze, feine Striche)
+        ls = LineString(wob)
+        for _ in range(int(ls.length * 2.5)):
+            s = rnd.uniform(0, ls.length)
+            p = ls.interpolate(s)
+            q = ls.interpolate(min(ls.length, s + 0.3))
+            dx, dy = q.x - p.x, q.y - p.y
+            n = math.hypot(dx, dy) or 1.0
+            off = rnd.uniform(-0.5, 0.5)
+            a = (p.x - dy / n * off, p.y + dx / n * off)
+            ln = rnd.uniform(0.08, 0.25)
+            b = (a[0] + dx / n * ln, a[1] + dy / n * ln)
+            draws[light].line([P(*a), P(*b)], fill=col[:3] + (rnd.randint(35, 70),), width=max(1, int(0.018 * ppm)))
+    out = img.convert("RGBA")
+    inside = walk_mask(walk, x0, y0, x1, y1, ppm, img.width, img.height)
+    for light, layer in layers.items():
+        layer = layer.filter(ImageFilter.GaussianBlur(0.22 * ppm))
+        layer.putalpha(ImageChops.multiply(layer.getchannel("A"), inside))
+        out.alpha_composite(layer)
+    return out.convert("RGB")
 
 
 def render_floor(walk, ppm):
     ops = build_floor_ops(walk)
     x0, y0, x1, y1 = L.BOUNDS
     img = ops.render(x0, y0, x1, y1, ppm, VOID)
-    return ambient_occlusion(img, walk, x0, y0, x1, y1)
+    img = apply_wear(img, walk, x0, y0, x1, y1)
+    img = ambient_occlusion(img, walk, x0, y0, x1, y1)
+    return HD.paper_grain(img, GRAIN, seed=4, scale=2) if GRAIN else img
 
 
 # ================================================================== Objekte
@@ -1205,7 +1971,14 @@ PROP_H = {
     "dino": 1.6, "dino_rex": 6.2, "lampe": 5.0,
     # "Rex erwacht" (25.09.): Kopf und Unterkiefer als eigene Sprites (beweglich), zwei Stationen
     "dino_rex_head": 6.2, "dino_rex_jaw": 6.2, "spieluhr": 1.3, "nachtlicht": 1.3,
+    # Stilblatt: Staffelei mit dem Portraet in der Galerie (Augen folgen spaeter per Code)
+    "staffelei": 1.9,
 }
+
+# Portraet auf der Staffelei (Stilblatt): Augenmitten in Weltkoordinaten der Bildebene, Halbachsen des
+# Augenweiss und der Pupille; wird beim Zeichnen gefuellt, gen_museum schreibt es in AtlasMuseumData
+# und legt das Pupillen-Sprite ab (assets/task_museum_pupil.png, task_* wird eingebettet).
+PORTRAIT_EYES = {}
 
 # Objekte, deren Sprite auf den sichtbaren Inhalt zugeschnitten wird (gen_museum.render_props): Kopf und
 # Kiefer liegen auf der vollen 13,6-m-Leinwand des Skeletts, belegen davon aber nur einen kleinen Teil.
@@ -1767,12 +2540,64 @@ def draw_prop(kind, shape, idx, ppm):
         c.rect(hx0 + 0.02, fz1 + 0.02, hx1 - 0.02, fz1 + 0.06, fill=shade(gold, 1.2), outline=OUTLINE, width=0.015)
         c.ellipse((hx0 + hx1) / 2, fz1 + 0.09, 0.03, 0.04, fill=blue, outline=OUTLINE, width=0.012)
         c.rect(hx1 - 0.15, fz0 + 0.02, hx1 - 0.06, fz0 + 0.1, fill=blue, outline=OUTLINE, width=0.012)
+    elif kind == "staffelei":
+        # Stilblatt: Holzstaffelei mit grossem Portraet ("der Stifter"), Augenweiss ohne Pupille (die
+        # Pupillen sind ein eigenes Sprite, bewegt per Code). Leinwand 1,0 x 1,2 m, leicht nach hinten
+        # geneigt: im Bild 1,0 x 1,2 * K. Stand: drei Beine, Standlinie y0.
+        wood = lift("#6a4a2a", 1.5)
+        for lx in (x0 + 0.08, x1 - 0.12):
+            c.line([(lx, y0 + 0.02), (cx, y0 + 1.9 * K)], fill=OUTLINE, width=0.07)
+            c.line([(lx, y0 + 0.02), (cx, y0 + 1.9 * K)], fill=wood, width=0.04)
+        c.line([(cx, y1 - 0.05), (cx, y0 + 1.9 * K)], fill=OUTLINE, width=0.06)
+        c.line([(cx, y1 - 0.05), (cx, y0 + 1.9 * K)], fill=shade(wood, 0.85), width=0.035)
+        c.rect(x0 - 0.02, y0 + 0.55 * K - 0.04, x1 + 0.02, y0 + 0.55 * K + 0.02, fill=wood, outline=OUTLINE, width=0.02)   # Ablageleiste
+        cz0, cz1 = 0.55, 1.75
+        py0, py1 = y0 + cz0 * K, y0 + cz1 * K
+        px0, px1 = cx - 0.5, cx + 0.5
+        c.soft_shadow([(px0 + 0.05, py0 - 0.06), (px1 + 0.08, py0 - 0.06), (px1 + 0.08, py1), (px0 + 0.05, py1)], 90, 0.05)
+        fr = HD.wobble_rect(px0, py0, px1, py1, amp=0.005, seed=61, step=0.05)
+        c.poly(fr, fill=hexc("#c9a24c"), outline=OUTLINE, width=0.03)
+        c.poly(HD.wobble_rect(px0 + 0.035, py0 + 0.03, px1 - 0.035, py1 - 0.03, amp=0.004, seed=62, step=0.05), outline=hexc("#8a6a28"), width=0.015)
+        ix0, iy0, ix1, iy1 = px0 + 0.07, py0 + 0.06, px1 - 0.07, py1 - 0.06
+        iw, ih = ix1 - ix0, iy1 - iy0
+        mx = (ix0 + ix1) / 2
+        c.rect(ix0, iy0, ix1, iy1, fill=hexc("#3a3f30"))                                         # olivgruener Fond
+        c.ellipse(mx, iy0 + ih * 0.55, iw * 0.42, ih * 0.5, fill=hexc("#2c3026"))                  # Vignette
+        # Schultern mit Samtjacke, Spitzenkragen, Kopf, Hut, Schnurrbart, Augen (Weiss ohne Pupille)
+        c.poly([(ix0 + iw * 0.12, iy0), (ix1 - iw * 0.12, iy0), (ix1 - iw * 0.2, iy0 + ih * 0.35), (mx, iy0 + ih * 0.42), (ix0 + iw * 0.2, iy0 + ih * 0.35)],
+               fill=hexc("#5b2430"), outline=OUTLINE, width=0.015)
+        c.poly([(mx - iw * 0.14, iy0 + ih * 0.38), (mx + iw * 0.14, iy0 + ih * 0.38), (mx + iw * 0.08, iy0 + ih * 0.3), (mx - iw * 0.08, iy0 + ih * 0.3)],
+               fill=hexc("#f4efe0"), outline=OUTLINE, width=0.012)
+        c.ellipse(mx, iy0 + ih * 0.6, iw * 0.2, ih * 0.22, fill=hexc("#e8c4a0"), outline=OUTLINE, width=0.015)   # Kopf
+        c.ellipse(mx - iw * 0.21, iy0 + ih * 0.6, iw * 0.03, ih * 0.05, fill=hexc("#e8c4a0"), outline=OUTLINE, width=0.01)   # Ohren
+        c.ellipse(mx + iw * 0.21, iy0 + ih * 0.6, iw * 0.03, ih * 0.05, fill=hexc("#e8c4a0"), outline=OUTLINE, width=0.01)
+        c.rect(mx - iw * 0.3, iy0 + ih * 0.76, mx + iw * 0.3, iy0 + ih * 0.8, fill=hexc("#2a2422"), outline=OUTLINE, width=0.012)   # Hutkrempe
+        c.rect(mx - iw * 0.18, iy0 + ih * 0.79, mx + iw * 0.18, iy1 - 0.02, fill=hexc("#2a2422"), outline=OUTLINE, width=0.012)    # Zylinder
+        c.rect(mx - iw * 0.18, iy0 + ih * 0.82, mx + iw * 0.18, iy0 + ih * 0.85, fill=hexc("#8e2e36"))
+        c.poly([(mx - iw * 0.12, iy0 + ih * 0.5), (mx - iw * 0.02, iy0 + ih * 0.53), (mx, iy0 + ih * 0.51), (mx + iw * 0.02, iy0 + ih * 0.53), (mx + iw * 0.12, iy0 + ih * 0.5),
+                (mx + iw * 0.04, iy0 + ih * 0.46), (mx - iw * 0.04, iy0 + ih * 0.46)], fill=hexc("#3a2a22"), outline=OUTLINE, width=0.01)   # Schnurrbart
+        c.ellipse(mx, iy0 + ih * 0.57, iw * 0.025, ih * 0.03, fill=hexc("#d8a888"), outline=OUTLINE, width=0.008)                 # Nase
+        erx, ery = iw * 0.065, ih * 0.075
+        eyes = []
+        for ex in (mx - iw * 0.09, mx + iw * 0.09):
+            ey = iy0 + ih * 0.64
+            c.ellipse(ex, ey, erx, ery, fill=hexc("#fbfaf4"), outline=OUTLINE, width=0.012)
+            c.line([(ex - erx, ey + ery), (ex + erx, ey + ery + 0.01)], fill=OUTLINE, width=0.014)       # Braue
+            eyes.append((round(ex, 4), round(ey, 4)))
+        PORTRAIT_EYES.update({"eyes": eyes, "rx": round(erx, 4), "ry": round(ery, 4), "pupil_rx": round(erx * 0.45, 4),
+                              "pupil_ry": round(ery * 0.5, 4), "base_y": round(p.base_y, 4)})
+        c.text(mx, iy0 + ih * 0.06, "THE FOUNDER", 0.05, hexc("#c9a24c"))
+        c.rect(px0 + 0.1, py1 + 0.02, px1 - 0.1, py1 + 0.05, fill=hexc("#c9a24c"), outline=OUTLINE, width=0.01)   # Bilderleuchte
+        c.glow(mx, py1 - 0.15, 0.6, WARM, 0.3)
     elif kind == "stellwand":
         felt = lift("#5b2430", 1.55)   # Bespannung wie die Galeriewaende
         # optisch etwas breiter als die Kollision (0,2 m), sonst liest sie sich als Stange
         vx0, vx1 = x0 - 0.06, x1 + 0.06
         p.box(vx0, y0, vx1, y1, 0, 2.2, shade(felt, 1.2), felt)
         zt = 2.2 * K
+        # Stilblatt: ein hochformatiges Gemaelde auf der sichtbaren Suedseite der Stellwand
+        painting(c, (vx0 + vx1) / 2 - 0.11, y0 + 0.45 * K, (vx0 + vx1) / 2 + 0.11, y0 + 1.75 * K, MOTIFS[idx % len(MOTIFS)], random.Random(idx))
+        c.glow((vx0 + vx1) / 2, y0 + 1.6 * K, 0.3, WARM, 0.3)
         # Bilderrahmen seitlich angedeutet (Ostseite) + Bilderleuchten auf der Krone
         rnd2 = random.Random(idx)
         for fy in (y0 + 0.35, y0 + 1.2):
@@ -2549,9 +3374,167 @@ def draw_rope_posts(p, cx, cy, rx, ry, z0, angles, rnd=None):
         c.ellipse(x, y + 0.9 * K, 0.05, 0.04, fill=shade(brass, 1.15), outline=OUTLINE, width=0.02)
 
 
+# Stilblatt: Staffelei mit Portraet an der Nordwand der Galerie, oestlich der Weapons-Konsole (-10,5, 7,7)
+# und westlich des Ost-Durchgangs. Ohne Kollider (begehbar, 0,4 m tief); ein GLASS-Eintrag in
+# museum_layout.py waere der Geometrie-Wunsch fuer den vollen Pass.
+ART_PROPS = [("staffelei", ("rect", -8.55, 7.0, -7.45, 7.4))]
+
+
 def extra_props():
     """Objekte ohne eigenen Kollider-Eintrag (Deko mit Hoehe)."""
-    return list(L.EXTRA_PROPS)
+    return list(L.EXTRA_PROPS) + list(ART_PROPS)
+
+
+def pupil_sprite(ppm):
+    """Pupille des Staffelei-Portraets als eigenes Sprite (Mitte = Pivot), mit Glanzpunkt."""
+    rx, ry = PORTRAIT_EYES.get("pupil_rx", 0.03), PORTRAIT_EYES.get("pupil_ry", 0.03)
+    c = Canvas(-rx - 0.02, -ry - 0.02, rx + 0.02, ry + 0.02, ppm)
+    c.ellipse(0, 0, rx, ry, fill=hexc("#2a2420"), outline=OUTLINE, width=0.008)
+    c.ellipse(-rx * 0.3, ry * 0.3, rx * 0.25, ry * 0.25, fill=(255, 255, 255, 255))
+    return c.finish()
+
+
+def planetarium_sprites():
+    """Laufzeit-Sprites der Planetariumsshow (Vertrag 01.10.): Sternenkuppel 512 x 512 px, rund, ausserhalb
+    transparent, hell auf transparent (Laufzeit toent blaeulich und dreht), mit Milchstrasse und Sternbild-
+    linien; drei Planeten 64 x 64 px (Ring, Baender, Krater), Mitte = Drehpunkt. Rueckgabe {Dateiname: Bild}."""
+    out = {}
+    rnd = random.Random(2026)
+    S, ss = 512, 2
+    W = S * ss
+    cx = cy = W / 2
+    R = W / 2 - 3 * ss
+    im = Image.new("RGBA", (W, W), (0, 0, 0, 0))
+    # Milchstrasse: weiches diagonales Band (zwei Striche, verwischt) + dichte feine Sterne entlang des Bands
+    band = Image.new("RGBA", (W, W), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(band, "RGBA")
+    a = math.radians(32)
+    dx, dy = math.cos(a), math.sin(a)
+    for wdt, al in ((int(W * 0.22), 38), (int(W * 0.11), 48)):
+        bd.line([(cx - dx * W, cy - dy * W), (cx + dx * W, cy + dy * W)], fill=(255, 255, 255, al), width=wdt)
+    bd.line([(cx - dx * W + dy * W * 0.03, cy - dy * W - dx * W * 0.03), (cx + dx * W + dy * W * 0.03, cy + dy * W - dx * W * 0.03)],
+            fill=(0, 0, 0, 40), width=int(W * 0.025))   # dunkle Staubbahn
+    band = band.filter(ImageFilter.GaussianBlur(W * 0.03))
+    im.alpha_composite(band)
+    d = ImageDraw.Draw(im, "RGBA")
+    for _ in range(1400):
+        t = rnd.uniform(-1, 1) * W * 0.75
+        off = rnd.gauss(0, W * 0.06)
+        px_, py_ = cx + dx * t - dy * off, cy + dy * t + dx * off
+        r = rnd.uniform(0.6, 1.6) * ss
+        d.ellipse([px_ - r, py_ - r, px_ + r, py_ + r], fill=(255, 255, 255, rnd.randint(60, 150)))
+    # Sterne ueber die ganze Kuppel, wenige grosse mit Glanzkreuz
+    stars = []
+    for _ in range(520):
+        ang, rr = rnd.uniform(0, math.tau), math.sqrt(rnd.random()) * R * 0.98
+        px_, py_ = cx + rr * math.cos(ang), cy + rr * math.sin(ang)
+        r = rnd.choice([0.8, 1.0, 1.0, 1.2, 1.2, 1.6, 1.6, 2.2, 3.0]) * ss
+        d.ellipse([px_ - r, py_ - r, px_ + r, py_ + r], fill=(255, 255, 255, rnd.randint(140, 255)))
+        if r >= 3.0 * ss and rnd.random() < 0.5:
+            for ddx, ddy in ((1, 0), (0, 1)):
+                d.line([(px_ - ddx * r * 2.2, py_ - ddy * r * 2.2), (px_ + ddx * r * 2.2, py_ + ddy * r * 2.2)], fill=(255, 255, 255, 70), width=ss)
+        stars.append((px_, py_, r))
+    # Sternbilder: 7 Gruppen aus 4 bis 7 nahen hellen Sternen, verbunden mit duennen Linien
+    for k in range(7):
+        ang = k * math.tau / 7 + rnd.uniform(-0.3, 0.3)
+        rr = rnd.uniform(0.3, 0.75) * R
+        gx, gy = cx + rr * math.cos(ang), cy + rr * math.sin(ang)
+        pts = []
+        for _ in range(rnd.randint(4, 7)):
+            pts.append((gx + rnd.uniform(-1, 1) * W * 0.09, gy + rnd.uniform(-1, 1) * W * 0.09))
+        pts.sort(key=lambda p: p[0] + 0.3 * p[1])
+        d.line(pts, fill=(255, 255, 255, 95), width=max(1, int(0.9 * ss)))
+        if rnd.random() < 0.5:
+            d.line([pts[0], pts[-1]], fill=(255, 255, 255, 60), width=max(1, int(0.8 * ss)))
+        for px_, py_ in pts:
+            r = 2.6 * ss
+            d.ellipse([px_ - r, py_ - r, px_ + r, py_ + r], fill=(255, 255, 255, 255))
+    # Kreisfenster: Alpha mit runder Maske multiplizieren, weicher Rand von 3 px, feiner heller Saum
+    mask = Image.new("L", (W, W), 0)
+    ImageDraw.Draw(mask).ellipse([cx - R, cy - R, cx + R, cy + R], fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(1.5 * ss))
+    im.putalpha(ImageChops.multiply(im.getchannel("A"), mask))
+    d.ellipse([cx - R, cy - R, cx + R, cy + R], outline=(255, 255, 255, 70), width=int(1.2 * ss))
+    out["task_museum_dome.png"] = im.resize((S, S), Image.LANCZOS)
+
+    # Planeten 64 x 64: Among-Us-Look (Umriss, flache Flaechen, Lichtkante oben links, Schattenseite rechts)
+    P, pss = 64, 4
+    PW = P * pss
+
+    def planet_canvas():
+        return Image.new("RGBA", (PW, PW), (0, 0, 0, 0))
+
+    def terminator(d, c, r):
+        # Schattenseite: Halbmond rechts unten als eigene Ebene
+        lay = Image.new("RGBA", (PW, PW), (0, 0, 0, 0))
+        ld = ImageDraw.Draw(lay)
+        ld.ellipse([c - r, c - r, c + r, c + r], fill=(0, 0, 0, 70))
+        ld.ellipse([c - r * 1.25, c - r * 1.25, c + r * 0.75, c + r * 0.75], fill=(0, 0, 0, 0))
+        return lay
+
+    def highlight(im, box, col):
+        # halbtransparentes Glanzlicht ueber eigene Ebene (PIL ueberschreibt sonst das Alpha)
+        lay = Image.new("RGBA", (PW, PW), (0, 0, 0, 0))
+        ImageDraw.Draw(lay).ellipse(box, fill=col)
+        im.alpha_composite(lay)
+
+    ol = max(2, int(0.7 * pss))
+    c = PW / 2
+    # 0: Ringplanet
+    im = planet_canvas(); d = ImageDraw.Draw(im, "RGBA")
+    r = PW * 0.3
+    ring = Image.new("RGBA", (PW, PW), (0, 0, 0, 0))
+    rd = ImageDraw.Draw(ring, "RGBA")
+    rd.ellipse([c - r * 1.65, c - r * 0.55, c + r * 1.65, c + r * 0.55], outline=(14, 16, 20, 255), width=ol + int(r * 0.26))
+    rd.ellipse([c - r * 1.65, c - r * 0.55, c + r * 1.65, c + r * 0.55], outline=(226, 200, 150, 255), width=int(r * 0.26))
+    rd.ellipse([c - r * 1.45, c - r * 0.48, c + r * 1.45, c + r * 0.48], outline=(170, 140, 100, 255), width=max(1, int(r * 0.05)))
+    ring = ring.rotate(-18, resample=Image.BICUBIC, center=(c, c))
+    back = ring.copy()
+    ImageDraw.Draw(back).rectangle([0, c, PW, PW], fill=(0, 0, 0, 0))
+    front = ring.copy()
+    ImageDraw.Draw(front).rectangle([0, 0, PW, c], fill=(0, 0, 0, 0))
+    im.alpha_composite(back)
+    d.ellipse([c - r, c - r, c + r, c + r], fill=(222, 170, 92, 255), outline=(14, 16, 20, 255), width=ol)
+    for k, (fy, hh, col) in enumerate(((-0.55, 0.16, (200, 140, 70)), (-0.1, 0.12, (240, 200, 130)), (0.35, 0.18, (200, 140, 70)))):
+        lay = Image.new("RGBA", (PW, PW), (0, 0, 0, 0))
+        ImageDraw.Draw(lay).rectangle([c - r, c + fy * r, c + r, c + (fy + hh) * r], fill=col + (255,))
+        m = Image.new("L", (PW, PW), 0)
+        ImageDraw.Draw(m).ellipse([c - r + ol, c - r + ol, c + r - ol, c + r - ol], fill=255)
+        lay.putalpha(ImageChops.multiply(lay.getchannel("A"), m))
+        im.alpha_composite(lay)
+    highlight(im, [c - r * 0.55, c - r * 0.75, c - r * 0.15, c - r * 0.45], (255, 240, 210, 130))
+    im.alpha_composite(terminator(d, c, r - ol / 2))
+    im.alpha_composite(front)
+    out["task_museum_planet_0.png"] = im.resize((P, P), Image.LANCZOS)
+    # 1: Gasriese mit Baendern und Sturmfleck
+    im = planet_canvas(); d = ImageDraw.Draw(im, "RGBA")
+    r = PW * 0.42
+    d.ellipse([c - r, c - r, c + r, c + r], fill=(120, 160, 210, 255), outline=(14, 16, 20, 255), width=ol)
+    m = Image.new("L", (PW, PW), 0)
+    ImageDraw.Draw(m).ellipse([c - r + ol, c - r + ol, c + r - ol, c + r - ol], fill=255)
+    lay = Image.new("RGBA", (PW, PW), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(lay)
+    for fy, hh, col in ((-0.75, 0.2, (90, 120, 180)), (-0.35, 0.14, (170, 200, 235)), (0.0, 0.22, (90, 120, 180)), (0.4, 0.12, (170, 200, 235)), (0.65, 0.2, (80, 110, 170))):
+        pts = [(c - r * 1.2, c + fy * r), (c + r * 1.2, c + (fy - 0.05) * r), (c + r * 1.2, c + (fy + hh - 0.05) * r), (c - r * 1.2, c + (fy + hh) * r)]
+        ld.polygon(pts, fill=col + (255,))
+    ld.ellipse([c + r * 0.1, c + r * 0.05, c + r * 0.6, c + r * 0.35], fill=(230, 120, 90, 255), outline=(14, 16, 20, 255), width=max(1, ol // 2))
+    lay.putalpha(ImageChops.multiply(lay.getchannel("A"), m))
+    im.alpha_composite(lay)
+    highlight(im, [c - r * 0.6, c - r * 0.78, c - r * 0.2, c - r * 0.5], (255, 255, 255, 110))
+    im.alpha_composite(terminator(d, c, r - ol / 2))
+    out["task_museum_planet_1.png"] = im.resize((P, P), Image.LANCZOS)
+    # 2: Felsplanet mit Kratern
+    im = planet_canvas(); d = ImageDraw.Draw(im, "RGBA")
+    r = PW * 0.36
+    d.ellipse([c - r, c - r, c + r, c + r], fill=(196, 120, 92, 255), outline=(14, 16, 20, 255), width=ol)
+    for kx, ky, kr in ((-0.35, -0.2, 0.22), (0.3, 0.1, 0.16), (-0.05, 0.45, 0.14), (0.35, -0.45, 0.1)):
+        px_, py_, rr = c + kx * r, c + ky * r, kr * r
+        d.ellipse([px_ - rr, py_ - rr, px_ + rr, py_ + rr], fill=(150, 88, 70, 255), outline=(14, 16, 20, 255), width=max(1, ol // 2))
+        d.ellipse([px_ - rr * 0.7, py_ - rr * 0.7 + rr * 0.25, px_ + rr * 0.7, py_ + rr * 0.7 + rr * 0.25], fill=(176, 104, 82, 255))
+    highlight(im, [c - r * 0.65, c - r * 0.75, c - r * 0.3, c - r * 0.5], (255, 230, 215, 110))
+    im.alpha_composite(terminator(d, c, r - ol / 2))
+    out["task_museum_planet_2.png"] = im.resize((P, P), Image.LANCZOS)
+    return out
 
 
 def all_props():

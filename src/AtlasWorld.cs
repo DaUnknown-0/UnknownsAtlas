@@ -66,9 +66,17 @@ internal static class AtlasWorld
         Lasers.Clear(); LaserLog.Clear(); LastPos.Clear();
         _root = null;
         AtlasWeatherFx.Reset();
+        AtlasParkFun.Reset();
+        AtlasFerry.ResetAll();
+        AtlasPlanetarium.Reset();
+        AtlasDusk.Reset();
+        AtlasGallery.Reset();
         AtlasParkWorld.Reset();
         AtlasRex.Reset();
         AtlasLookout.Reset();
+        AtlasFigure.Reset();
+        AtlasView.Reset();
+        AtlasUse.Reset();
     }
 
     /// <summary>Nach dem Kartenbau: Baum-Stellen, Nebelmaschine, Laserschranken anlegen.</summary>
@@ -105,6 +113,12 @@ internal static class AtlasWorld
         }
         if (Park) AtlasParkWorld.Build(ship, _root);
         if (Museum) AtlasRex.OnBuilt(ship);
+        if (Museum) AtlasPlanetarium.Build(ship, _root);
+        if (Museum) AtlasGallery.Build(ship, _root);
+        if (Wald) AtlasDusk.Build(ship, _root);
+        // Kanu: Bootssteg (A) <-> Anleger am Wasserwerk (B), langsamer als zu Fuss nicht, aber gut sichtbar
+        if (Wald) AtlasFerry.Create(_root, "canoe", "task_wald_canoe.png", AtlasWaldData.CanoePath,
+            AtlasWaldData.CanoeA, AtlasWaldData.CanoeB, 3.6f, 6f, 0.85f, "task_btn_canoe.png", "splash");
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} ready: {TreeSpots.Count} tree spot(s), {Lasers.Count} laser(s)");
     }
 
@@ -158,6 +172,9 @@ internal static class AtlasWorld
                 case AtlasParkWorld.OpParkEvent when fromHost: AtlasParkWorld.Apply((AtlasParkWorld.Ev)reader.ReadByte()); break;
                 case AtlasRex.OpRex: AtlasRex.Receive(__instance, fromHost, reader); break;
                 case AtlasLookout.OpLookout: AtlasLookout.Receive(__instance, reader); break;
+                case AtlasParkFun.OpFun: AtlasParkFun.Receive(__instance, fromHost, reader); break;
+                case AtlasPlanetarium.OpShow when fromHost: AtlasPlanetarium.Start(); break;
+                case AtlasFerry.OpFerry: AtlasFerry.Receive(__instance, fromHost, reader); break;
             }
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} rpc: {e.Message}"); }
@@ -180,6 +197,7 @@ internal static class AtlasWorld
         if (!AmHost || MeetingHud.Instance != null || ExileController.Instance != null) return;
         float now = Time.time;
         if (Park) AtlasParkWorld.HostTick(CriticalActive());
+        if (Museum) AtlasPlanetarium.HostTick(CriticalActive());
         if (Wald)
         {
             if (now >= _weatherUntil)
@@ -326,7 +344,9 @@ internal static class AtlasWorld
         float f = 1f;
         if (Wald) f *= CurrentWeather == Weather.Fog ? 0.65f : CurrentWeather == Weather.Storm ? 0.85f : 1f;
         if (Wald) f *= AtlasLookout.VisionFactor;                 // Hochsitz: oben sieht man weiter
-        if (Park) f *= AtlasParkWorld.VisionFactor(pos);
+        if (Wald) f *= AtlasDusk.VisionFactor;                    // Daemmerung: nachts etwas weniger
+        if (Park) f *= AtlasParkWorld.VisionFactor(pos) * AtlasParkFun.VisionFactor;   // Riesenrad: oben weiter
+        if (Museum) f *= AtlasPlanetarium.VisionFactor(pos);                          // Show: dunkle Kuppel
         return f;
     }
 
@@ -674,7 +694,7 @@ internal static class AtlasWorld
 
     public static string DiagState() =>
         $"weather {CurrentWeather}, trees {Trees.Count}, lasers {Lasers.Count}, log {LaserLog.Count}" +
-        (Park ? "; " + AtlasParkWorld.DiagState() : "") + (Museum ? "; " + AtlasRex.DiagState() : "");
+        (Park ? "; " + AtlasParkWorld.DiagState() + "; " + AtlasParkFun.DiagState() : "") + (Museum ? "; " + AtlasRex.DiagState() + "; " + AtlasPlanetarium.DiagState() : "") + (Wald ? "; " + AtlasDusk.DiagState() + "; " + AtlasFerry.Find("canoe")?.DiagState() : "");
 
     private static void Snap(Vector2 p)
     {
@@ -772,6 +792,25 @@ internal static class AtlasWorld
             case var r when r.StartsWith("rex", StringComparison.Ordinal) || r == "arrowinfo": AtlasRex.Diag(r, Snap); break;
             // Forest-Hochsitz: lookoutbase, lookout1..3 (Sichtstufen), lookoutdown, lookoutdummy (AtlasLookout.Diag)
             case var l when l.StartsWith("lookout", StringComparison.Ordinal): AtlasLookout.Diag(l, Snap); break;
+            // Park-Attraktionen: funlukas, funlukasmap, funcostume, funcostumedummy, funwheel, funwheeldummy,
+            // funshuttle, funshuttleback (AtlasParkFun.Diag)
+            case var f when f.StartsWith("fun", StringComparison.Ordinal): AtlasParkFun.Diag(f, Snap); break;
+            case "canoe": AtlasFerry.Find("canoe")?.Diag(0, Snap); break;
+            case "canoeback": AtlasFerry.Find("canoe")?.Diag(1, Snap); break;
+            case "dusk":
+                AtlasDusk.DiagAdvance(400f);
+                if (AtlasMuseumBuilder.RoomCenters.TryGetValue(SystemTypes.Weapons, out var hs)) Snap(hs + new Vector2(-2f, -1.5f));
+                break;
+            case "gallery":
+                Snap(AtlasMuseumData.PortraitEyes[0] + new Vector2(-2.5f, -2.2f));
+                break;
+            case "gallery2":
+                Snap(AtlasMuseumData.PortraitEyes[0] + new Vector2(1.2f, -1.6f));
+                break;
+            case "planetarium":
+                if (AtlasMuseumBuilder.RoomCenters.TryGetValue(SystemTypes.Nav, out var pc)) Snap(pc + new Vector2(1.5f, -1.5f));
+                AtlasPlanetarium.Start();
+                break;
         }
         _sabCooldownUntil = 0f;
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag {what}: {DiagState()}");
@@ -793,8 +832,14 @@ internal static class AtlasWorld
             MapButtonTick();
             AtlasWeatherFx.Tick(dt, Wald);
             AtlasParkWorld.Tick(dt);
+            if (Park) AtlasParkFun.Tick(dt);
+            AtlasPlanetarium.Tick(dt);
+            AtlasDusk.Tick(dt);
+            AtlasGallery.Tick(dt);
+            AtlasFerry.TickAll(dt);                                // Pendelwagen (Park), Kanu (Wald)
             AtlasRex.Tick(dt);
             AtlasLookout.Tick(dt);
+            AtlasUse.Commit();                                     // nach allen Mechaniken, die den Knopf anbieten
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} tick: {e.Message}"); }
     }

@@ -164,6 +164,13 @@ GLASS = [
 ]
 
 # Wasser (sperrt Weg, nicht Sicht): Bach am Ostrand des Stegs
-WATER = [("rect", 20.3, -16.0, 25.5, -3.8)]
-# Bootssteg (begehbar, ragt ins Wasser)
+# Seit 01.10. laeuft der Bach als Kanustrecke am Ostrand bis zum Wasserwerk hinauf (AtlasFerry "canoe")
+WATER = [("rect", 20.3, -16.0, 25.5, 13.0)]
+# Bootssteg (begehbar, ragt ins Wasser) und Anleger am Wasserwerk (Ecke der Lichtung bei x 19,4)
 DOCK = ("rect", 20.2, -10.2, 23.3, -8.6)
+DOCK2 = ("rect", 19.2, 9.6, 22.2, 10.9)
+DOCKS = [DOCK, DOCK2]
+# Kanu: Use-Punkt an Land/Steg, Fahrweg vom Halt am Bootssteg (A) zum Halt am Wasserwerk (B)
+CANOE_A = (22.9, -9.9)
+CANOE_B = (20.6, 10.25)
+CANOE_PATH = [(24.4, -9.4), (24.2, -3.0), (23.8, 6.0), (23.4, 10.25)]
