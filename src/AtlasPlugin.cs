@@ -23,7 +23,7 @@ public class AtlasPlugin : BasePlugin
 {
     public const string Id = "com.daunknown0.atlas";
     public const string PluginName = "Unknown's Atlas";
-    public const string VersionString = "0.3.0.19";
+    public const string VersionString = "0.3.0.20";
     public static readonly System.Version Version = System.Version.Parse(VersionString);
 
     public static BepInEx.Logging.ManualLogSource Logger = null!;
@@ -139,11 +139,11 @@ public class AtlasPlugin : BasePlugin
 // Version line in the top-corner PingTracker readout, folded into the shared "Unknown's
 // Collective" line alongside this project family's other mods (see UnknownsCollective.cs).
 [HarmonyPatch(typeof(PingTracker), nameof(PingTracker.Update))]
-[HarmonyPriority(Priority.Low)]
 internal static class AtlasVersionDisplayPatch
 {
     private static string? cachedLine;
 
+    [HarmonyPriority(Priority.Low)]
     public static void Postfix(PingTracker __instance)
     {
         if (__instance == null || __instance.text == null) return;

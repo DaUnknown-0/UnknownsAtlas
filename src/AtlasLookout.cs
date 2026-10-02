@@ -351,6 +351,10 @@ internal static class AtlasLookout
         foreach (var pc in PlayerControl.AllPlayerControls)
         {
             if (pc == null || pc.Data == null) continue;
+            // A canoe rider belongs to AtlasFerry, which switches his collider off and poses him every
+            // frame; this tick runs after it and switched the collider back on and reset the pose, so
+            // the rider hit the shoreline walls on every client (Opus audit 2026-10-02).
+            if (AtlasFerry.IsRiding(pc.PlayerId)) continue;
             float target;
             bool up;
             if (pc == lp) { target = Smooth(_p) * lift; up = _state != St.Down; }

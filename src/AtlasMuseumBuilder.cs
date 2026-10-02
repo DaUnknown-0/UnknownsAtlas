@@ -103,7 +103,7 @@ internal static class AtlasMuseumBuilder
         {
             D = AtlasPlugin.SelectedMap();
             _blocks = null;
-            VentArt.Clear();
+            VentArt.Clear(); SealedVentArt.Clear();
             Build(__instance);
             _builtFor = __instance;
             AppDomain.CurrentDomain.SetData(AppDomainKey, D.Key);
@@ -119,7 +119,7 @@ internal static class AtlasMuseumBuilder
         if (_builtFor != null && _builtFor != __instance) return;
         _builtFor = null;
         FadeProps.Clear();
-        VentArt.Clear();
+        VentArt.Clear(); SealedVentArt.Clear();
         AppDomain.CurrentDomain.SetData(AppDomainKey, null);
     }
 
@@ -550,7 +550,9 @@ internal static class AtlasMuseumBuilder
     // dass ein Zuruecksetzen dort beim Venten nicht griff (User 23.09.: "Vent geht zurueck zum
     // Original"). Der Kind-Renderer teilt die Material-Instanz von myRend, damit die rote/gelbe
     // Kontur (Vent.SetOutline schreibt in myRend.material) weiter sichtbar ist.
-    private static readonly List<(SpriteRenderer Orig, SpriteRenderer Art, Sprite S)> VentArt = new();
+    private static readonly List<(SpriteRenderer Orig, SpriteRenderer Art, Sprite S, Vent V)> VentArt = new();
+    private static readonly HashSet<int> SealedVentArt = new();
+    private static float _sealCheckAt;
 
     private static void ApplyVentArt(Vent v)
     {
@@ -583,7 +585,7 @@ internal static class AtlasMuseumBuilder
         // Die Idle-Animation muss nicht mehr laufen; Ein-/Aussteigen spielt sie trotzdem (unsichtbar).
         try { var anim = v.myAnim; if (anim != null) anim.enabled = false; } catch { }
         foreach (var an in v.GetComponentsInChildren<Animator>(true)) an.enabled = false;
-        VentArt.Add((sr, art, sprite));
+        VentArt.Add((sr, art, sprite, v));
     }
 
     private static Sprite _markerSprite;
@@ -830,10 +832,23 @@ internal static class AtlasMuseumBuilder
         if (!Active) return;
         for (int i = 0; i < VentArt.Count; i++)
         {
-            var (orig, art, sp) = VentArt[i];
-            if (orig != null && orig.enabled) orig.enabled = false;
+            var (orig, art, sp, vent) = VentArt[i];
+            // TOR shows a Security Guard seal (and the guard's half-transparent preview) on myRend and
+            // renames the vent "SealedVent_" / "FutureSealedVent_". Such a vent shows TOR's renderer
+            // instead of the Atlas art, or a sealed vent looks like any other (Opus audit 2026-10-02).
+            // The name, not the sprite: entering/exiting a vent animates myRend's sprite too.
+            if (Time.time >= _sealCheckAt && vent != null)
+            {
+                string n = vent.name;
+                if (n.StartsWith("SealedVent_", StringComparison.Ordinal) || n.StartsWith("FutureSealedVent_", StringComparison.Ordinal)) SealedVentArt.Add(i);
+                else SealedVentArt.Remove(i);
+            }
+            bool sealedVent = SealedVentArt.Contains(i);
+            if (orig != null && orig.enabled != sealedVent) orig.enabled = sealedVent;
+            if (art != null && art.enabled == sealedVent) art.enabled = !sealedVent;
             if (art != null && art.sprite != sp) art.sprite = sp;
         }
+        if (Time.time >= _sealCheckAt) _sealCheckAt = Time.time + 0.25f;
         if (FadeProps.Count == 0) return;
         var lp = PlayerControl.LocalPlayer;
         if (lp == null) return;

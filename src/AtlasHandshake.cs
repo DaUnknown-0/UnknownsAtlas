@@ -55,7 +55,8 @@ internal static class AtlasHandshake
     private static bool AmHost => AmongUsClient.Instance != null && AmongUsClient.Instance.AmHost;
     private static bool Online => AmongUsClient.Instance != null && AmongUsClient.Instance.NetworkMode != NetworkModes.FreePlay;
     private static bool LocalEnabled => AtlasPlugin.CfgEnabled is { Value: true } && AtlasPlugin.CfgBuildPocMap is { Value: true };
-    private static bool AtlasMapChosen => AtlasSelection.CurrentKey != null;
+    // Only a Skeld lobby builds an Atlas map; on any other map the choice does nothing (Opus audit 2026-10-02).
+    private static bool AtlasMapChosen => AtlasSelection.CurrentKey != null && AtlasSelection.LobbyOnSkeld();
 
     private static Version Norm(Version v) =>
         new(Math.Max(0, v.Major), Math.Max(0, v.Minor), Math.Max(0, v.Build), Math.Max(0, v.Revision));
@@ -133,6 +134,14 @@ internal static class AtlasHandshake
         var ac = AmongUsClient.Instance;
         if (ac == null || ac.allClients == null) return list;
         var local = Local;
+        // The host checks itself too (Opus audit 2026-10-02): with BuildPocMap off the host stays on the
+        // plain Skeld while every guest builds the Atlas map - walls, vents and consoles in different
+        // places, noticed only by the self-check 3 s into the round.
+        if (!LocalEnabled)
+        {
+            string me = PlayerControl.LocalPlayer != null && PlayerControl.LocalPlayer.Data != null ? PlayerControl.LocalPlayer.Data.PlayerName : "host";
+            list.Add($"{me} (you): Atlas map building switched off in your config");
+        }
         for (int i = 0; i < ac.allClients.Count; i++)
         {
             var c = ac.allClients[i];
@@ -160,10 +169,11 @@ internal static class AtlasHandshake
                 else if (AtlasMapChosen && Time.unscaledTime >= _resendAt) { _resendAt = Time.unscaledTime + 5f; SendHello(); }
             }
             PublishBoard();
-            if (!AmHost || !Online || __instance == null || !AtlasMapChosen) return;
-            if (__instance.startState == GameStartManager.StartingStates.Countdown) return;
+            if (!AmHost || !Online || __instance == null || !AtlasMapChosen) { BlockStartButton(__instance, false); RestoreText(__instance); return; }
+            if (__instance.startState == GameStartManager.StartingStates.Countdown) { RestoreText(__instance); return; }
             if (Time.unscaledTime >= _nextCheck) { _nextCheck = Time.unscaledTime + 0.25f; _warn = Mismatches(); }
-            if (_warn.Count == 0) return;
+            BlockStartButton(__instance, _warn.Count > 0);
+            if (_warn.Count == 0) { RestoreText(__instance); return; }
             var text = __instance.GameStartText;
             if (text == null || (text.text != null && text.text.Contains(Marker))) return;
 
@@ -178,11 +188,52 @@ internal static class AtlasHandshake
                 tl.z = text.transform.position.z;
                 text.transform.position = tl + new Vector3(0.7f, -0.5f, 0f);
             }
+            if (!_textStyled) { _textStyled = true; _origAlign = text.alignment; _origPivot = text.rectTransform.pivot; }
             text.alignment = TMPro.TextAlignmentOptions.TopLeft;
             text.rectTransform.pivot = new Vector2(0f, 1f);
             __instance.GameStartTextParent.SetActive(true);
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} lobby tick: {e.Message}"); _nextCheck = Time.unscaledTime + 5f; }
+    }
+
+    // Der Start-Knopf selbst wird gesperrt (Opus-Audit 2026-10-02): der BeginGame-Prefix unten
+    // ueberspringt nur das Original, TORs eigener BeginGame-Prefix lief trotzdem und wuerfelte bei
+    // jedem verweigerten Klick eine neue dynamische Karte (und ggf. ein anderes Preset). Ein Klick,
+    // der gar nicht erst ankommt, loest nichts davon aus. Zurueck nur, was Atlas selbst gesperrt hat.
+    private static bool _startBlockedByUs;
+
+    // The warning re-styles GameStartText (top-left); TOR only resets position and scale, so the later
+    // "Starting in N" countdown stayed off-centre (Opus audit 2026-10-02). Put back what we changed.
+    private static bool _textStyled;
+    private static TMPro.TextAlignmentOptions _origAlign;
+    private static Vector2 _origPivot;
+
+    private static void RestoreText(GameStartManager g)
+    {
+        if (!_textStyled) return;
+        try
+        {
+            var text = g != null ? g.GameStartText : null;
+            if (text == null) return;
+            text.alignment = _origAlign;
+            text.rectTransform.pivot = _origPivot;
+            _textStyled = false;
+        }
+        catch { }
+    }
+
+    private static void BlockStartButton(GameStartManager g, bool block)
+    {
+        try
+        {
+            if (g == null || g.StartButton == null) return;
+            if (!block && !_startBlockedByUs) return;
+            var col = g.StartButton.GetComponent<Collider2D>();
+            if (col == null) return;
+            if (col.enabled == block) col.enabled = !block;
+            _startBlockedByUs = block;
+        }
+        catch { }
     }
 
     // Start sperren, solange eine Atlas-Karte gewaehlt ist und nicht jeder dasselbe Atlas hat.
@@ -282,6 +333,7 @@ internal static class AtlasHandshake
 
     /// <summary>TaskTest "buildfail": der Bau wird uebersprungen, der Selbsttest muss anschlagen.</summary>
     internal static bool DiagBuildFail =>
+        AtlasMapShot.AutotestRun &&
         string.Equals(AtlasPlugin.CfgTaskTest?.Value?.Trim(), "buildfail", StringComparison.OrdinalIgnoreCase);
 
     private static void DiagFinish()

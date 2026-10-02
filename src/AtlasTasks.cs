@@ -90,6 +90,9 @@ internal static class AtlasTasks
     {
         var all = AtlasPlugin.CfgTaskTest?.Value;
         if (string.IsNullOrEmpty(all)) return;
+        // Nur im Freeplay-Autotest (Opus-Audit 2026-10-02): ein in der Config stehengebliebener Wert
+        // wirkte sonst in Online-Runden (Tasks setzen, Teleports, echte Sabotagen, Rollenwechsel).
+        if (!AtlasMapShot.AutotestRun) return;
         // mehrere Minispiele nacheinander in derselben Runde: "tomb,projector,steam@1"
         var list = all.Split(',');
         if (_diagPhase == 4 || _diagPhase == 5)

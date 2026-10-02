@@ -42,6 +42,7 @@ internal static class AtlasSelection
     };
 
     private static int _current;   // 0 = keine
+    private static float _pickedAt = -100f;   // Schonfrist fuer den Karten-Abgleich nach einer Atlas-Wahl
     private static AtlasMapDef _cached;
     private static int _cachedIndex = -1;
 
@@ -52,7 +53,10 @@ internal static class AtlasSelection
     {
         int idx = _current;
         var force = AtlasPlugin.CfgForceMap?.Value;
-        if (!string.IsNullOrEmpty(force))
+        // ForceMap nur im Freeplay (Opus-Audit 2026-10-02): online baute dieser Client sonst die
+        // erzwungene Karte, auch wenn der Host Vanilla gewaehlt hatte, und kein Gate merkte es.
+        bool freeplay = AmongUsClient.Instance != null && AmongUsClient.Instance.NetworkMode == NetworkModes.FreePlay;
+        if (!string.IsNullOrEmpty(force) && freeplay)
             for (int i = 0; i < Maps.Length; i++)
                 if (string.Equals(Maps[i].Key, force, StringComparison.OrdinalIgnoreCase)) idx = i + 1;
         if (idx == 0) return null;
@@ -67,6 +71,7 @@ internal static class AtlasSelection
         if (changed)
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} map -> {(idx == 0 ? "vanilla" : Maps[idx - 1].Key)}");
         _current = idx;
+        if (idx > 0) _pickedAt = Time.time;
         if (broadcast) Broadcast();
         if (changed) RefreshLobbyView();
     }
@@ -235,10 +240,26 @@ internal static class AtlasSelection
         catch { return null; }
     }
 
+    /// <summary>Spielt die Lobby technisch auf der Skeld? Nur dort baut Atlas eine Karte.</summary>
+    internal static bool LobbyOnSkeld()
+    {
+        try { return GameOptionsManager.Instance.CurrentGameOptions.MapId == (byte)MapNames.Skeld; }
+        catch { return true; }
+    }
+
     private static void LobbyVisualTick()
     {
         if (Time.time < _visualNext) return;
         _visualNext = Time.time + 0.5f;
+        // Abgleich mit der echten Lobby-Karte (Opus-Audit 2026-10-02): wechselt die Karte anders als
+        // ueber einen Vanilla-Knopf (alte Freeplay-Wahl beim Hosten, TOR-Optionen, Presets), blieb die
+        // Atlas-Wahl stehen - falsches Banner, und das Start-Gate verlangte Atlas fuer eine Runde,
+        // in der Atlas gar nichts baut. Der Host nimmt die Wahl dann zurueck und verteilt das.
+        if (AmHost && _current > 0 && Time.time - _pickedAt > 2f && !LobbyOnSkeld())
+        {
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} lobby map is no longer the Skeld - Atlas map choice cleared.");
+            Set(0, broadcast: true);
+        }
         try
         {
             var g = LobbyScreenOrNull();
