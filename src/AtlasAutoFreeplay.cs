@@ -47,7 +47,16 @@ internal static class AtlasAutoFreeplay
             if (popover == null) { AtlasPlugin.Logger.LogError("[Atlas/Diag] auto freeplay: no FreeplayPopover"); yield break; }
             for (var t = popover.transform; t != null; t = t.parent) if (!t.gameObject.activeSelf) t.gameObject.SetActive(true);
             popover.Show();
-            popover.PlayMap(MapNames.Skeld);
+            // "vanilla:<map>" (z.B. vanilla:polus) startet eine Vanilla-Karte ohne Atlas-Bau (Autotests
+            // anderer Mods, z.B. der UTS-Rueckblick); alles andere bleibt die Skeld, auf der Atlas baut.
+            var map = MapNames.Skeld;
+            var force = AtlasPlugin.CfgForceMap?.Value ?? "";
+            if (force.StartsWith("vanilla:", StringComparison.OrdinalIgnoreCase)) {
+                string arg = force.Substring(8);
+                if (int.TryParse(arg, out int id)) map = (MapNames)id;                      // 1 = Mira, 2 = Polus, ...
+                else if (Enum.TryParse(arg, true, out MapNames parsed)) map = parsed;
+            }
+            popover.PlayMap(map);
             AtlasPlugin.Logger.LogInfo("[Atlas/Diag] auto freeplay: started (Skeld, ForceMap builds the Atlas map)");
         }
         catch (Exception e) { AtlasPlugin.Logger.LogError($"[Atlas/Diag] auto freeplay failed: {e}"); }
