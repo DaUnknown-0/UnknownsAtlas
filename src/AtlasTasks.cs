@@ -5,7 +5,7 @@
 //
 // Nie an den Prefabs in ShipStatus.CommonTasks/ShortTasks/LongTasks: das sind Assets, eine
 // Aenderung dort sickert in die naechste Vanilla-Skeld-Runde. Getauscht wird nur
-// PlayerTask.MinigamePrefab an den Task-INSTANZEN des lokalen Spielers, jede Runde neu, zweimal
+// PlayerTask.MinigamePrefab an den Task-INSTANZEN des lokalen Spielers, jede Runde neu, viermal
 // pro Sekunde abgeglichen (andere Mods ersetzen Tasks nachtraeglich: UC Auditor, Role Control).
 // Die Prefabs haengen unter einem inaktiven Halter am ShipStatus und sterben mit der Runde.
 // Verteilung, RpcSetTasks, RpcCompleteTask und der server-autoritative Taskwin bleiben vanilla.

@@ -385,6 +385,7 @@ internal sealed class ValvesMechanic : IAtlasMechanic
     const float Need = 200f;
     private readonly List<(Vector2 P, int Num, Transform T, Rotary Rot)> _valves = new();
     private readonly float[] _turn = new float[5];
+    private readonly float[] _lastMove = new float[5];
     private int _next;
     private SpriteRenderer _steam;
     private float _steamA;
@@ -421,8 +422,11 @@ internal sealed class ValvesMechanic : IAtlasMechanic
             var v = _valves[i];
             v.Rot.Tick(mouse, down, pressed);
             if (Done || v.Rot.Delta == 0f) continue;
-            float d = Mathf.Max(0f, v.Rot.Delta);                    // aufdrehen = gegen den Uhrzeigersinn
+            // Beide Drehrichtungen zaehlen (Audit 04.10.: im Uhrzeigersinn passierte gar nichts, ohne
+            // Hinweis); die anderen Drehbausteine nehmen auch beide Richtungen.
+            float d = Mathf.Abs(v.Rot.Delta);
             if (v.Num - 1 < _next) continue;                         // schon offen
+            _lastMove[i] = Time.time;
             if (v.Num - 1 != _next)
             {
                 // falsches Rad: Dampf, alles wieder zu
@@ -433,6 +437,8 @@ internal sealed class ValvesMechanic : IAtlasMechanic
                     {
                         _next = 0;
                         Array.Clear(_turn, 0, _turn.Length);
+                        // alle Raeder sichtbar wieder zu
+                        foreach (var w in _valves) w.T.localEulerAngles = Vector3.zero;
                         _steam.transform.localPosition = new Vector3(v.P.x, v.P.y + 0.6f, _steam.transform.localPosition.z);
                         _steamA = 1f;
                     }
@@ -443,6 +449,11 @@ internal sealed class ValvesMechanic : IAtlasMechanic
             v.T.localEulerAngles = new Vector3(0, 0, _turn[i]);
             if (_turn[i] >= Need) { _next++; if (_next >= 5) Done = true; }
         }
+        // Kleine Streifer an falschen Raedern bauen sich nach 1 s Ruhe wieder ab, statt sich ueber den
+        // ganzen Task zu den 40 Grad aufzusummieren, die alles zuruecksetzen.
+        for (int i = 0; i < _valves.Count; i++)
+            if (_valves[i].Num - 1 > _next && _turn[i] > 0f && Time.time - _lastMove[i] > 1f)
+                _turn[i] = Mathf.Max(0f, _turn[i] - dt * 40f);
         for (int i = 0; i < _valves.Count; i++)
             _valves[i].T.GetComponent<SpriteRenderer>().color = _valves[i].Num - 1 < _next ? new Color(0.6f, 1f, 0.6f) : Color.white;
     }

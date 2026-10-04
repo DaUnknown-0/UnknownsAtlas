@@ -24,7 +24,7 @@ internal sealed class AtlasFerry
 {
     private const string LogPrefix = "[Atlas/Ferry]";
     internal const byte OpFerry = 15;
-    private const byte SubReq = 0, SubStart = 1, None = 255;
+    private const byte SubReq = 0, SubStart = 1, SubSync = 2, None = 255;
     private const float Step = 0.45f;
     // Fahrzeuge liegen HINTER dem Fahrgast (Sortierlinie 0,6 m noerdlich), er steht sichtbar darin
     private const int LayerObjects = 12;
@@ -72,6 +72,19 @@ internal sealed class AtlasFerry
         return f;
     }
 
+    /// <summary>Host: where every vehicle stands, for a client who does not know it (a player who
+    /// joined, audit 04.10.: a newcomer assumed every vehicle at landing A).</summary>
+    public static void HostSyncAll()
+    {
+        if (!AmHost) return;
+        foreach (var f in All)
+        {
+            if (f._t0 > 0f) continue;
+            byte id = f._id, at = f._at;
+            AtlasWorld.Send(OpFerry, w => { w.Write(SubSync); w.Write(id); w.Write(at); w.Write((byte)0); });
+        }
+    }
+
     public static void ResetAll()
     {
         foreach (var f in All) f.EndLocal(true);
@@ -95,6 +108,7 @@ internal sealed class AtlasFerry
         var f = All[id];
         if (sub == SubReq && AmHost && from != null) f.HostRequest(from.PlayerId, a);
         else if (sub == SubStart && fromHost) f.Apply(a, b);
+        else if (sub == SubSync && fromHost && f._t0 <= 0f && a <= 1) { f._at = a; f.Place(a); }
     }
 
     private void Request(byte station)
@@ -115,6 +129,11 @@ internal sealed class AtlasFerry
         foreach (var p in PlayerControl.AllPlayerControls) if (p != null && p.PlayerId == pid) pc = p;
         if (pc == null || pc.Data == null || pc.Data.IsDead || pc.Data.Disconnected || station > 1) return;
         if (_t0 > 0f || IsRiding(pid) || AtlasParkFun.IsBusy(pid)) return;
+        // The host checks what the asking client only checked for itself (audit 04.10.): no ride in
+        // a meeting or exile, from a vent, from the lookout, or from farther than the landing.
+        if (MeetingHud.Instance != null || ExileController.Instance != null) return;
+        if (pc.inVent || AtlasLookout.IsUp(pid)) return;
+        if (Vector2.Distance(pc.GetTruePosition(), station == 0 ? _platA : _platB) > 2.5f) return;
         byte rider = _at == station ? pid : None, from = _at == station ? station : (byte)(1 - station);
         Apply(rider, from);
         byte id = _id;

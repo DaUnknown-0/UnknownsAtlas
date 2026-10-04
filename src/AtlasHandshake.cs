@@ -119,6 +119,17 @@ internal static class AtlasHandshake
     internal static void AmongUsClient_OnPlayerJoined_Postfix()
     {
         if (PlayerControl.LocalPlayer != null) SendHello();
+        // A newcomer does not know where the vehicles stand or who is up on the lookout (audit
+        // 04.10.): the host sends the vehicles, everyone on the lookout says so again.
+        try
+        {
+            if (AtlasMuseumBuilder.Active)
+            {
+                AtlasFerry.HostSyncAll();
+                AtlasLookout.Reannounce();
+            }
+        }
+        catch { }
     }
 
     [HarmonyPostfix]
@@ -145,7 +156,15 @@ internal static class AtlasHandshake
         for (int i = 0; i < ac.allClients.Count; i++)
         {
             var c = ac.allClients[i];
-            if (c == null || c.Character == null || c.Id == ac.ClientId || c.Character == PlayerControl.LocalPlayer) continue;
+            if (c == null || c.Id == ac.ClientId) continue;
+            // Still connecting (no character yet): blocks the start like a missing mod (audit 04.10.:
+            // skipped, a newcomer who joined a second before the start played on the Skeld).
+            if (c.Character == null)
+            {
+                if (!Peers.ContainsKey(c.Id)) list.Add($"#{c.Id}: still connecting");
+                continue;
+            }
+            if (c.Character == PlayerControl.LocalPlayer) continue;
             string name = c.Character.Data != null ? c.Character.Data.PlayerName : $"#{c.Id}";
             if (!Peers.TryGetValue(c.Id, out var p)) list.Add($"{name}: Unknown's Atlas missing or outdated");
             else if (p.Version != local) list.Add($"{name}: Atlas v{Fmt(p.Version)} (host v{Fmt(local)})");

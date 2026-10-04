@@ -246,6 +246,12 @@ internal sealed class NightLightMechanic : IAtlasMechanic
     private RenderTexture _rt;
     private Material _camMat;
     private float _simA = 90f;
+    // The night light watches camera K1 like the security screen (User 04.10.): the cameras show
+    // they are in use while it is open, and under a comms sabotage the picture is static.
+    private bool _camInUse;
+    private Texture2D _noise;
+    private float _noiseNext;
+    private Camera _cam;
     public float Progress => AtlasRex.Sleep / 100f;
     public bool Done => false;
     public bool Leave { get; private set; }
@@ -310,6 +316,7 @@ internal sealed class NightLightMechanic : IAtlasMechanic
                 cam.clearFlags = CameraClearFlags.SolidColor;
                 cam.backgroundColor = Color.black;
             }
+            _cam = cam;
             cam.orthographicSize = 2.3f;
             cam.targetTexture = _rt;
             cam.depth = main.depth - 5;
@@ -329,13 +336,58 @@ internal sealed class NightLightMechanic : IAtlasMechanic
             _camMat = new Material(Shader.Find("Sprites/Default")) { mainTexture = _rt };
             mr.sharedMaterial = _camMat;
             mr.sortingOrder = 3;
+            SetCamerasInUse(true);
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"[Atlas/Rex] camera view: {e.Message}"); }
+    }
+
+    // The game's own signal for "somebody is watching the cameras" (what SurveillanceMinigame sends on
+    // open/close): the security system's camera lamps light up for everyone.
+    private void SetCamerasInUse(bool on)
+    {
+        if (_camInUse == on) return;
+        try
+        {
+            var ship = ShipStatus.Instance;
+            if (ship == null || !ship.Systems.ContainsKey(SystemTypes.Security)) return;
+            ship.RpcUpdateSystem(SystemTypes.Security, (byte)(on ? 1 : 2));
+            _camInUse = on;
+        }
+        catch { }
+    }
+
+    // Comms down: the camera feed is noise, as on the security screen.
+    private void CamTick()
+    {
+        if (_camMat == null) return;
+        bool comms = false;
+        try { var c = SabKit.Sys<HudOverrideSystemType>(SystemTypes.Comms); comms = c != null && c.IsActive; } catch { }
+        if (_cam != null && _cam.enabled == comms) _cam.enabled = !comms;
+        if (!comms)
+        {
+            if (_camMat.mainTexture != _rt) _camMat.mainTexture = _rt;
+            return;
+        }
+        if (_noise == null)
+        {
+            _noise = new Texture2D(80, 54, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point, name = "Atlas_RexCamNoise" };
+            _noise.hideFlags |= HideFlags.HideAndDontSave;
+        }
+        if (Time.time >= _noiseNext)
+        {
+            _noiseNext = Time.time + 0.08f;
+            var px = new Color32[80 * 54];
+            for (int i = 0; i < px.Length; i++) { byte g = (byte)Random.Range(20, 200); px[i] = new Color32(g, g, g, 255); }
+            _noise.SetPixels32(px);
+            _noise.Apply(false);
+        }
+        if (_camMat.mainTexture != _noise) _camMat.mainTexture = _noise;
     }
 
     public void Tick(float dt, Vector2 mouse, bool down, bool pressed)
     {
         if (!AtlasRex.Active && AtlasMinigame.DiagStep < 0) { AtlasRex.SetInput(AtlasRex.Light, false); Leave = true; return; }
+        CamTick();
         float agit = 1f - AtlasRex.Sleep / 100f;
         // der Rex waelzt sich: die Zielringe wandern, je wacher er ist, desto schneller
         _tv += (Random.value - 0.5f) * 70f * dt * (0.35f + agit);
@@ -411,6 +463,8 @@ internal sealed class NightLightMechanic : IAtlasMechanic
     public void Dispose()
     {
         AtlasRex.SetInput(AtlasRex.Light, false);
+        SetCamerasInUse(false);
+        if (_noise != null) Object.Destroy(_noise);
         if (_camGo != null) Object.Destroy(_camGo);
         if (_rt != null) { _rt.Release(); Object.Destroy(_rt); }
         if (_camMat != null) Object.Destroy(_camMat);

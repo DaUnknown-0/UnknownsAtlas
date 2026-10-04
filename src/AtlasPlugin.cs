@@ -23,7 +23,7 @@ public class AtlasPlugin : BasePlugin
 {
     public const string Id = "com.daunknown0.atlas";
     public const string PluginName = "Unknown's Atlas";
-    public const string VersionString = "0.3.0.22";
+    public const string VersionString = "0.3.0.23";
     public static readonly System.Version Version = System.Version.Parse(VersionString);
 
     public static BepInEx.Logging.ManualLogSource Logger = null!;
@@ -89,7 +89,7 @@ public class AtlasPlugin : BasePlugin
 
         Logger.LogInfo($"[Atlas] v{VersionString} loaded ({Id})");
 
-        Logger.LogInfo("[Atlas] Maps: museum (Vesper Museum) - chosen in the Freeplay/Lobby map picker");
+        Logger.LogInfo("[Atlas] Maps: museum (Vesper Museum), forest, park (Moonlight Carnival) - chosen in the Freeplay/Lobby map picker");
 
         // Register in the Mod Manager (hosted by Forgotten Fixes / UsefulTORStuff), same as this
         // project family's other released mods: via AppDomain, no compile-time reference, so it

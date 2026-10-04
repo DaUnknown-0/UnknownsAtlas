@@ -41,7 +41,9 @@ internal static class AtlasParkFun
         _root = null;
         _lukasUntil = 0f; _lukasT0 = -10f; _lukas = _puck = _bellGlow = null;
         _wearer = None; _worn.Clear(); _rackFreeAt = 0f; _rack = null; _mascots.Clear(); _lastX.Clear();
-        _rider = None; _wheelT0 = -100f; _ring = null; _wheelProp = null; Gondolas.Clear();
+        _rider = None; _wheelT0 = -100f; _ring = null; _wheelProp = null; Gondolas.Clear(); _wheelNext.Clear();
+        _placedTheta = float.NaN; _placedAlpha = float.NaN;
+        _scan.Clear(); _scanNames = null; _scanFor = None;
         _pingUntil = 0f; _ping = null;
         _meeting = false;
     }
@@ -132,6 +134,12 @@ internal static class AtlasParkFun
                 break;
             case WheelReq:
                 if (!alive || _rider != None) return;
+                // Host checks (audit 04.10.): no ride in a meeting, an exile or a critical sabotage,
+                // not from afar, and every player waits 45 s after his ride (User 04.10.).
+                if (MeetingHud.Instance != null || ExileController.Instance != null || AtlasWorld.CriticalActive()) return;
+                if (pc.inVent || Vector2.Distance(pc.GetTruePosition(), AtlasParkWorldData.WheelBoard) > 2.5f) return;
+                if (_wheelNext.TryGetValue(pid, out float next) && now < next) return;
+                _wheelNext[pid] = now + WheelTotal + WheelCooldown;
                 Broadcast(WheelStart, pid, 0);
                 break;
         }
@@ -313,6 +321,12 @@ internal static class AtlasParkFun
     private const float RackFree = 10f, MascotWidth = 0.95f;
     private const float MascotPivotY = (140f - 134f) / 140f;
     private static byte _wearer = None;
+    private const float WheelCooldown = 45f;
+    private static readonly Dictionary<byte, float> _wheelNext = new();
+    /// <summary>Wer gerade im Maskottchen-Anzug steckt (None = niemand). Fuer Anzeigen, die sonst
+    /// die echte Outfit-Farbe verraten wuerden (Geisterbahn-Foto).</summary>
+    internal static byte Wearer => _wearer;
+    internal const byte NoWearer = None;
     private static readonly HashSet<byte> _worn = new();
     private static float _rackFreeAt;
     private static SpriteRenderer _rack;
@@ -376,21 +390,36 @@ internal static class AtlasParkFun
         _mascots.Clear();
     }
 
+    private static readonly string[] MascotHides = { "BodyForms", "Cosmetics" };
+    private static readonly List<SpriteRenderer> _scan = new();
+    private static GameObject _scanNames;
+    private static byte _scanFor = None;
+    private static float _nextScan;
+
     private static void DrawMascot(float dt)
     {
         if (_wearer == None) return;
         var pc = Player(_wearer);
         if (pc == null || pc.Data == null || pc.Data.IsDead || _meeting) { if (_mascots.Count > 0 || _hidden.Count > 0) CostumeOff(); return; }
-        // Farbe, Hut, Visier, Haustier und Namen verdecken; jeden Frame, weil Spiel und TOR sie wieder einschalten
-        foreach (var part in new[] { "BodyForms", "Cosmetics" })
+        // Farbe, Hut, Visier, Haustier und Namen verdecken; jeden Frame, weil Spiel und TOR sie wieder
+        // einschalten. Die Renderer-Liste wird nur zweimal pro Sekunde (oder beim Traegerwechsel) neu
+        // gesucht, nicht jeden Frame per Find und GetComponentsInChildren (Leistung, 04.10.).
+        if (_scanFor != _wearer || Time.time >= _nextScan)
         {
-            var t = pc.transform.Find(part);
-            if (t == null) continue;
-            foreach (var r in t.GetComponentsInChildren<SpriteRenderer>(true))
-                if (r != null && r.enabled) { r.enabled = false; if (!_hidden.Contains(r)) _hidden.Add(r); }
+            _scanFor = _wearer; _nextScan = Time.time + 0.5f;
+            _scan.Clear();
+            foreach (var part in MascotHides)
+            {
+                var t = pc.transform.Find(part);
+                if (t == null) continue;
+                foreach (var r in t.GetComponentsInChildren<SpriteRenderer>(true)) if (r != null) _scan.Add(r);
+            }
+            _scanNames = pc.transform.Find("Names")?.gameObject;
         }
-        var names = pc.transform.Find("Names");
-        if (names != null && names.gameObject.activeSelf) { names.gameObject.SetActive(false); _hiddenNames = names.gameObject; }
+        foreach (var r in _scan)
+            if (r != null && r.enabled) { r.enabled = false; if (!_hidden.Contains(r)) _hidden.Add(r); }
+        var names = _scanNames;
+        if (names != null && names.activeSelf) { names.SetActive(false); _hiddenNames = names; }
 
         if (!_mascots.TryGetValue(_wearer, out var m) || m == null)
         {
@@ -457,10 +486,15 @@ internal static class AtlasParkFun
         return AtlasParkWorldData.WheelHub + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * AtlasParkWorldData.WheelRadius;
     }
 
+    private static float _placedTheta = float.NaN, _placedAlpha = float.NaN;
+
     private static void PlaceGondolas(float theta)
     {
-        if (_ring != null) _ring.transform.localEulerAngles = new Vector3(0f, 0f, -theta);
         float alpha = _wheelProp != null ? _wheelProp.color.a : 1f;          // Durchsicht-Blende des Gestells mitmachen
+        // Im Leerlauf aendert sich nichts: nur neu setzen, wenn sich Winkel oder Durchsicht bewegt haben.
+        if (theta == _placedTheta && Mathf.Abs(alpha - _placedAlpha) < 0.002f) return;
+        _placedTheta = theta; _placedAlpha = alpha;
+        if (_ring != null) _ring.transform.localEulerAngles = new Vector3(0f, 0f, -theta);
         if (_ring != null) _ring.color = new Color(1f, 1f, 1f, alpha);
         for (int k = 0; k < Gondolas.Count; k++)
         {
@@ -477,6 +511,9 @@ internal static class AtlasParkFun
         if (_ring == null) return;
         float el = Time.time - _wheelT0;
         if (_rider != None && el > WheelTotal) WheelEndLocal(false);
+        // A critical sabotage (reactor, oxygen, Rex) ends the ride at once (User 04.10.): nobody
+        // sits it out frozen up there with the triple view.
+        if (_rider != None && AtlasWorld.CriticalActive()) WheelEndLocal(false);
         float u = _rider != None ? Mathf.Clamp01((el - WheelBoardT) / WheelTurnT) : 0f;
         _theta = 360f * AtlasFigure.Smooth(u);
         PlaceGondolas(_theta);
@@ -514,7 +551,13 @@ internal static class AtlasParkFun
             // Fahrgast tot (oder Meeting): Figur zurueck, die Gondel dreht leer zu Ende
             AtlasFigure.Pose(pc, Vector2.zero, 1f);
             AtlasFigure.SetCollide(pc, true);
-            if (pc == lp && _wheelLocal) { _wheelLocal = false; _wheelHeight = 0f; AtlasView.Restore(); }
+            if (pc == lp && _wheelLocal)
+            {
+                _wheelLocal = false; _wheelHeight = 0f; AtlasView.Restore();
+                // A death without a kill animation (Exiled(): Poisoner, meeting-end deaths) never gives
+                // the movement back (audit 04.10.: the ghost stayed frozen in the gondola).
+                if (MeetingHud.Instance == null) lp.moveable = true;
+            }
         }
 
         if (lp == null || _rider != None || !AtlasUse.CanReach(lp, AtlasParkWorldData.WheelBoard, 1.3f)) return;

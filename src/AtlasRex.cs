@@ -4,7 +4,7 @@
 // AtlasRex - dritte kritische Sabotage im Museum: "Rex erwacht" (User 25.09.; Konzept und Prototyp:
 // https://claude.ai/artifact/TwpK278eBi1gas4QT28nxR).
 //
-// Die Impostor wecken das T.-rex-Skelett der Rotunde. Die Crew hat 50 s, es an zwei Stationen wieder
+// Die Impostor wecken das T.-rex-Skelett der Rotunde. Die Crew hat 65 s, es an zwei Stationen wieder
 // einzuschlaefern: Spieluhr (Rotunde) im Wiegenlied-Tempo kurbeln, Sternenprojektor (Security Office)
 // ausgerichtet halten. Schlafbalken 0-100: eine Station im Takt +2/s, beide +6/s, niemand -1/s. Alle
 // 10-13 s bruellt der Rex (1,6 s Vorwarnung: er reisst das Maul auf) und kostet 6 Punkte. Balken voll =
@@ -47,7 +47,8 @@ internal static class AtlasRex
     internal const byte Music = 0, Light = 1;
     internal const byte EndSlept = 0, EndMeeting = 1, EndLost = 2;
 
-    public const float Countdown = 50f, RateOne = 2f, RateBoth = 6f, Decay = 1f, RoarLoss = 6f;
+    // 65 s statt 50 (User 04.10.): mit zwei Stationen am anderen Ende war die Zeit kaum zu schaffen.
+    public const float Countdown = 65f, RateOne = 2f, RateBoth = 6f, Decay = 1f, RoarLoss = 6f;
     public const float RoarMin = 10f, RoarMax = 13f, Warn = 1.6f;
     public const float CrankMin = 0.75f, CrankMax = 1.35f, ProjTol = 9f;
     public const float NormalSabCooldown = 30f, Cooldown = 2f * NormalSabCooldown;
@@ -128,7 +129,8 @@ internal static class AtlasRex
 
     // ------------------------------------------------------------------ Host
 
-    /// <summary>Kartenknopf eines Impostors (AtlasWorld.HostSabRequest hat Rolle, Tod und Abklingzeit geprueft).</summary>
+    /// <summary>Kartenknopf eines Impostors (AtlasWorld.HostSabRequest hat Rolle und Abklingzeit geprueft;
+    /// tote Impostoren duerfen wie bei Vanilla sabotieren, User 04.10.).</summary>
     internal static bool HostTryStart()
     {
         if (!Museum || Active) return false;
@@ -188,6 +190,7 @@ internal static class AtlasRex
         if (any == _hostSabWasActive) return;
         _hostSabWasActive = any;
         _hostReadyAt = Time.time + Cooldown;
+        AtlasWorld.HostSendWait();
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} host: sabotage {(any ? "started" : "fixed")}, Rex cooldown {Cooldown:F0} s");
     }
 
@@ -244,7 +247,7 @@ internal static class AtlasRex
         if (sab != null && sab.Timer < 5f) SetSabotageTimer(10f);
     }
 
-    private static void SetSabotageTimer(float t)
+    internal static void SetSabotageTimer(float t)
     {
         try
         {
@@ -705,13 +708,17 @@ internal static class AtlasRex
     private static void ClickTick()
     {
         var lp = PlayerControl.LocalPlayer;
-        if (lp == null || lp.Data == null || lp.Data.IsDead || Minigame.Instance != null || MeetingHud.Instance != null) { ShowHint(null, default); return; }
-        var me = lp.GetTruePosition();
+        // Same reach rule as every other world station (audit 04.10.: alive, not in a vent, free to
+        // move, nothing open), and the Use button / E as well as the click: controller, touch and
+        // E players had no way to the repair of a critical sabotage.
         string kind = null; Vector2 at = default;
-        if (Vector2.Distance(me, AtlasMuseumLayout.RexMusicBox) < 1.9f) { kind = "rexmusic"; at = AtlasMuseumLayout.RexMusicBox; }
-        else if (Vector2.Distance(me, AtlasMuseumLayout.RexNightLight) < 1.9f) { kind = "rexlight"; at = AtlasMuseumLayout.RexNightLight; }
+        if (AtlasUse.CanReach(lp, AtlasMuseumLayout.RexMusicBox, 1.9f)) { kind = "rexmusic"; at = AtlasMuseumLayout.RexMusicBox; }
+        else if (AtlasUse.CanReach(lp, AtlasMuseumLayout.RexNightLight, 1.9f)) { kind = "rexlight"; at = AtlasMuseumLayout.RexNightLight; }
         ShowHint(kind, at);
-        if (kind == null || !Input.GetMouseButtonDown(0) || Camera.main == null) return;
+        if (kind == null) return;
+        string k = kind;
+        AtlasUse.Offer(k == "rexmusic" ? "WIND" : "ALIGN", k == "rexmusic" ? "task_key.png" : "task_light_source.png", () => OpenStation(k));
+        if (!Input.GetMouseButtonDown(0) || Camera.main == null) return;
         Vector2 click = Camera.main.ScreenToWorldPoint(Input.mousePosition);
         if (Vector2.Distance(click, at + new Vector2(0f, 0.5f)) < 1.4f) OpenStation(kind);
     }
@@ -732,7 +739,7 @@ internal static class AtlasRex
             var mr = go.GetComponent<MeshRenderer>(); if (mr != null) mr.sortingOrder = 200;
         }
         _hint.gameObject.SetActive(true);
-        _hint.text = kind == "rexmusic" ? "CLICK TO WIND" : "CLICK TO ALIGN";
+        _hint.text = kind == "rexmusic" ? "USE TO WIND" : "USE TO ALIGN";
         _hint.transform.position = new Vector3(at.x, at.y + 1.6f, -2f);
     }
 

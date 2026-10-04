@@ -6,10 +6,10 @@
 // Achse der Karte: Ablenkung und wechselnde Wege. Der Host startet alle 22 bis 38 s ein Fahrgeschaeft
 // (RPC 237 Op 10 [Art]); jeder Client spielt denselben Ablauf ab Empfang: 2 s Vorwarnung (Glocke,
 // blinkende Lampen), dann das Ereignis. Nie waehrend Meeting, Rauswurf oder kritischer Sabotage.
-//   Coaster Run     Schranken an den drei Bahnuebergaengen 6 s zu, der Zug faehrt die Runde
-//   Carousel Spin   Karussell dreht 10 s, Seile sperren Nord- und Westoeffnung (Tueren S/O bleiben)
+//   Coaster Run     Schranken an den zwei Bahnuebergaengen 6 s zu, der Zug faehrt die Runde
+//   Carousel Spin   Karussell dreht 10 s, ein Seil sperrt das Karussell-Tor (CarouselGates)
 //   Ghost Flash     Wagen faehrt durch den Tunnel, der Blitz fotografiert alle darin; das Foto (Figuren
-//                   in der aktuell sichtbaren Farbe) zeigt der Monitor am Nordausgang bis zum naechsten Blitz
+//                   in der aktuell sichtbaren Farbe) zeigt der Monitor am Suedausgang bis zum naechsten Blitz
 //   Log Flume Drop  Boot faehrt den Kanal hinab, am Sturz ist die Ost-Bruecke 4 s nass und gesperrt
 //   Turnstile Jam   beide Drehkreuze klemmen 5 s
 // Dauerhaft: die Drehkreuze sind Einbahn (West nur nach Norden in den Park, Ost nur nach Sueden), und
@@ -108,7 +108,7 @@ internal static class AtlasParkWorld
         _flash = Spr("GhostFlash", Circle, ghostC, 14f, ghostC.y - 7f);
         _flash.color = new Color(1f, 1f, 1f, 0f);
 
-        // Foto-Monitor am Nordausgang: dunkler Rahmen, Beschriftung, Platz fuer 8 Figuren
+        // Foto-Monitor am Suedausgang (GhostMonitor): dunkler Rahmen, Beschriftung, Platz fuer 8 Figuren
         var mp = AtlasParkWorldData.GhostMonitor;
         // gezeichnetes Gehaeuse (tools/gen_park_fun.py ridephoto), sonst die dunkle Flaeche von frueher
         var frame = AtlasAssets.TaskSprite("task_park_ridephoto.png", 100f, new Vector2(0.5f, 0.5f));
@@ -366,13 +366,20 @@ internal static class AtlasParkWorld
 
     // ------------------------------------------------------------------ Geisterbahn
 
+    // The photo is the host's (audit 04.10.: every client built it from its own, lagging positions at
+    // its own moment, so two screens could show different riders). Clients only flash and wait for
+    // the host's list: one byte per rider, the colour id, or MascotColor for the suit.
+    private const byte PhotoMarker = 0xF0, MascotColor = 254;
+
     private static void TakePhoto()
     {
-        var ship = ShipStatus.Instance;
         if (_flash != null) _flash.color = new Color(1f, 1f, 1f, 0.85f);
+        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return;
+        var ship = ShipStatus.Instance;
         if (ship == null || !ship.FastRooms.ContainsKey(SystemTypes.Laboratory)) return;
         var area = ship.FastRooms[SystemTypes.Laboratory].roomArea;
-        var colors = new List<int>();
+        var ids = new List<byte>();
+        byte wearer = AtlasParkFun.Wearer;
         foreach (var pc in PlayerControl.AllPlayerControls)
         {
             if (pc == null || pc.Data == null || pc.Data.IsDead || pc.Data.Disconnected) continue;
@@ -381,21 +388,44 @@ internal static class AtlasParkWorld
             // rule as the mascot (AtlasParkFun).
             if (pc.inVent || !pc.Visible) continue;
             if (area == null || !area.OverlapPoint(pc.GetTruePosition())) continue;
-            colors.Add(pc.CurrentOutfit != null ? pc.CurrentOutfit.ColorId : pc.Data.DefaultOutfit.ColorId);
+            if (ids.Count >= MonitorFigures.Count) break;
+            // The mascot suit hides colour, hat and name only through switched-off renderers; the
+            // outfit underneath is unchanged (audit 04.10.: the photo showed the wearer's real colour).
+            if (pc.PlayerId == wearer && wearer != AtlasParkFun.NoWearer) { ids.Add(MascotColor); continue; }
+            int c = pc.CurrentOutfit != null ? pc.CurrentOutfit.ColorId : pc.Data.DefaultOutfit.ColorId;
+            ids.Add((byte)Mathf.Clamp(c, 0, 253));
         }
+        ShowPhoto(ids);
+        var send = ids.ToArray();
+        AtlasWorld.Send(OpParkEvent, w => { w.Write(PhotoMarker); w.Write((byte)send.Length); foreach (var b in send) w.Write(b); });
+    }
+
+    /// <summary>OpParkEvent from the host: an event start, or the ghost train photo.</summary>
+    internal static void Receive(Hazel.MessageReader r)
+    {
+        byte kind = r.ReadByte();
+        if (kind != PhotoMarker) { Apply((Ev)kind); return; }
+        int n = r.ReadByte();
+        var ids = new List<byte>(n);
+        for (int i = 0; i < n; i++) ids.Add(r.ReadByte());
+        ShowPhoto(ids);
+    }
+
+    private static void ShowPhoto(List<byte> ids)
+    {
         for (int i = 0; i < MonitorFigures.Count; i++)
         {
             var (body, visor) = MonitorFigures[i];
-            bool on = i < colors.Count;
+            bool on = i < ids.Count;
             body.gameObject.SetActive(on); visor.gameObject.SetActive(on);
-            if (on)
-            {
-                int c = colors[i];
-                body.color = c >= 0 && c < Palette.PlayerColors.Length ? (Color)Palette.PlayerColors[c] : Color.gray;
-            }
+            if (!on) continue;
+            int c = ids[i];
+            // the suit: a neutral cream figure
+            body.color = c == MascotColor ? new Color(0.95f, 0.9f, 0.8f)
+                : c < Palette.PlayerColors.Length ? (Color)Palette.PlayerColors[c] : Color.gray;
         }
-        if (_monitorText != null) _monitorText.text = colors.Count == 0 ? "RIDE PHOTO: empty" : $"RIDE PHOTO: {colors.Count}";
-        AtlasPlugin.Logger.LogInfo($"{LogPrefix} ghost train photo: {colors.Count} rider(s)");
+        if (_monitorText != null) _monitorText.text = ids.Count == 0 ? "RIDE PHOTO: empty" : $"RIDE PHOTO: {ids.Count}";
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} ghost train photo: {ids.Count} rider(s)");
     }
 
     /// <summary>Sichtfaktor: die Geisterbahn ist dunkel.</summary>

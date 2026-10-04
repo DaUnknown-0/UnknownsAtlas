@@ -71,8 +71,14 @@ internal static class AtlasLookout
     private static float _roofAlpha = 1f;
     private static GameObject _posts;
 
-    /// <summary>Faktor fuer den eigenen Sichtradius (AtlasWorld.VisionFactor).</summary>
-    public static float VisionFactor => Wald ? Mathf.Lerp(1f, Levels[Level].Vision, Smooth(_p)) : 1f;
+    /// <summary>Faktor fuer den eigenen Sichtradius (AtlasWorld.VisionFactor). Der Bonus darf ueber den
+    /// normalen Hoechstradius gehen, aber nicht bei Lichtsabotage oder Nebel (User 04.10.): von oben
+    /// sieht man in die Dunkelheit und in den Nebel nicht weiter als unten.</summary>
+    public static float VisionFactor =>
+        Wald && !LightsOut() && AtlasWorld.CurrentWeather != AtlasWorld.Weather.Fog
+            ? Mathf.Lerp(1f, Levels[Level].Vision, Smooth(_p)) : 1f;
+
+    private static bool LightsOut() => AtlasWorld.LightsOut();
 
     private static float Smooth(float x) => x * x * (3f - 2f * x);
 
@@ -97,6 +103,18 @@ internal static class AtlasLookout
         byte id = r.ReadByte(); bool up = r.ReadBoolean();
         if (from == null || from.PlayerId != id) return;           // jeder meldet nur sich selbst
         if (up) UpPlayers.Add(id); else UpPlayers.Remove(id);
+    }
+
+    /// <summary>Steht der Spieler gerade oben auf dem Hochsitz?</summary>
+    internal static bool IsUp(byte pid) => UpPlayers.Contains(pid);
+
+    /// <summary>Den eigenen Stand erneut melden (fuer einen Spieler, der ihn noch nicht kennt).</summary>
+    internal static void Reannounce()
+    {
+        var lp = PlayerControl.LocalPlayer;
+        if (lp == null || !UpPlayers.Contains(lp.PlayerId)) return;
+        byte id = lp.PlayerId;
+        AtlasWorld.Send(OpLookout, w => { w.Write(id); w.Write(true); });
     }
 
     private static void Announce(bool up)
@@ -164,7 +182,9 @@ internal static class AtlasLookout
             AtlasView.ZoomTo(Levels[Level].Zoom, Smooth(_p));
             LookTick(lp, dt);
         }
-        SetPosts(_state != St.Down);
+        // Die Eckpfosten blocken die Sicht nicht mehr (User 04.10.: wer oben steht, blendet sie aus
+        // wie das Auge einen Fensterrahmen). SetPosts bleibt, falls sie wieder gebraucht werden.
+        SetPosts(false);
         RoofTick(lp, dt);
         UseOffer(lp);
         LiftTick(dt, lp);
@@ -217,7 +237,9 @@ internal static class AtlasLookout
         AtlasView.Restore();
         Announce(false);
         if (lp == null) return;
-        if (!dead && MeetingHud.Instance == null) { try { lp.NetTransform.RpcSnapTo(LadderFoot); } catch { } }
+        // The ghost comes down as well (audit 04.10.: killed on the deck, it stayed up there with its
+        // collider back on); only the body stays where the kill was. Never inside a meeting.
+        if (MeetingHud.Instance == null) { try { lp.NetTransform.RpcSnapTo(LadderFoot); } catch { } }
         AtlasFigure.SetCollide(lp, true);
         SetLift(lp, 0f);
     }

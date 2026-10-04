@@ -1,12 +1,12 @@
 // Unknown's Atlas - Copyright (C) 2026 DaUnknown-0
 // Licensed under GPL-3.0-or-later. See LICENSE for details.
 //
-// AtlasSelection - welche Atlas-Karte (Museum, Wald oder keine) in der naechsten Runde gebaut wird.
+// AtlasSelection - welche Atlas-Karte (Museum, Wald, Park oder keine) in der naechsten Runde gebaut wird.
 //
-// Beide Karten sitzen technisch auf der Skeld (Relocate-in-Place). Die Auswahl erscheint deshalb
+// Alle drei Karten sitzen technisch auf der Skeld (Relocate-in-Place). Die Auswahl erscheint deshalb
 // als zusaetzliche Karten-Knoepfe NEBEN den Vanilla-Karten:
-//   - Freeplay (Uebung): zwei weitere Knoepfe im Freeplay-Kartenmenue, lokal.
-//   - Lobby: zwei weitere Knoepfe im Karten-Picker der Spieleinstellungen (nur Host). Der Host
+//   - Freeplay (Uebung): drei weitere Knoepfe im Freeplay-Kartenmenue, lokal.
+//   - Lobby: drei weitere Knoepfe im Karten-Picker der Spieleinstellungen (nur Host). Der Host
 //     schickt die Wahl per RPC 236 an alle (bei Aenderung, bei jedem Beitritt, alle 5 s in der
 //     Lobby und unmittelbar vor dem Spielstart - Reliable-Nachrichten kommen in Reihenfolge an,
 //     also vor dem Spawn des ShipStatus).

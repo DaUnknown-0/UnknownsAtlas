@@ -697,8 +697,10 @@ internal sealed class SampleMechanic : IAtlasMechanic
             if (_state != 2) { r.color = new Color(0.85f, 0.85f, 0.9f); continue; }
             if (_water)
             {
-                // eine Streifenfarbe passt nicht zur Skala
-                var c = i == _odd ? new Color(0.65f, 0.35f, 0.75f) : refCols[Random.Range(0, 4)];
+                // Eine Streifenfarbe passt nicht zur Skala. Sie liegt nahe an einer Referenz, nur leicht
+                // ins Blaue verschoben (Audit 04.10.: die violette Abweichung war ohne REF-Vergleich zu sehen).
+                var c = refCols[Random.Range(0, 4)];
+                if (i == _odd) c = new Color(c.r * 0.7f, c.g * 0.85f, Mathf.Min(1f, c.b + 0.4f));
                 MatchKit.Box(root, p + new Vector2(0f, 0.55f), new Vector2(0.3f, 0.3f), c, 3);
             }
             else
@@ -931,8 +933,19 @@ internal sealed class TimecardMechanic : IAtlasMechanic
         AtlasTaskKit.Sprite(root, "task_button.png", 100f, Lever, 2);
         MatchKit.Text(root, Lever + new Vector2(0.95f, 0f), "PUNCH", 2f, Color.white, 3);
         string own = "YOU";
-        try { own = PlayerControl.LocalPlayer.Data.PlayerName; } catch { }
-        var names = new List<string> { own, "RANGER", "WARDEN", "SCOUT" };
+        try { own = CardName(PlayerControl.LocalPlayer.Data.PlayerName); } catch { }
+        if (own.Length == 0) own = "YOU";
+        // Attrappen, die keinem echten Spielernamen gleichen (Audit 04.10.: ein Spieler "Ranger" gab
+        // zwei gleich aussehende Karten, von denen nur eine zaehlte).
+        var taken = new HashSet<string> { own.ToUpperInvariant() };
+        try { foreach (var pc in PlayerControl.AllPlayerControls) if (pc != null && pc.Data != null) taken.Add(CardName(pc.Data.PlayerName).ToUpperInvariant()); } catch { }
+        var names = new List<string> { own };
+        foreach (var d in Decoys)
+        {
+            if (names.Count == 4) break;
+            if (!taken.Contains(d)) names.Add(d);
+        }
+        for (int n = 1; names.Count < 4; n++) names.Add("GUEST " + n);
         var order = new List<int> { 0, 1, 2, 3 };
         for (int i = 3; i > 0; i--) { int j = Random.Range(0, i + 1); (order[i], order[j]) = (order[j], order[i]); }
         for (int i = 0; i < 4; i++)
@@ -944,6 +957,17 @@ internal sealed class TimecardMechanic : IAtlasMechanic
             _cards.Add((p, c, order[i] == 0));
         }
         _msg = MatchKit.Text(root, new Vector2(1.3f, 2.2f), "TAKE YOUR CARD", 2.2f, Color.white, 4);
+    }
+
+    private static readonly string[] Decoys = { "RANGER", "WARDEN", "SCOUT", "KEEPER", "FORESTER", "TRACKER", "HIKER" };
+
+    /// <summary>Kartentext aus einem Spielernamen: ohne Rich-Text-Tags und auf 10 Zeichen gekuerzt,
+    /// damit er auf die Karte passt.</summary>
+    private static string CardName(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return "";
+        string s = System.Text.RegularExpressions.Regex.Replace(raw, "<[^>]*>", "").Replace("<", "").Replace(">", "").Trim();
+        return s.Length > 10 ? s.Substring(0, 10) : s;
     }
 
     public void Tick(float dt, Vector2 mouse, bool down, bool pressed)

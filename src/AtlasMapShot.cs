@@ -247,7 +247,9 @@ internal static class AtlasMapShot
         cam.farClipPlane = 200f;
         cam.clearFlags = CameraClearFlags.SolidColor;
         cam.backgroundColor = ShipStatus.Instance != null ? ShipStatus.Instance.CameraColor : Color.black;
-        cam.cullingMask = WorldMask;
+        // The players (layer 8) only in an autotest run: outside it a forgotten MapShot config would
+        // photograph every player's position, the whole map without a sight mask (audit 04.10.).
+        cam.cullingMask = AutotestRun ? WorldMask : WorldMask & ~(1 << 8);
         go.transform.position = new Vector3(
             (AtlasMuseumBuilder.D.MinX + AtlasMuseumBuilder.D.MaxX) * 0.5f,
             (AtlasMuseumBuilder.D.MinY + AtlasMuseumBuilder.D.MaxY) * 0.5f, -50f);

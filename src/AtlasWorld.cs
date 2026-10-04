@@ -16,10 +16,15 @@
 //  10 ParkEvent [art]                   Host -> alle: Fahrgeschaeft im Park startet (AtlasParkWorld)
 //  11 Rex [sub][...]                    Museum-Sabotage "Rex erwacht" (AtlasRex)
 //  12 Lookout [spieler][oben]           jeder -> alle: Figur steht auf dem Hochsitz (AtlasLookout, nur Optik)
+//  13 Fun [sub][...]                    Park-Attraktionen: Lukas, Kostuem, Riesenrad (AtlasParkFun)
+//  14 Show [...]                        Museum: Planetarium-Show (AtlasPlanetarium)
+//  15 Ferry [sub][...]                  Faehren/Fahrzeuge auf festen Strecken (AtlasFerry)
 //
 // Wald: Regen und Sturm verlangsamen den Waldbrand-Countdown (Reaktor-System) auf die Haelfte. Im
-// Sturm kann ein Blitz einen Waldbrand ausloesen, auch waehrend Licht oder Comms sabotiert sind
-// (zwei Sabotagen gleichzeitig), oder einen Baum quer ueber einen Weg werfen.
+// Sturm kann ein Blitz einen Baum quer ueber einen Weg werfen. Einen Waldbrand legt er seit 04.10.
+// nicht mehr (User, Fable-Review): eine toedliche Sabotage ohne Taeter nahm der Crew die Lesart
+// "Sabotage = ein Impostor war es" und war jedem Impostor ein Alibi. Das Blitz-Sturmholz ist ein
+// Wetter-Ereignis: es haelt die gemeinsame Abklingzeit nicht oben und sperrt keine Sabotage.
 // Museum: Laserschranken in den Durchgaengen; jeder Durchgang wird im Kamera-Minispiel protokolliert.
 // Jeder Client wertet die Schranken selbst aus (Spielerpositionen sind ohnehin synchron).
 
@@ -39,7 +44,7 @@ internal static class AtlasWorld
 {
     private const string LogPrefix = "[Atlas/World]";
     public const byte RpcId = 237;
-    private const byte OpWeather = 1, OpStrike = 2, OpSabStart = 3, OpSabReq = 4, OpRepair = 5, OpSabEnd = 6, OpEjectScene = 7;
+    private const byte OpWeather = 1, OpStrike = 2, OpSabStart = 3, OpSabReq = 4, OpRepair = 5, OpSabEnd = 6, OpEjectScene = 7, OpSabWait = 8;
     public const byte SabTrees = 1;
     public const byte SabRex = 3;          // 2 = AtlasParkWorld.SabRide
 
@@ -53,6 +58,11 @@ internal static class AtlasWorld
     // ------------------------------------------------------------------ Zustand
     public static Weather CurrentWeather { get; private set; }
     private static float _weatherUntil, _nextStrike, _sabCooldownUntil;
+    // Was der Host ueber die Abklingzeiten weiss, fuer die Knoepfe der Gast-Impostoren (Audit 04.10.:
+    // dort waren sie immer weiss, ein abgelehnter Klick blieb ohne jede Rueckmeldung).
+    private static float _waitUntil, _rexWaitUntil;
+    private static bool _treesWere;
+    private static bool _treesByImpostor;   // liegendes Sturmholz stammt aus einer Impostor-Sabotage
     private static Transform _root;
     private static readonly List<(Vector2 C, bool Vertical, float Len)> TreeSpots = new();
     private static readonly Dictionary<int, GameObject> Trees = new();
@@ -61,7 +71,7 @@ internal static class AtlasWorld
     public static void Reset()
     {
         CurrentWeather = Weather.Clear;
-        _weatherUntil = 0f; _nextStrike = 0f; _sabCooldownUntil = 0f;
+        _weatherUntil = 0f; _nextStrike = 0f; _sabCooldownUntil = 0f; _waitUntil = _rexWaitUntil = 0f; _treesWere = false; _treesByImpostor = false;
         Trees.Clear(); TreeUntil.Clear(); TreeSpots.Clear();
         Lasers.Clear(); LaserLog.Clear(); LastPos.Clear();
         _root = null;
@@ -169,7 +179,11 @@ internal static class AtlasWorld
                 case OpSabReq when AmHost: HostSabRequest(__instance, reader.ReadByte()); break;
                 case OpRepair when AmHost: HostRepair(reader.ReadByte(), reader.ReadByte()); break;
                 case OpEjectScene when fromHost: AtlasEject.NextScene = reader.ReadByte(); AtlasEject.NextSkip = reader.ReadByte(); break;
-                case AtlasParkWorld.OpParkEvent when fromHost: AtlasParkWorld.Apply((AtlasParkWorld.Ev)reader.ReadByte()); break;
+                case OpSabWait when fromHost:
+                    _waitUntil = Time.time + reader.ReadUInt16() / 10f;
+                    _rexWaitUntil = Time.time + reader.ReadUInt16() / 10f;
+                    break;
+                case AtlasParkWorld.OpParkEvent when fromHost: AtlasParkWorld.Receive(reader); break;
                 case AtlasRex.OpRex: AtlasRex.Receive(__instance, fromHost, reader); break;
                 case AtlasLookout.OpLookout: AtlasLookout.Receive(__instance, reader); break;
                 case AtlasParkFun.OpFun: AtlasParkFun.Receive(__instance, fromHost, reader); break;
@@ -182,7 +196,20 @@ internal static class AtlasWorld
 
     // ------------------------------------------------------------------ Host-Logik
 
-    private static bool CriticalActive()
+    /// <summary>Lichtsabotage aktiv (Schalter nicht in der Sollstellung)?</summary>
+    internal static bool LightsOut()
+    {
+        try
+        {
+            var ship = ShipStatus.Instance;
+            if (ship == null || !ship.Systems.ContainsKey(SystemTypes.Electrical)) return false;
+            var s = ship.Systems[SystemTypes.Electrical].TryCast<SwitchSystem>();
+            return s != null && s.ActualSwitches != s.ExpectedSwitches;
+        }
+        catch { return false; }
+    }
+
+    internal static bool CriticalActive()
     {
         var r = SabKit.Sys<ReactorSystemType>(SystemTypes.Reactor);
         var o = SabKit.Sys<LifeSuppSystemType>(SystemTypes.LifeSupp);
@@ -190,14 +217,37 @@ internal static class AtlasWorld
     }
 
     /// <summary>Gemeinsame Abklingzeit der Welt-Sabotagen (AtlasRex nach dem Ende).</summary>
-    internal static void SetSabCooldown(float seconds) => _sabCooldownUntil = Mathf.Max(_sabCooldownUntil, Time.time + seconds);
+    internal static void SetSabCooldown(float seconds)
+    {
+        _sabCooldownUntil = Mathf.Max(_sabCooldownUntil, Time.time + seconds);
+        HostSendWait();
+    }
+
+    /// <summary>Host: die eigenen Abklingzeiten an alle (Restsekunden; die Gaeste zaehlen selbst herunter).</summary>
+    internal static void HostSendWait()
+    {
+        if (!AmHost) return;
+        ushort a = (ushort)Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(0f, _sabCooldownUntil - Time.time) * 10f), 0, 65535);
+        ushort b = (ushort)Mathf.Clamp(Mathf.CeilToInt(AtlasRex.CooldownLeft * 10f), 0, 65535);
+        Send(OpSabWait, w => { w.Write(a); w.Write(b); });
+    }
+
+    /// <summary>Die gemeinsame Regel fuer jede Atlas-Sabotage (User 04.10., wie beim Rex): keine
+    /// waehrend einer Vanilla-Sabotage und keine in der gemeinsamen Vanilla-Abklingzeit.</summary>
+    private static bool VanillaSabBlocks()
+    {
+        var sab = SabKit.Sys<SabotageSystemType>(SystemTypes.Sabotage);
+        return sab != null && (sab.AnyActive || sab.Timer > 0f);
+    }
 
     private static void HostTick()
     {
         if (!AmHost || MeetingHud.Instance != null || ExileController.Instance != null) return;
         float now = Time.time;
         if (Park) AtlasParkWorld.HostTick(CriticalActive());
-        if (Museum) AtlasPlanetarium.HostTick(CriticalActive());
+        // Die Planetariums-Show dimmt das Licht zusaetzlich; unter einer Lichtsabotage wartet sie
+        // (Audit 04.10.: 0,45 mal Sabotage-Radius, der Schalterkasten liegt am anderen Kartenende).
+        if (Museum) AtlasPlanetarium.HostTick(CriticalActive() || LightsOut());
         if (Wald)
         {
             if (now >= _weatherUntil)
@@ -223,45 +273,56 @@ internal static class AtlasWorld
                 c += Random.insideUnitCircle * 2f;
                 ApplyStrike(c);
                 Send(OpStrike, w => { w.Write((short)(c.x * 100f)); w.Write((short)(c.y * 100f)); });
-                float roll = Random.value;
-                if (roll < 0.3f && !CriticalActive())
+                // Der Blitz wirft hoechstens einen Baum (kein Waldbrand mehr, s. Dateikopf); nicht
+                // waehrend einer kritischen Sabotage, die Crew hat dann genug zu tun.
+                if (Random.value < 0.3f && !CriticalActive() && Trees.Count == 0 && TreeSpots.Count > 0)
                 {
-                    // Blitz setzt den Wald in Brand - auch neben einer laufenden Licht-/Comms-Sabotage
-                    ShipStatus.Instance.RpcUpdateSystem(SystemTypes.Reactor, ReactorSystemType.StartCountdown);
-                    AtlasPlugin.Logger.LogInfo($"{LogPrefix} lightning started a forest fire");
+                    _treesByImpostor = false;
+                    HostStartSab(SabTrees, 1);
+                    AtlasPlugin.Logger.LogInfo($"{LogPrefix} lightning felled a tree");
                 }
-                else if (roll < 0.5f && Trees.Count == 0 && TreeSpots.Count > 0) HostStartSab(SabTrees, 1);
             }
             foreach (var kv in new List<KeyValuePair<int, float>>(TreeUntil))
                 if (now >= kv.Value) { ApplySabEnd(SabTrees, (byte)kv.Key); Send(OpSabEnd, w => { w.Write(SabTrees); w.Write((byte)kv.Key); }); }
+            // Sturmholz zaehlt fuer Vanilla nicht als Sabotage: solange es aus einer Impostor-Sabotage
+            // liegt, die gemeinsame Abklingzeit oben halten, danach 30 s wie nach jeder Sabotage. Das
+            // Blitz-Sturmholz ist Wetter und laesst die Abklingzeit in Ruhe.
+            if (Trees.Count > 0) { if (_treesByImpostor) { _treesWere = true; AtlasRex.SetSabotageTimer(10f); } }
+            else if (_treesWere) { _treesWere = false; AtlasRex.SetSabotageTimer(30f); }
         }
     }
 
     private static void HostSabRequest(PlayerControl from, byte kind)
     {
-        if (from == null || from.Data == null || from.Data.Role == null || !from.Data.Role.IsImpostor || from.Data.IsDead)
+        // Tote Impostoren duerfen wie bei Vanilla sabotieren (User 04.10.).
+        if (from == null || from.Data == null || from.Data.Role == null || !from.Data.Role.IsImpostor)
         {
-            AtlasPlugin.Logger.LogInfo($"{LogPrefix} sabotage {kind} refused: requester is no living impostor");
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} sabotage {kind} refused: requester is no impostor");
             return;
         }
-        if (Time.time < _sabCooldownUntil || CriticalActive())
+        if (Time.time < _sabCooldownUntil || CriticalActive() || (kind != SabRex && VanillaSabBlocks()))
         {
-            AtlasPlugin.Logger.LogInfo($"{LogPrefix} sabotage {kind} refused: cooldown {Mathf.Max(0f, _sabCooldownUntil - Time.time):F0} s, critical {CriticalActive()}");
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} sabotage {kind} refused: cooldown {Mathf.Max(0f, _sabCooldownUntil - Time.time):F0} s, critical {CriticalActive()}, vanilla {VanillaSabBlocks()}");
+            HostSendWait();
             return;
         }
         if (kind == AtlasParkWorld.SabRide)
         {
-            if (Park && AtlasParkWorld.HostRide()) _sabCooldownUntil = Time.time + 30f;
+            if (Park && AtlasParkWorld.HostRide()) { _sabCooldownUntil = Time.time + 30f; AtlasRex.SetSabotageTimer(30f); }
+            HostSendWait();
             return;
         }
         if (kind == SabRex)
         {
             if (Museum && AtlasRex.HostTryStart()) _sabCooldownUntil = Time.time + 30f;
+            HostSendWait();
             return;
         }
-        if (kind != SabTrees || !Wald || Trees.Count > 0) return;
+        if (kind != SabTrees || !Wald || Trees.Count > 0) { HostSendWait(); return; }
+        _treesByImpostor = true;
         HostStartSab(kind, Mathf.Min(3, TreeSpots.Count));
         _sabCooldownUntil = Time.time + 30f;
+        HostSendWait();
     }
 
     private static void HostStartSab(byte kind, int trees)
@@ -399,7 +460,8 @@ internal static class AtlasWorld
     private static void ClickTick()
     {
         var lp = PlayerControl.LocalPlayer;
-        if (lp == null || lp.Data == null || lp.Data.IsDead || Minigame.Instance != null || MeetingHud.Instance != null) { ShowHint(null, default); return; }
+        // Reichweite wie bei jeder Weltstation (AtlasUse.CanReach, Audit 04.10.), und Use-Knopf/E neben dem Klick
+        if (lp == null || !AtlasUse.CanReach(lp, lp.GetTruePosition(), 1f)) { ShowHint(null, default); return; }
         var me = lp.GetTruePosition();
         // naechstes reparierbares Objekt in Reichweite
         string kind = null; byte arg = 0; Vector2 at = default; float best = 1.9f;
@@ -410,7 +472,10 @@ internal static class AtlasWorld
             if (d < best) { best = d; kind = "sawlog"; arg = (byte)kv.Key; at = kv.Value.transform.position; }
         }
         ShowHint(kind, at);
-        if (kind == null || !Input.GetMouseButtonDown(0) || Camera.main == null) return;
+        if (kind == null) return;
+        byte a = arg;
+        AtlasUse.Offer("SAW", "task_saw.png", () => OpenRepair("sawlog", a));
+        if (!Input.GetMouseButtonDown(0) || Camera.main == null) return;
         Vector2 click = Camera.main.ScreenToWorldPoint(Input.mousePosition);
         if (Vector2.Distance(click, at) < 1.6f) OpenRepair(kind, arg);
     }
@@ -432,7 +497,7 @@ internal static class AtlasWorld
         }
         if (_hint == null) return;
         _hint.gameObject.SetActive(true);
-        _hint.text = "CLICK TO SAW";
+        _hint.text = "USE TO SAW";
         _hint.transform.position = new Vector3(at.x, at.y + 1.1f, -2f);
     }
 
@@ -555,6 +620,10 @@ internal static class AtlasWorld
             }
             else text = holder.GetComponentInChildren<TextMeshPro>();
             if (text == null) return;
+            // Comms down: the cameras show static, so does the log (audit 04.10.: it stayed readable)
+            bool noSignal = __instance.isStatic;
+            try { var c = SabKit.Sys<HudOverrideSystemType>(SystemTypes.Comms); noSignal |= c != null && c.IsActive; } catch { }
+            if (noSignal) { text.text = "LASER LOG:  NO SIGNAL"; return; }
             var parts = new List<string>();
             for (int i = LaserLog.Count - 1; i >= 0 && parts.Count < 4; i--)
             {
@@ -680,13 +749,14 @@ internal static class AtlasWorld
 
     private static void MapButtonTick()
     {
-        bool cooling = Time.time < _sabCooldownUntil || CriticalActive();
+        bool cooling = (AmHost ? Time.time < _sabCooldownUntil : Time.time < _waitUntil) || CriticalActive() || VanillaSabBlocks();
+        float rexLeft = AmHost ? AtlasRex.CooldownLeft : _rexWaitUntil - Time.time;
         foreach (var (b, r, kind) in MapButtons)
         {
             if (r == null) continue;
             bool active = Trees.Count > 0 || AtlasParkWorld.EventActive || AtlasRex.Active;
-            bool wait = cooling || (kind == SabRex && AtlasRex.CooldownLeft > 0f);
-            r.color = active ? new Color(1f, 0.4f, 0.4f) : wait && AmHost ? new Color(0.5f, 0.5f, 0.5f) : Color.white;
+            bool wait = cooling || (kind == SabRex && rexLeft > 0f);
+            r.color = active ? new Color(1f, 0.4f, 0.4f) : wait ? new Color(0.5f, 0.5f, 0.5f) : Color.white;
         }
     }
 
@@ -721,7 +791,8 @@ internal static class AtlasWorld
                     if (r.Room == SystemTypes.Reactor) { var c = Vector2.zero; foreach (var q in r.Area) c += q; Snap(c / r.Area.Length); }
                 break;
             case "firestorm":
-                // Waldbrand + Licht gleichzeitig: Blitz darf neben einer nicht-kritischen Sabotage zuenden
+                // Waldbrand + Licht gleichzeitig (seit 04.10. legt der Blitz keinen Brand mehr; die
+                // Diagnose prueft nur noch, dass beide Sabotagen nebeneinander funktionieren)
                 ShipStatus.Instance.RpcUpdateSystem(SystemTypes.Sabotage, (byte)SystemTypes.Electrical);
                 Weather(AtlasWorld.Weather.Storm);
                 ShipStatus.Instance.RpcUpdateSystem(SystemTypes.Reactor, ReactorSystemType.StartCountdown);
@@ -813,6 +884,8 @@ internal static class AtlasWorld
                 break;
         }
         _sabCooldownUntil = 0f;
+        // Diagnose: auch die gemeinsame Vanilla-Abklingzeit freigeben, die jetzt jede Atlas-Sabotage achtet
+        try { var sab = SabKit.Sys<SabotageSystemType>(SystemTypes.Sabotage); if (sab != null && AmHost && !sab.AnyActive) { sab.Timer = 0f; sab.IsDirty = true; } } catch { }
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag {what}: {DiagState()}");
     }
 

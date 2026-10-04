@@ -159,6 +159,11 @@ internal static class AtlasAssets
         var sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), ppu);
         sprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
         MapSprites[key] = sprite;
+        // The texture is kept with the map's other textures, so ReleaseOtherMaps frees it with the
+        // sprite (audit 04.10.: destroying the sprite left its 4-5 MB texture behind on every map
+        // change). No CPU copy is needed once it is on the GPU.
+        try { tex.Apply(false, true); } catch { }
+        MapTextures[key] = tex;
         return sprite;
     }
 

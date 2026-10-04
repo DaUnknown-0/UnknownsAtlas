@@ -1655,3 +1655,37 @@ internal static class AtlasMuseumBuilder
         return string.Join("/", parts);
     }
 }
+
+// Die Konsolen laufen ohne checkWalls (der Konsolenpunkt sitzt oft IN der 0,5 m dicken Wand, an der
+// sie haengt, und Vanillas Linientest traf dann die eigene Wand). Dafuer gingen Tasks durch die Wand
+// (Audit 04.10.: Galerie-Konsolen vom Aegyptischen Saal aus nutzbar). Eigener Test: Linie vom
+// Spieler zu einem Punkt bis 0,4 m VOR der Konsole, Richtung Spieler. Von vorn kreuzt sie keine
+// Wand, von hinten muss sie durch die Wand, an der die Konsole haengt.
+[HarmonyPatch(typeof(Console), nameof(Console.CanUse))]
+internal static class AtlasConsoleWallCheck
+{
+    [HarmonyPriority(Priority.Last)]
+    public static void Postfix(ref float __result, Console __instance,
+                               [HarmonyArgument(0)] NetworkedPlayerInfo pc,
+                               [HarmonyArgument(1)] ref bool canUse)
+    {
+        if (!canUse || !AtlasMuseumBuilder.Active) return;
+        try
+        {
+            var obj = pc?.Object;
+            if (obj == null) return;
+            Vector2 from = obj.GetTruePosition();
+            Vector2 at = __instance.transform.position;
+            Vector2 d = from - at;
+            float len = d.magnitude;
+            if (len < 0.05f) return;
+            Vector2 to = at + d / len * Mathf.Min(0.4f, len * 0.5f);
+            if (PhysicsHelpers.AnythingBetween(from, to, Constants.ShipOnlyMask, false))
+            {
+                canUse = false;
+                __result = float.MaxValue;
+            }
+        }
+        catch { }
+    }
+}

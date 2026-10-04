@@ -48,6 +48,17 @@ namespace UnknownsAtlas {
         // Manager so it only shows the collected update announcement after every mod's check.
         private bool _checkCompleted;
 
+        // The folder the running DLL was loaded from (audit 2026-10-04): BepInEx loads plugins from
+        // sub-folders too (mod-manager layouts), and writing the update into plugins\ itself left a
+        // second copy with the same GUID beside the old one. Falls back to plugins\.
+        private static string PluginDir() {
+            try {
+                var dir = Path.GetDirectoryName(typeof(AtlasUpdater).Assembly.Location);
+                if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir)) return dir;
+            } catch { }
+            return Paths.PluginPath;
+        }
+
         public void Awake() {
             if (Instance) Destroy(Instance);
             Instance = this;
@@ -56,7 +67,7 @@ namespace UnknownsAtlas {
             // aborts the component's initialisation, so the updater silently did not exist for the
             // rest of the session. Cleaning up a leftover file is not worth that.
             try {
-                foreach (var file in Directory.GetFiles(Paths.PluginPath, PluginAssetName + ".old")) {
+                foreach (var file in Directory.GetFiles(PluginDir(), PluginAssetName + ".old")) {
                     try { File.Delete(file); } catch { }
                 }
             } catch (Exception e) {
@@ -211,7 +222,7 @@ namespace UnknownsAtlas {
                 popup.TextAreaTMP.text = "Copying files...";
             }
 
-            var filePath = Path.Combine(Paths.PluginPath, asset.Name);
+            var filePath = Path.Combine(PluginDir(), asset.Name);
 
             // Move the working DLL aside before writing the download, so a write failure below can
             // roll back to it instead of leaving the plugin folder without a usable Unknown's Atlas at all.
@@ -328,8 +339,10 @@ namespace UnknownsAtlas {
             if (!template) return;
 
             var button = Instantiate(template, null);
-            // Stacked below this project family's other updaters' anchors to avoid overlap.
-            button.GetComponent<AspectPosition>().anchorPoint = new Vector2(0.458f, 0.38f);
+            // One rung per updater of this project family (audit 04.10.: Atlas sat exactly on Nightfall,
+            // Nightfall almost on UTS): TOR 0.124, Chance 0.21, Host Fix 0.30, UTS 0.39, UC 0.48,
+            // Nightfall 0.57, Atlas 0.66.
+            button.GetComponent<AspectPosition>().anchorPoint = new Vector2(0.458f, 0.66f);
 
             PassiveButton passiveButton = button.GetComponent<PassiveButton>();
             passiveButton.OnClick = new Button.ButtonClickedEvent();
@@ -377,9 +390,9 @@ namespace UnknownsAtlas {
             popUp.gameObject.SetActive(true);
 
             Announcement nightfallAnnouncement = new() {
-                Id = "nightfallAnnouncement",
+                Id = "atlasAnnouncement",
                 Language = 0,
-                Number = 6972,
+                Number = 6975,
                 Title = title == "" ? "Unknown's Atlas Update" : title,
                 ShortTitle = shortTitle,
                 SubTitle = "",
