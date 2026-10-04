@@ -42,6 +42,33 @@ internal static class AtlasAssets
     private static readonly Dictionary<string, Texture2D> MapTextures = new();
     private static readonly Dictionary<string, Sprite> MapSprites = new();
 
+    /// <summary>
+    /// Gibt die Kartenpakete (Boden, Objekte, Konsolen, Minimap) aller ANDEREN Karten frei. Sie
+    /// tragen HideAndDontSave und werden nie entladen: Museum, Wald und Park nacheinander in einer
+    /// Sitzung hielten zusammen rund 235 MB im 32-Bit-Prozess. Aufgerufen beim Aufbau einer Karte;
+    /// der Builder schneidet seine Sprites bei jedem Aufbau neu und haelt keine aus einer frueheren
+    /// Runde, eine wieder gewaehlte Karte laedt ihr Paket einfach erneut.
+    /// </summary>
+    public static void ReleaseOtherMaps(AtlasMapDef keep)
+    {
+        try
+        {
+            // A map pack is "<prefix>_floor_*", "_props_*", "_consoles_*" or "_minimap" (see above);
+            // task art and buttons have other names and stay.
+            string keepPrefix = $"UnknownsAtlas.Resources.{keep.ResourcePrefix}_";
+            var pack = new System.Text.RegularExpressions.Regex(
+                @"^UnknownsAtlas\.Resources\.[A-Za-z0-9]+_(floor_|props_|consoles_|minimap)");
+            bool Other(string key) => !key.StartsWith(keepPrefix, StringComparison.Ordinal) && pack.IsMatch(key);
+            int freed = 0;
+            foreach (var key in new List<string>(MapSprites.Keys))
+                if (Other(key)) { var s = MapSprites[key]; if (s != null) UnityEngine.Object.Destroy(s); MapSprites.Remove(key); }
+            foreach (var key in new List<string>(MapTextures.Keys))
+                if (Other(key)) { var t = MapTextures[key]; if (t != null) { UnityEngine.Object.Destroy(t); freed++; } MapTextures.Remove(key); }
+            if (freed > 0) AtlasPlugin.Logger.LogInfo($"[Atlas] released {freed} texture(s) of other maps.");
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"[Atlas] releasing other maps failed: {e.Message}"); }
+    }
+
     private static Texture2D MapTexture(string res)
     {
         if (MapTextures.TryGetValue(res, out var cached) && cached != null) return cached;

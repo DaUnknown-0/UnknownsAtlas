@@ -725,6 +725,14 @@ internal sealed class SampleMechanic : IAtlasMechanic
         var t = _ctx.Task;
         if (_state == 1)
         {
+            // The analysis ended while the console was open: the picking UI is only built in Build,
+            // so it stood at "ANALYSING 0s" for good. Close; the next opening builds the picker.
+            if (t != null && AtlasMinigame.DiagStep < 0 && t.TimerStarted == NormalPlayerTask.TimerState.Finished)
+            {
+                _msg.text = "ANALYSIS DONE";
+                Leave = true;
+                return;
+            }
             float left = t != null ? t.TaskTimer : 0f;
             _msg.text = $"ANALYSING  {Mathf.CeilToInt(Mathf.Max(0f, left))}s";
             for (int i = 0; i < _samples.Count; i++) _samples[i].R.transform.localEulerAngles = new Vector3(0, 0, Mathf.Sin(Time.time * 8f + i) * 4f);

@@ -46,6 +46,10 @@ public class AtlasMinigame : Minigame
         // Minigame.Begin loggt aber ueber logger.
         try { if (logger == null) logger = new Logger("AtlasMinigame", (Logger.Level)1, (Logger.Category)0); }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"[Atlas/Task] logger: {e.Message}"); }
+        // Pin right here, where the logger is made: Start comes a frame later at the earliest, and
+        // the logger is held by nothing but the native base field in between. Start pins again as a
+        // fallback (PinLogger does nothing once it holds a handle).
+        PinLogger();
     }
 
     // ---- Logger-Pin (Absturz 24.09.) ----
@@ -101,7 +105,13 @@ public class AtlasMinigame : Minigame
             _opened = Time.realtimeSinceStartup;
             AtlasPlugin.Logger.LogInfo($"[Atlas/Task] {kind} opened (step {(MyNormTask != null ? MyNormTask.taskStep : -1)})");
         }
-        catch (Exception e) { AtlasPlugin.Logger.LogError($"[Atlas/Task] start failed: {e}"); }
+        catch (Exception e)
+        {
+            AtlasPlugin.Logger.LogError($"[Atlas/Task] start failed: {e}");
+            // A half-built minigame has no close button and would keep the player stuck in it.
+            _done = true;
+            try { StartCoroutine(CoStartClose(0.3f)); } catch { }
+        }
     }
 
     /// <summary>Baustein je Task-Art und Schritt (mehrstufige Tasks zeigen je Schritt ein anderes Minispiel).</summary>
@@ -179,15 +189,18 @@ public class AtlasMinigame : Minigame
 
     public void Update()
     {
-        if (_mech == null || amClosing != CloseState.None) return;
+        if (_mech == null) return;
         if (_done)
         {
             // Nach "fertig" bis zum Schliessen weiterlaufen lassen, ohne Eingabe: sonst froren
             // laufende Schlussanimationen ein (User 24.09.: "die letzte Animation wird nicht
             // abgespielt", z. B. die letzte Motte auf dem Weg ins Glas).
+            // VOR der amClosing-Pruefung (03.10.): CoStartClose setzt amClosing schon im ersten
+            // Schritt, also im selben Frame wie Done - danach kam dieser Zweig nie mehr dran.
             try { _mech.Tick(Time.deltaTime, _lastMouse, false, false); } catch { }
             return;
         }
+        if (amClosing != CloseState.None) return;
         try
         {
             float dt = Time.deltaTime;
@@ -228,7 +241,14 @@ public class AtlasMinigame : Minigame
                 StartCoroutine(CoStartClose(0.9f));
             }
         }
-        catch (Exception e) { AtlasPlugin.Logger.LogError($"[Atlas/Task] update failed: {e}"); _done = true; }
+        catch (Exception e)
+        {
+            AtlasPlugin.Logger.LogError($"[Atlas/Task] update failed: {e}");
+            // _done alone left the minigame open with its close button dead (the _done branch takes
+            // no input): the player hung in it until a meeting. Close it instead.
+            _done = true;
+            try { StartCoroutine(CoStartClose(0.3f)); } catch { }
+        }
     }
 
     /// <summary>

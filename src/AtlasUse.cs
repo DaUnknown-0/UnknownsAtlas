@@ -82,9 +82,25 @@ internal static class AtlasUse
             if (ub.buttonLabelText != null) ub.buttonLabelText.text = label;
             _owned = true;
             _act = act;
-            if (_enabled && Input.GetKeyDown(KeyCode.E)) OnClick();                    // Use-Taste auf der Tastatur
+            if (_enabled && Input.GetKeyDown(KeyCode.E) && KeyboardFree()) OnClick();  // Use-Taste auf der Tastatur
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} button: {e.Message}"); }
+    }
+
+    /// <summary>E gehoert dem Spiel nur, wenn kein Chat, keine Karte und kein Minispiel offen ist. Ein
+    /// "always"-Angebot (CLIMB DOWN oben auf dem Hochsitz) fragte sonst nichts ab: ein "e" beim Tippen
+    /// oder bei offener Karte holte den Spieler herunter.</summary>
+    private static bool KeyboardFree()
+    {
+        try
+        {
+            var chat = HudManager.InstanceExists ? HudManager.Instance.Chat : null;
+            if (chat != null && chat.IsOpenOrOpening) return false;
+            if (MapBehaviour.Instance != null && MapBehaviour.Instance.IsOpen) return false;
+            if (Minigame.Instance != null) return false;
+        }
+        catch { }
+        return true;
     }
 
     private static Sprite Icon(UseButton ub, string file)

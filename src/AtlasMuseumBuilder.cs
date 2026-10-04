@@ -104,6 +104,7 @@ internal static class AtlasMuseumBuilder
             D = AtlasPlugin.SelectedMap();
             _blocks = null;
             VentArt.Clear(); SealedVentArt.Clear();
+            AtlasAssets.ReleaseOtherMaps(D);
             Build(__instance);
             _builtFor = __instance;
             AppDomain.CurrentDomain.SetData(AppDomainKey, D.Key);
@@ -205,6 +206,9 @@ internal static class AtlasMuseumBuilder
     [HarmonyPatch(typeof(MapBehaviour), nameof(MapBehaviour.Show))]
     internal static void MapBehaviour_Show_Postfix(MapBehaviour __instance)
     {
+        // Diagnose nur im Autotest-Lauf (Freeplay + ForceMap/TaskTest): im normalen Spiel schrieb
+        // jedes Kartenoeffnen eine Zeile plus eine pro Task-Marker ins Log.
+        if (!AtlasMapShot.AutotestRun) return;
         if (!Active || __instance == null || __instance.HerePoint == null) return;
         try
         {

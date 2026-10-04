@@ -140,6 +140,11 @@ internal static class AtlasWeatherFx
         // Kamera-Kind: lokale Einheiten koennen skaliert sein, also die Sichtflaeche in den lokalen Raum umrechnen
         float sc = Mathf.Max(0.01f, _screen.lossyScale.y);
         float halfH = (cam != null ? cam.orthographicSize : 3f) / sc, halfW = halfH * (cam != null ? cam.aspect : 1.78f);
+        // Tint and flash cover the real view, like the drops do. A fixed 30 x 20 left bare strips at
+        // the sides on an ultrawide screen with the lookout's zoom (32:9 at zoom 6 is 42 wide).
+        var full = new Vector3(Mathf.Max(30f, halfW * 2.3f) / 0.16f, Mathf.Max(20f, halfH * 2.3f) / 0.16f, 1f);
+        if (_tint != null && _tint.transform.localScale != full) _tint.transform.localScale = full;
+        if (_flash != null && _flash.transform.localScale != full) _flash.transform.localScale = full;
         if (!_dropsPlaced)
         {
             _dropsPlaced = true;

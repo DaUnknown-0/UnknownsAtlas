@@ -376,6 +376,10 @@ internal static class AtlasParkWorld
         foreach (var pc in PlayerControl.AllPlayerControls)
         {
             if (pc == null || pc.Data == null || pc.Data.IsDead || pc.Data.Disconnected) continue;
+            // Someone in a vent (vent 1 lies inside the ghost train) or switched invisible is not in
+            // the picture: the photo would show everyone who sat there and in which colour. Same
+            // rule as the mascot (AtlasParkFun).
+            if (pc.inVent || !pc.Visible) continue;
             if (area == null || !area.OverlapPoint(pc.GetTruePosition())) continue;
             colors.Add(pc.CurrentOutfit != null ? pc.CurrentOutfit.ColorId : pc.Data.DefaultOutfit.ColorId);
         }

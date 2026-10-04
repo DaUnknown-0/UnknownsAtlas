@@ -316,6 +316,14 @@ internal static class AtlasLookout
             behind = _state == St.Down && f.x > 12.1f && f.x < 14.5f && f.y > 4.25f && f.y < 6.6f;
         }
         catch { }
+        // Someone who drops out while up top never announces "down"; without this the roof stayed
+        // see-through for the rest of the round and wrongly said that somebody is up there.
+        if (UpPlayers.Count > 0)
+            UpPlayers.RemoveWhere(id =>
+            {
+                var pc = GameData.Instance != null ? GameData.Instance.GetPlayerById(id) : null;
+                return pc == null || pc.Disconnected || pc.IsDead;
+            });
         float target = UpPlayers.Count > 0 || _state != St.Down || behind ? RoofAlpha : 1f;
         if (Mathf.Approximately(_roofAlpha, target)) return;
         _roofAlpha = Mathf.MoveTowards(_roofAlpha, target, dt * 4f);
