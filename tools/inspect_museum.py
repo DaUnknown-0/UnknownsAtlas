@@ -32,6 +32,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 import museum_layout as L
 import museum_art as A
+import handdraw as HD
 import gen_museum as G
 
 HERE = Path(__file__).resolve().parent
@@ -198,7 +199,7 @@ def render(x0, y0, x1, y1, ppm=120, overlay=True, title=""):
     sprites.sort(key=lambda t: -t[0])
     for _base, im, wx, wy in sprites:
         px, py = P(wx, wy)
-        img.alpha_composite(im, (int(round(px)), int(round(py)) - im.height)) if px > -im.width and py > 0 else None
+        HD.paste_clipped(img, im, int(round(px)), int(round(py)) - im.height)
 
     if not overlay:
         return img, missing

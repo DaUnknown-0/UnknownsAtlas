@@ -44,7 +44,9 @@ internal static class AtlasParkFun
         _rider = None; _wheelT0 = -100f; _ring = null; _wheelProp = null; Gondolas.Clear(); _wheelNext.Clear();
         _placedTheta = float.NaN; _placedAlpha = float.NaN;
         _scan.Clear(); _scanNames = null; _scanFor = None;
-        _pingUntil = 0f; _ping = null;
+        _pingUntil = 0f;
+        if (_ping != null) Object.Destroy(_ping.gameObject);   // haengt an der Karte, nicht am Schiff
+        _ping = null;
         _meeting = false;
     }
 

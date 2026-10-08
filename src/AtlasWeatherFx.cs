@@ -37,6 +37,10 @@ internal static class AtlasWeatherFx
 
     public static void Reset()
     {
+        // Der Wetter-Screen haengt an Camera.main, die den Kartenwechsel ueberlebt: ohne Destroy
+        // bliebe pro Runde eine Kopie mit der letzten Tint-Alpha stehen. Das Blitz-Material ebenso.
+        if (_screen != null) Object.Destroy(_screen.gameObject);
+        if (_bolt != null && _bolt.sharedMaterial != null) Object.Destroy(_bolt.sharedMaterial);
         _screen = null; _tint = _flash = null; _bolt = null; _dropsPlaced = false;
         Drops.Clear(); Flames.Clear(); ThunderQueue.Clear();
         _weather = AtlasWorld.Weather.Clear; _tintNow = Color.clear; _flashT = 0f; _boltT = 0f;

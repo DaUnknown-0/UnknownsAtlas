@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from PIL import Image
 import gen_wald as GW
+import handdraw as HD
 import wald_geo as G
 import wald_layout as W
 
@@ -62,7 +63,7 @@ def render(x0, y0, x1, y1):
         pass
     sprites.sort(key=lambda t: -t[0])
     for _b, im, wx, wy in sprites:
-        img.alpha_composite(im, (int(round((wx - x0) * PPM)), int(round((y1 - wy) * PPM)) - im.height)) if (wx - x0) * PPM > -im.width else None
+        HD.paste_clipped(img, im, int(round((wx - x0) * PPM)), int(round((y1 - wy) * PPM)) - im.height)
     return img
 
 

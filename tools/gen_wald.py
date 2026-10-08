@@ -1803,7 +1803,7 @@ def main():
         im = images[i][1]
         im = im.resize((max(1, int(im.width * ppm / PROP_PPM)), max(1, int(im.height * ppm / PROP_PPM))), Image.LANCZOS)
         kind, wx, wy, base, _a, _b = meta[i]
-        fl.alpha_composite(im, (int((wx - BX0) * ppm), int((BY1 - wy) * ppm) - im.height))
+        HD.paste_clipped(fl, im, int((wx - BX0) * ppm), int((BY1 - wy) * ppm) - im.height)
     d = ImageDraw.Draw(fl)
     for k, p in consoles.items():
         x, y = (p[0] - BX0) * ppm, (BY1 - p[1]) * ppm

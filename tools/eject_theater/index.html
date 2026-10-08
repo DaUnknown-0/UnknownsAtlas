@@ -558,7 +558,7 @@ function renderSheet(mode) {
   const tmp = document.createElement("canvas"); tmp.width = cw * 2; tmp.height = ch * 2; const tg = tmp.getContext("2d");
   scenes.forEach((def, r) => times.forEach((t, c) => {
     const sc = new Scene(def, {}); TEXT.line = def.textStyle === "void" ? "The vote vanished into the void." : def.skip ? "No one was ejected. (Skipped)" : "Red was ejected."; TEXT.imp = "";
-    while (sc.t < t) sc.step(1 / 60);
+    while (sc.t < t && sc.t < sc.len + 2.2) sc.step(1 / 60);   // step() kappt bei len + 2.2
     sc.shake = null; render(tg, sc, tmp.width, tmp.height, "red");
     sg.drawImage(tmp, c * cw, r * ch, cw, ch);
     sg.fillStyle = "rgba(0,0,0,.6)"; sg.fillRect(c * cw, r * ch, 150, 20);

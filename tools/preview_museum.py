@@ -7,6 +7,7 @@ from pathlib import Path
 from PIL import Image
 import museum_layout as L
 import museum_art as A
+import handdraw as HD
 import gen_museum as G
 
 bx0, by0, bx1, by1 = L.BOUNDS
@@ -37,7 +38,7 @@ def render(x0=None, y0=None, x1=None, y1=None, ppm=None):
         props.append((base, im, wx, wy))
     props.sort(key=lambda t: -t[0])
     for base, im, wx, wy in props:
-        floor.alpha_composite(im, (int(round((wx - bx0) * ppm)), int(round((by1 - wy) * ppm)) - im.height))
+        HD.paste_clipped(floor, im, int(round((wx - bx0) * ppm)), int(round((by1 - wy) * ppm)) - im.height)
     if not full:
         floor = floor.crop((int((x0 - bx0) * ppm), int((by1 - y1) * ppm), int((x1 - bx0) * ppm), int((by1 - y0) * ppm)))
     return floor

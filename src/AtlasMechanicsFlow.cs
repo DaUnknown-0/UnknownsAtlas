@@ -1103,6 +1103,9 @@ internal sealed class LanternsMechanic : IAtlasMechanic
         {
             _burning = false; _flame.enabled = false;
             _msg.text = _burn <= 0f ? "BURNT OUT" : "BLOWN OUT";
+            // neu reiben: sonst zuendet _strike > 1 im naechsten Frame sofort wieder
+            _strike = 0f;
+            Array.Clear(_in, 0, _in.Length);
             return;
         }
         _flame.transform.localScale = Vector3.one * (0.8f + 0.2f * Mathf.Sin(Time.time * 25f));

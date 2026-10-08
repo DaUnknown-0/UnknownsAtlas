@@ -126,10 +126,13 @@ internal static class AtlasSelection
 
     private static float _resendTimer = 5f;
 
+    // HudManager.Update statt LobbyBehaviour.Update: dessen nativer Code ist mit einer zweiten
+    // Methode zusammengelegt (il2cpp-Dedup, siehe Lobby-Shot unten), ein Detour traefe beide.
     [HarmonyPostfix]
-    [HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Update))]
+    [HarmonyPatch(typeof(HudManager), nameof(HudManager.Update))]
     internal static void LobbyBehaviour_Update_Postfix()
     {
+        if (LobbyBehaviour.Instance == null) return;
         LobbyVisualTick();
         if (!AmHost) return;
         _resendTimer -= Time.deltaTime;

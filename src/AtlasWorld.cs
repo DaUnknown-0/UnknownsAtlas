@@ -19,6 +19,9 @@
 //  13 Fun [sub][...]                    Park-Attraktionen: Lukas, Kostuem, Riesenrad (AtlasParkFun)
 //  14 Show [...]                        Museum: Planetarium-Show (AtlasPlanetarium)
 //  15 Ferry [sub][...]                  Faehren/Fahrzeuge auf festen Strecken (AtlasFerry)
+//  16 SabWait [a][b] (je ushort)        Host -> alle: Restzeit der Sabotage-Abklingzeiten in Zehntelsekunden
+//                                       (a gemeinsam, b Rex). Lag bis 08.10. faelschlich auf 8 und wurde
+//                                       dort vom Hello-Handshake abgefangen; Clients ohne Op 16 ignorieren es.
 //
 // Wald: Regen und Sturm verlangsamen den Waldbrand-Countdown (Reaktor-System) auf die Haelfte. Im
 // Sturm kann ein Blitz einen Baum quer ueber einen Weg werfen. Einen Waldbrand legt er seit 04.10.
@@ -44,7 +47,7 @@ internal static class AtlasWorld
 {
     private const string LogPrefix = "[Atlas/World]";
     public const byte RpcId = 237;
-    private const byte OpWeather = 1, OpStrike = 2, OpSabStart = 3, OpSabReq = 4, OpRepair = 5, OpSabEnd = 6, OpEjectScene = 7, OpSabWait = 8;
+    private const byte OpWeather = 1, OpStrike = 2, OpSabStart = 3, OpSabReq = 4, OpRepair = 5, OpSabEnd = 6, OpEjectScene = 7, OpSabWait = 16;
     public const byte SabTrees = 1;
     public const byte SabRex = 3;          // 2 = AtlasParkWorld.SabRide
 

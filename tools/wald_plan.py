@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from shapely.geometry import Point
+from shapely.ops import unary_union
 
 import wald_layout as W
 import wald_geo as G
@@ -76,7 +77,8 @@ def at(best, p):
 def main():
     walk, water, shells, doors = G.build()
     rooms = G.rooms(walk)
-    grid = raster(walk)
+    # Moebel, Baeume und Anlagen (OPAQUE und GLASS) sperren den Weg, sonst sind Laufzeiten zu optimistisch
+    grid = raster(walk.difference(unary_union([G.shape(s) for s, _k in W.OPAQUE + W.GLASS])))
     rep = []
     spawn = dist_from(grid, W.SPAWN)
     for k, p in W.FIXED.items():

@@ -1655,7 +1655,9 @@ def build_floor_ops(walk):
 
     # Gebaeude-Grundflaeche (Wandkrone): folgt seit der Verkleinerung dem Grundriss (Aussenwand
     # WALL_OUT dick); eingeschlossene Luecken zwischen Raeumen werden Wandmasse, der Rest bleibt VOID.
-    building = Polygon(walk.buffer(WALL_OUT, join_style=2).exterior)
+    # Teilflaechen weiter als 2 x WALL_OUT auseinander ergeben ein MultiPolygon (ohne .exterior).
+    crown = walk.buffer(WALL_OUT, join_style=2)
+    building = Polygon(crown.exterior) if crown.geom_type == "Polygon" else unary_union([Polygon(g.exterior) for g in crown.geoms])
     ops.geom(building, fill=WALL_TOP)
     if L.DECOR:
         decor_outside(ops)
@@ -1706,8 +1708,9 @@ def build_floor_ops(walk):
             wob = HD.wobble(ring, amp=0.006, seed=900 + k, step=0.1, closed=True)
             ops.line(wob + [wob[0]], fill=OUTLINE, width=0.09)
             k += 1
-    wob = HD.wobble(list(building.exterior.coords)[:-1], amp=0.008, seed=899, step=0.12, closed=True)
-    ops.poly(wob, outline=OUTLINE, width=0.09)
+    for part in ([building] if building.geom_type == "Polygon" else list(building.geoms)):
+        wob = HD.wobble(list(part.exterior.coords)[:-1], amp=0.008, seed=899, step=0.12, closed=True)
+        ops.poly(wob, outline=OUTLINE, width=0.09)
 
     exit_signs(ops)
     return ops
