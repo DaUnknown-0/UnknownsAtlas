@@ -31,7 +31,6 @@ internal sealed class TombMechanic : IAtlasMechanic
     private readonly int[] _pos = new int[3];                 // Klicks seit "Schluessel oben", 0..7
     private readonly Transform[] _rings = new Transform[3];
     private readonly float[] _shown = new float[3];
-    private float _glow;
     private InputScript _script;
     public float Progress { get { int ok = 0; foreach (var p in _pos) if (p == 0) ok++; return ok / 3f; } }
     public bool Done { get; private set; }
@@ -102,7 +101,7 @@ internal sealed class ProjectorMechanic : IAtlasMechanic
     public string Name => "projector";
     static readonly Vector2 Sky = new(-1.1f, -0.05f), Coarse = new(2.0f, 0.95f), Fine = new(2.0f, -1.2f);
     private Rotary _coarse, _fine;
-    private Transform _ghost, _coarseT, _fineT, _needle;
+    private Transform _ghost, _coarseT, _fineT;
     private SpriteRenderer _ghostR;
     private float _err, _hold;
     private InputScript _script;

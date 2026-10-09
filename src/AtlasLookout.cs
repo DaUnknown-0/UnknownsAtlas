@@ -242,6 +242,9 @@ internal static class AtlasLookout
         if (MeetingHud.Instance == null) { try { lp.NetTransform.RpcSnapTo(LadderFoot); } catch { } }
         AtlasFigure.SetCollide(lp, true);
         SetLift(lp, 0f);
+        // Beim Klettern, Absteigen oder Gehen zum freien Platz ist die Bewegung gesperrt. Ein Tod in diesem
+        // Moment liess den Geist sonst bis zum naechsten Meeting stehen (Review 09.10.).
+        if (dead && MeetingHud.Instance == null) lp.moveable = true;
     }
 
     // ------------------------------------------------------------------ Bewegung oben

@@ -90,6 +90,7 @@ internal static class AtlasWorld
         AtlasFigure.Reset();
         AtlasView.Reset();
         AtlasUse.Reset();
+        AtlasBlockGuard.Reset();
     }
 
     /// <summary>Nach dem Kartenbau: Baum-Stellen, Nebelmaschine, Laserschranken anlegen.</summary>
@@ -399,6 +400,10 @@ internal static class AtlasWorld
         go.transform.localScale = new Vector3(s.Len / 4.2f, 1f, 1f);
         var col = go.AddComponent<BoxCollider2D>();
         col.size = new Vector2(4.0f, 0.5f);
+        // Steht jemand auf dem Weg, wo der Stamm faellt: erst auf seine Seite, dann der Kollider (AtlasBlockGuard)
+        col.enabled = false;
+        AtlasBlockGuard.ClearLocal(col, $"fallen tree {i}");
+        col.enabled = true;
         Trees[i] = go;
     }
 
@@ -434,7 +439,7 @@ internal static class AtlasWorld
 
     // ------------------------------------------------------------------ Welt-Reparaturen (Klick in der Welt)
 
-    private static byte _pendingKind, _pendingArg;
+    private static byte _pendingArg;
     public static bool IsWorldRepair(string name) => name == "sawlog";
 
     public static void RepairDone(string name)
@@ -506,10 +511,14 @@ internal static class AtlasWorld
 
     // ------------------------------------------------------------------ Laserschranken (Museum)
 
-    private static readonly List<(Vector2 A, Vector2 B, string Label, LineRenderer L, float Flash)> Lasers = new();
+    // Laserstrahl = gestrecktes weisses Sprite mit dem Sicht-Material der Karte (AtlasMuseumBuilder.Mask):
+    // ausserhalb des eigenen Lichtkegels dunkelt es ab wie Boden und Moebel. Der LineRenderer von frueher
+    // trug Sprites-Default und war ueberall sichtbar; sein Aufblitzen beim Durchlaufen verriet Bewegungen
+    // hinter Waenden (Review 09.10.). Das Aufblitzen zeigt jeder Client zusaetzlich nur, wenn die Schranke
+    // in seiner Sicht liegt.
+    private static readonly List<(Vector2 A, Vector2 B, string Label, SpriteRenderer R, float Flash)> Lasers = new();
     private static readonly List<(float T, string Label)> LaserLog = new();
     private static readonly Dictionary<byte, Vector2> LastPos = new();
-    private static Material _laserMat;
 
     private static void BuildLasers()
     {
@@ -517,6 +526,15 @@ internal static class AtlasWorld
         var slots = new List<(AtlasMuseumLayout.DoorSlot S, bool V)>();
         foreach (var s in D.VerticalDoors) slots.Add((s, true));
         foreach (var s in D.HorizontalDoors) slots.Add((s, false));
+        var white = AtlasAssets.TaskSprite("task_white.png", 100f, new Vector2(0.5f, 0.5f));
+        if (white == null) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} lasers: no sprite"); return; }
+        float unit = white.bounds.size.x;
+        // Der Welt-Knoten haengt am Schiff (1,2-fach skaliert): eigener Knoten mit Gegenmassstab, damit Meter Meter sind
+        var holder = new GameObject("Atlas_Lasers") { layer = 11 };
+        holder.transform.SetParent(_root, false);
+        var ls = _root.lossyScale;
+        holder.transform.localScale = new Vector3(1f / ls.x, 1f / ls.y, 1f / ls.z);
+        holder.transform.position = Vector3.zero;
         // jede zweite Tuer bekommt eine Schranke (sonst waere das Museum ein Lasergitter)
         for (int i = 0; i < slots.Count; i += 2)
         {
@@ -524,18 +542,34 @@ internal static class AtlasWorld
             var half = v ? new Vector2(0f, s.Length / 2f) : new Vector2(s.Length / 2f, 0f);
             var a = s.Center - half; var b = s.Center + half;
             var go = new GameObject($"Atlas_Laser_{i}") { layer = 11 };
-            go.transform.SetParent(_root, false);
-            var lr = go.AddComponent<LineRenderer>();
-            lr.useWorldSpace = true;
-            lr.positionCount = 2;
-            lr.SetPosition(0, new Vector3(a.x, a.y, -0.5f));
-            lr.SetPosition(1, new Vector3(b.x, b.y, -0.5f));
-            lr.startWidth = lr.endWidth = 0.035f;
-            if (_laserMat == null) _laserMat = new Material(Shader.Find("Sprites/Default")) { hideFlags = HideFlags.HideAndDontSave };
-            lr.sharedMaterial = _laserMat;
-            lr.startColor = lr.endColor = new Color(1f, 0.1f, 0.1f, 0.35f);
-            Lasers.Add((a, b, RoomName(s.Center), lr, 0f));
+            go.transform.SetParent(holder.transform, false);
+            // knapp ueber dem Boden (z 9), hinter Spielern und Moebeln: der Strahl liegt in Kniehoehe im Durchgang
+            go.transform.position = new Vector3(s.Center.x, s.Center.y, 8.4f);
+            go.transform.localScale = v ? new Vector3(0.05f / unit, s.Length / unit, 1f) : new Vector3(s.Length / unit, 0.05f / unit, 1f);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = white;
+            AtlasMuseumBuilder.Mask(sr);
+            sr.color = new Color(1f, 0.1f, 0.1f, 0.35f);
+            Lasers.Add((a, b, RoomName(s.Center), sr, 0f));
         }
+    }
+
+    /// <summary>Liegt die Schranke in der Sicht des lokalen Spielers? Gleiche Regel wie die Sichtbarkeit von
+    /// Spielern: im Lichtradius und keine Schattenkante dazwischen. Geister sehen alles.</summary>
+    private static bool LaserVisible(Vector2 a, Vector2 b)
+    {
+        var lp = PlayerControl.LocalPlayer;
+        if (lp == null || lp.Data == null) return false;
+        if (lp.Data.IsDead) return true;
+        var me = lp.GetTruePosition();
+        float r;
+        try { r = ShipStatus.Instance != null ? ShipStatus.Instance.CalculateLightRadius(lp.Data) : 3f; } catch { r = 3f; }
+        foreach (var p in new[] { a, (a + b) / 2f, b })
+        {
+            if (Vector2.Distance(me, p) > r) continue;
+            if (!PhysicsHelpers.AnythingBetween(me, p, Constants.ShadowMask, false)) return true;
+        }
+        return false;
     }
 
     private static string RoomName(Vector2 p)
@@ -568,7 +602,7 @@ internal static class AtlasWorld
                 {
                     var l = Lasers[i];
                     if (!Cross(prev, p, l.A, l.B)) continue;
-                    Lasers[i] = (l.A, l.B, l.Label, l.L, 1f);
+                    Lasers[i] = (l.A, l.B, l.Label, l.R, 1f);
                     LaserLog.Add((Time.time, l.Label));
                     if (LaserLog.Count > 20) LaserLog.RemoveAt(0);
                 }
@@ -578,9 +612,11 @@ internal static class AtlasWorld
         {
             var l = Lasers[i];
             float f = Mathf.Max(0f, l.Flash - dt);
-            float a = 0.25f + 0.1f * Mathf.Sin(Time.time * 3f + i) + f * 0.7f;
-            l.L.startColor = l.L.endColor = new Color(1f, 0.1f + f * 0.4f, 0.1f, a);
-            Lasers[i] = (l.A, l.B, l.Label, l.L, f);
+            // Aufblitzen nur, wenn ich die Schranke sehe; ausser Sicht verfaellt der Blitz ungesehen
+            float shown = f > 0f && LaserVisible(l.A, l.B) ? f : 0f;
+            float a = 0.25f + 0.1f * Mathf.Sin(Time.time * 3f + i) + shown * 0.7f;
+            if (l.R != null) l.R.color = new Color(1f, 0.1f + shown * 0.4f, 0.1f, a);
+            Lasers[i] = (l.A, l.B, l.Label, l.R, f);
         }
     }
 
@@ -594,13 +630,25 @@ internal static class AtlasWorld
         try
         {
             // am Minispiel selbst suchen statt cachen: jede Oeffnung ist eine neue Instanz
-            var holder = __instance.transform.Find("Atlas_SurvLog");
+            // unter "Viewables" wie TORs Nachtsicht-Overlays
+            var parent = __instance.Viewables != null ? __instance.Viewables.transform : __instance.transform;
+            // Viewables ist beim ersten Frame noch inaktiv; TextMeshPro wirft dort beim Setzen der Schrift
+            // (Autotest 09.10.). Erst anlegen, wenn das Minispiel steht.
+            if (!parent.gameObject.activeInHierarchy) return;
+            var holder = parent.Find("Atlas_SurvLog");
             TextMeshPro text;
             if (holder == null)
             {
                 var go = new GameObject("Atlas_SurvLog") { layer = __instance.gameObject.layer };
-                go.transform.SetParent(__instance.transform, false);
-                go.transform.localPosition = new Vector3(0f, -1.72f, -5f);
+                go.transform.SetParent(parent, false);
+                // Das Minispiel hat einen bildschirmgrossen Verlauf "FillQuad" (z -60, fast durchsichtig), der in den
+                // Tiefenpuffer schreibt. Was mit hoeherer Order danach gezeichnet wird und dahinter liegt, faellt im
+                // Tiefentest weg: so war das Protokoll seit 0.3.0.3 nie zu sehen (Diagnose 09.10.). Also knapp davor.
+                float z = __instance.transform.position.z - 10.5f;
+                foreach (var r in __instance.GetComponentsInChildren<MeshRenderer>(true))
+                    if (r != null && r.name == "FillQuad") { z = Mathf.Min(z, r.transform.position.z - 0.5f); break; }
+                var basePos = __instance.transform.position;
+                go.transform.position = new Vector3(basePos.x, basePos.y - 1.72f, z);
                 // dunkler Streifen unter dem Monitor: die Tastatur darunter ist fast weiss
                 // Das Minispiel zeichnet auf eigener Sortierebene: Ebene + hoechste Order uebernehmen,
                 // sonst liegt das Protokoll hinter Monitor und Tisch (Autotest 23.09.)
@@ -611,7 +659,7 @@ internal static class AtlasWorld
                 bar.sortingLayerID = layerId; bar.sortingOrder = top + 1;
                 var tgo = new GameObject("text") { layer = go.layer };
                 tgo.transform.SetParent(go.transform, false);
-                tgo.transform.localPosition = new Vector3(0f, 0f, -0.1f);
+                tgo.transform.localPosition = new Vector3(0f, 0f, -0.05f);
                 text = tgo.AddComponent<TextMeshPro>();
                 var src = HudManager.Instance != null ? HudManager.Instance.GetComponentInChildren<TextMeshPro>(true) : null;
                 if (src != null) { text.font = src.font; text.fontSharedMaterial = src.fontSharedMaterial; }
@@ -636,8 +684,14 @@ internal static class AtlasWorld
             }
             text.text = parts.Count > 0 ? "LASER LOG:  " + string.Join("  |  ", parts) : "LASER LOG:  no trips";
         }
-        catch { }
+        catch (Exception e)
+        {
+            // frueher ein leeres catch: ein Fehler hier liess das Protokoll still verschwinden
+            if (Time.time >= _survWarnAt) { _survWarnAt = Time.time + 10f; AtlasPlugin.Logger.LogWarning($"{LogPrefix} laser log: {e}"); }
+        }
     }
+
+    private static float _survWarnAt;
 
     // ------------------------------------------------------------------ Sabotage-Karte: neue Knoepfe
 
@@ -811,6 +865,7 @@ internal static class AtlasWorld
             case "flume": Snap(new Vector2(18.0f, -6.2f)); AtlasParkWorld.DiagStart(AtlasParkWorld.Ev.Flume); break;
             case "jam": Snap(new Vector2(0f, -4.8f)); AtlasParkWorld.DiagStart(AtlasParkWorld.Ev.TurnstileJam); break;
             case "oneway": AtlasParkWorld.DiagOneWay(); break;
+            case "guard": AtlasParkWorld.DiagGuard(); break;
             // Lichtebene: bei einer Laterne stehen (an), dann Park Blackout ausloesen (aus, Neon bleibt)
             case "lamps": Snap(AtlasParkWorldData.Lamps[2] + new Vector2(0f, -1.2f)); break;
             case "blackout":
@@ -902,6 +957,7 @@ internal static class AtlasWorld
         try
         {
             float dt = Time.deltaTime;
+            AtlasBlockGuard.Track();
             HostTick();
             LaserTick(dt);
             ClickTick();

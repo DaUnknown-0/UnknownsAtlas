@@ -49,6 +49,8 @@ internal static class AtlasAssets
     /// der Builder schneidet seine Sprites bei jedem Aufbau neu und haelt keine aus einer frueheren
     /// Runde, eine wieder gewaehlte Karte laedt ihr Paket einfach erneut.
     /// </summary>
+    private static string _lastKey;
+
     public static void ReleaseOtherMaps(AtlasMapDef keep)
     {
         try
@@ -58,7 +60,16 @@ internal static class AtlasAssets
             string keepPrefix = $"UnknownsAtlas.Resources.{keep.ResourcePrefix}_";
             var pack = new System.Text.RegularExpressions.Regex(
                 @"^UnknownsAtlas\.Resources\.[A-Za-z0-9]+_(floor_|props_|consoles_|minimap)");
-            bool Other(string key) => !key.StartsWith(keepPrefix, StringComparison.Ordinal) && pack.IsMatch(key);
+            // Minispiel- und Weltgrafik (task_*) haengt an der Karte (AtlasMapDef.TaskArt) und lag nach einem
+            // Kartenwechsel weiter unkomprimiert im Speicher (Review 09.10.). Beim Wechsel wird sie mit
+            // freigegeben und bei Bedarf neu geladen; beim Bau derselben Karte bleibt sie. Kein lebendes Objekt
+            // haelt sie hier noch: die alte Runde ist zerstoert, AtlasUse prueft seine Symbole auf null.
+            bool switching = _lastKey != null && _lastKey != keep.Key;
+            _lastKey = keep.Key;
+            const string taskPrefix = "UnknownsAtlas.Resources.task_";
+            bool Other(string key) =>
+                (!key.StartsWith(keepPrefix, StringComparison.Ordinal) && pack.IsMatch(key)) ||
+                (switching && key.StartsWith(taskPrefix, StringComparison.Ordinal));
             int freed = 0;
             foreach (var key in new List<string>(MapSprites.Keys))
                 if (Other(key)) { var s = MapSprites[key]; if (s != null) UnityEngine.Object.Destroy(s); MapSprites.Remove(key); }

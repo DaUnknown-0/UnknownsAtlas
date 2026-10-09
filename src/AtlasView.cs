@@ -32,6 +32,7 @@ internal static class AtlasView
     {
         Restore();
         ShadowBase.Clear();
+        Shadows.Clear();
     }
 
     /// <summary>Zoom zwischen der Grundgroesse (t = 0) und z (t = 1).</summary>
@@ -41,9 +42,20 @@ internal static class AtlasView
         Apply(Mathf.Lerp(_base, z, t));
     }
 
+    // Die Riesenrad-Fahrt aendert den Zoom 18 s lang in jedem Frame (Review 09.10.). Frueher suchte jeder
+    // dieser Frames alle ShadowCollab der Szene und liess das ganze HUD neu anordnen. Jetzt: Schattenkameras
+    // einmal je Zoom-Vorgang suchen, HUD hoechstens zehnmal pro Sekunde und am Ende eines Vorgangs neu setzen.
+    private static readonly List<ShadowCollab> Shadows = new();
+    private static float _hudAt, _hudZ = -1f;
+
     private static void Apply(float z)
     {
-        if (Mathf.Abs(z - _now) < 0.002f) return;
+        if (Mathf.Abs(z - _now) < 0.002f)
+        {
+            // Zoom steht: eine noch ausstehende HUD-Anpassung nachholen
+            if (_now >= 0f && Mathf.Abs(_hudZ - _now) > 0.002f) NotifyHud(_now);
+            return;
+        }
         _now = z;
         try
         {
@@ -51,14 +63,29 @@ internal static class AtlasView
             ScaleShadow(z);
             foreach (var cam in Camera.allCameras)
                 if (cam != null && cam.gameObject.name == "UI Camera") cam.orthographicSize = z;
-            ResolutionManager.ResolutionChanged.Invoke((float)Screen.width / Screen.height, Screen.width, Screen.height, Screen.fullScreen);
+            if (Time.unscaledTime >= _hudAt) NotifyHud(z);
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} zoom: {e.Message}"); }
     }
 
+    private static void NotifyHud(float z)
+    {
+        _hudAt = Time.unscaledTime + 0.1f;
+        _hudZ = z;
+        try { ResolutionManager.ResolutionChanged.Invoke((float)Screen.width / Screen.height, Screen.width, Screen.height, Screen.fullScreen); }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} hud: {e.Message}"); }
+    }
+
     private static void ScaleShadow(float z)
     {
-        foreach (var sc in Object.FindObjectsOfType<ShadowCollab>())
+        bool stale = Shadows.Count == 0;
+        foreach (var s in Shadows) if (s == null) { stale = true; break; }
+        if (stale)
+        {
+            Shadows.Clear();
+            foreach (var s in Object.FindObjectsOfType<ShadowCollab>()) if (s != null) Shadows.Add(s);
+        }
+        foreach (var sc in Shadows)
         {
             if (sc == null || sc.ShadowCamera == null || sc.ShadowQuad == null) continue;
             if (!ShadowBase.TryGetValue(sc.Pointer, out var b))
@@ -85,6 +112,7 @@ internal static class AtlasView
         Offset(Vector2.zero);
         if (_now < 0f) return;
         _now = -1f;
+        _hudZ = -1f;
         try
         {
             if (Camera.main != null) Camera.main.orthographicSize = _base;

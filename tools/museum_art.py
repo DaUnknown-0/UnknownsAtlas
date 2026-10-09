@@ -1811,8 +1811,7 @@ def render_floor(walk, ppm):
 class Prop:
     """Ein Objekt-Sprite: Leinwand in Weltkoordinaten, Standlinie base_y (-> z-Sortierung)."""
 
-    def __init__(self, x0, y0, x1, y1, h, ppm, base_y=None):
-        pad = 0.3
+    def __init__(self, x0, y0, x1, y1, h, ppm, base_y=None, pad=0.3):
         self.c = Canvas(x0 - pad, y0 - pad, x1 + pad, y1 + h * K + pad, ppm)
         self.base_y = y0 if base_y is None else base_y
 

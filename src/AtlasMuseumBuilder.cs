@@ -1665,11 +1665,14 @@ internal static class AtlasMuseumBuilder
 internal static class AtlasConsoleWallCheck
 {
     [HarmonyPriority(Priority.Last)]
+    // couldUse steuert die gelbe Umrandung. Nur canUse zu sperren liess eine Konsole hinter der Wand
+    // weiter aufleuchten (Review 09.10.), deshalb beide.
     public static void Postfix(ref float __result, Console __instance,
                                [HarmonyArgument(0)] NetworkedPlayerInfo pc,
-                               [HarmonyArgument(1)] ref bool canUse)
+                               [HarmonyArgument(1)] ref bool canUse,
+                               [HarmonyArgument(2)] ref bool couldUse)
     {
-        if (!canUse || !AtlasMuseumBuilder.Active) return;
+        if ((!canUse && !couldUse) || !AtlasMuseumBuilder.Active) return;
         try
         {
             var obj = pc?.Object;
@@ -1683,6 +1686,7 @@ internal static class AtlasConsoleWallCheck
             if (PhysicsHelpers.AnythingBetween(from, to, Constants.ShipOnlyMask, false))
             {
                 canUse = false;
+                couldUse = false;
                 __result = float.MaxValue;
             }
         }

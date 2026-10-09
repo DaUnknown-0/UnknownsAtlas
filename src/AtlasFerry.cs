@@ -199,6 +199,20 @@ internal sealed class AtlasFerry
                     _car.transform.position = new Vector3(f.x, f.y, AtlasMuseumBuilder.SortZ(f.y + 0.6f));
                 }
             }
+            else if (pc != null && _rider != None)
+            {
+                // Fahrgast unterwegs gestorben: Figur und Kollider zurueck, das Fahrzeug faehrt leer zu Ende.
+                // Wie beim Riesenrad: ohne das blieb der eigene Geist bis zum naechsten Meeting eingefroren,
+                // weil EndLocal die Bewegung nur Lebenden zurueckgibt.
+                AtlasFigure.Pose(pc, Vector2.zero, 1f);
+                AtlasFigure.SetCollide(pc, true);
+                if (pc == lp && _local)
+                {
+                    _local = false;
+                    if (MeetingHud.Instance == null) lp.moveable = true;
+                    AtlasPlugin.Logger.LogInfo($"{LogPrefix} {_name}: rider died on the way, movement given back");
+                }
+            }
             return;
         }
         if (lp == null) return;

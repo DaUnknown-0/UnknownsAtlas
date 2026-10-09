@@ -198,7 +198,6 @@ internal static class AtlasSelection
     // Das Spiel setzt das Kartenbanner im Infofeld jeden Frame neu (Test 23.09.: "Room Settings
     // flackert mit dem Museum"), deshalb laeuft der Banner-Abgleich direkt NACH GameStartManager.Update.
     private static readonly List<SpriteRenderer> SkeldNameRenderers = new();
-    private static Sprite _skeldName;
 
     [HarmonyPostfix]
     [HarmonyPatch(typeof(GameStartManager), nameof(GameStartManager.Update))]

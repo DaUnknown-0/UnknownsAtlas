@@ -1,13 +1,16 @@
 // Unknown's Atlas - Copyright (C) 2026 DaUnknown-0
 // Licensed under GPL-3.0-or-later. See LICENSE for details.
 //
-// Plugin-Einstieg des Minimal-PoC. Registriert die Karten in der AtlasRegistry und haengt
-// die beiden Replace-in-Place-Hooks an ShipStatus.Awake / ShipStatus.Begin (AtlasBuilder).
+// Plugin-Einstieg: Config, Anmeldung im Mod Manager, eingeschleuste Minispiel-Klasse, Harmony-Patches und
+// Updater. Die drei Karten (Vesper Museum, Forest Station, Moonlight Carnival) baut AtlasMuseumBuilder per
+// Relocate-in-Place auf die Skeld (ShipStatus.Start-Postfix); gewaehlt wird in AtlasSelection.
 //
 // Bewusst KEIN Reactor-API-Aufruf: Reactor 2.3.1 enthaelt keine Karten-/ShipStatus-
 // Registrierung (Binaerscan der installierten Reactor.dll: Identifier "ShipStatus",
 // "RegisterCustomShipStatus", "MapSelection" = 0 Treffer; Kontrollen "Reactor"=43,
 // "RegisterCustomRpc"=1). Das Package bleibt als Stack-Nachweis referenziert.
+// Die Config-Sektion heisst aus Kompatibilitaet weiter "PoC" (BuildPocMap): ein neuer Name wuerde die
+// Einstellungen bestehender Installationen verwerfen.
 
 using BepInEx;
 using BepInEx.Configuration;
@@ -23,7 +26,7 @@ public class AtlasPlugin : BasePlugin
 {
     public const string Id = "com.daunknown0.atlas";
     public const string PluginName = "Unknown's Atlas";
-    public const string VersionString = "0.3.0.24";
+    public const string VersionString = "1.0.0";
     public static readonly System.Version Version = System.Version.Parse(VersionString);
 
     public static BepInEx.Logging.ManualLogSource Logger = null!;
@@ -141,7 +144,7 @@ public class AtlasPlugin : BasePlugin
 [HarmonyPatch(typeof(PingTracker), nameof(PingTracker.Update))]
 internal static class AtlasVersionDisplayPatch
 {
-    private static string? cachedLine;
+    private static string cachedLine;
 
     [HarmonyPriority(Priority.Low)]
     public static void Postfix(PingTracker __instance)

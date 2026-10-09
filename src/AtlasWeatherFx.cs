@@ -160,14 +160,20 @@ internal static class AtlasWeatherFx
         // Daemmerung (AtlasDusk): der Grundschleier wird ueber die Runde tiefer
         float dusk = AtlasDusk.Level;
         Color want = wald ? new Color(0.02f, 0.04f - 0.015f * dusk, 0.12f + 0.04f * dusk, 0.12f + 0.26f * dusk) : Color.clear;
-        if (wald)
-            want = _weather switch
+        if (wald && _weather != AtlasWorld.Weather.Clear)
+        {
+            // Das Wetter liegt UEBER der Daemmerung, statt sie zu ersetzen: nachts wurde es sonst bei Regen
+            // oder Nebel heller als bei klarem Himmel (Review 09.10.). Farbe zur Nacht hin abdunkeln, Deckkraft
+            // nie unter die der Daemmerung.
+            var w = _weather switch
             {
                 AtlasWorld.Weather.Rain => new Color(0.03f, 0.06f, 0.14f, 0.28f),
                 AtlasWorld.Weather.Fog => new Color(0.72f, 0.76f, 0.82f, 0.30f),
-                AtlasWorld.Weather.Storm => new Color(0.0f, 0.02f, 0.08f, 0.40f),
-                _ => want,
+                _ => new Color(0.0f, 0.02f, 0.08f, 0.40f),
             };
+            var night = Color.Lerp(new Color(w.r, w.g, w.b), new Color(want.r, want.g, want.b), dusk * 0.6f);
+            want = new Color(night.r, night.g, night.b, Mathf.Max(w.a, want.a + 0.08f));
+        }
         _tintNow = Color.Lerp(_tintNow, want, Mathf.Clamp01(dt * 0.6f));
         _tint.color = _tintNow;
 
@@ -289,9 +295,11 @@ internal static class AtlasWeatherFx
     {
         if (SoundManager.Instance == null) return;
         bool inGame = MeetingHud.Instance == null && ExileController.Instance == null;
-        // Park (Graybox): noch kein eigener Raumton, und der Museumston passt nicht
         bool museum = AtlasMuseumBuilder.D.Key == "museum";
-        EnsureLoop(ref _ambience, wald ? "wald_bed" : "museum_bed", inGame && (wald || museum) ? (wald ? 0.35f : 0.28f) : 0f, dt);
+        bool park = AtlasMuseumBuilder.D.Key == "park";
+        // Park seit 09.10. mit eigenem Raumton (Review: auf der Karte war es nach dem Abschalten der Skeld-Klaenge still)
+        string bed = wald ? "wald_bed" : park ? "park_bed" : "museum_bed";
+        EnsureLoop(ref _ambience, bed, inGame ? (wald ? 0.35f : park ? 0.3f : 0.28f) : 0f, dt);
         EnsureLoop(ref _rain, "rain", inGame && raining ? (_weather == AtlasWorld.Weather.Storm ? 0.55f : 0.4f) : 0f, dt);
         bool fire = Flames.Count > 0;
         float fireVol = 0f;
@@ -308,6 +316,7 @@ internal static class AtlasWeatherFx
             _nextOneShot = Time.time + Random.Range(14f, 30f);
             if (wald && _weather != AtlasWorld.Weather.Storm) Play(Random.value < 0.6f ? "owl" : "twig", 0.3f);
             if (museum) Play(Random.value < 0.5f ? "creak" : "clock", 0.22f);
+            if (park) Play(Random.value < 0.5f ? "creak" : "chime", 0.12f);           // Schild im Wind, ferne Glocke
         }
     }
 
@@ -347,6 +356,7 @@ internal static class AtlasWeatherFx
         {
             "wald_bed" => WaldBed(),
             "museum_bed" => MuseumBed(),
+            "park_bed" => ParkBed(),
             "rain" => Rain(),
             "fire" => Fire(),
             "thunder" => Thunder(),
@@ -447,6 +457,49 @@ internal static class AtlasWeatherFx
             if (ph < 0.012f) s[i] += Mathf.Sin(2f * Mathf.PI * 2600f * t) * 0.12f * (1f - ph / 0.012f);
         }
         return Finish(s, Rate / 2);
+    }
+
+    /// <summary>Park nach Ladenschluss: Nachtwind, Brummen der Leuchtreklamen und ganz fern eine Drehorgel im
+    /// Walzertakt (gedaempft, als kaeme sie von jenseits der Zaeune). 12 s = 8 Takte, die Schleife bleibt im Takt.</summary>
+    private static float[] ParkBed()
+    {
+        int n = Rate * 12;
+        var s = Brown(n, 0.015f, 2.4f);                                         // Wind
+        // Walzer in C: Bass auf 1, Akkord auf 2 und 3; Takt = 1,5 s
+        float[][] bars =
+        {
+            new[] { 130.81f, 261.63f, 329.63f, 392.00f }, new[] { 98.00f, 246.94f, 293.66f, 392.00f },
+            new[] { 110.00f, 261.63f, 329.63f, 440.00f }, new[] { 87.31f, 261.63f, 349.23f, 440.00f },
+            new[] { 130.81f, 261.63f, 329.63f, 392.00f }, new[] { 98.00f, 246.94f, 293.66f, 392.00f },
+            new[] { 87.31f, 220.00f, 261.63f, 349.23f }, new[] { 98.00f, 246.94f, 293.66f, 392.00f },
+        };
+        float lp = 0f;
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / Rate;
+            s[i] *= 0.6f + 0.4f * Mathf.Sin(t * 0.47f) * Mathf.Sin(t * 0.19f + 2f);
+            // Leuchtreklame: 120 Hz mit Obertoenen, flackert leicht
+            float flick = 0.8f + 0.2f * Mathf.Sin(t * 7.3f) * Mathf.Sin(t * 2.1f);
+            s[i] += (Mathf.Sin(2f * Mathf.PI * 120f * t) + 0.5f * Mathf.Sin(2f * Mathf.PI * 240f * t) + 0.25f * Mathf.Sin(2f * Mathf.PI * 360f * t)) * 0.006f * flick;
+            int bar = (int)(t / 1.5f) % bars.Length;
+            float beatT = t % 0.5f;
+            int beat = (int)((t % 1.5f) / 0.5f);
+            float env = Mathf.Exp(-beatT * 6f) * Mathf.Min(1f, beatT * 200f);
+            float v = 0f;
+            var chord = bars[bar];
+            if (beat == 0) v = Organ(chord[0], t) * 1.2f;
+            else for (int k = 1; k < 4; k++) v += Organ(chord[k], t) * 0.45f;
+            lp += 0.08f * (v * env - lp);                                       // fern: kraeftig gedaempft
+            s[i] += lp * 0.065f;
+        }
+        return Finish(s, Rate / 2);
+    }
+
+    /// <summary>Drehorgel-Pfeife: Grundton plus ungerade Obertoene, leichtes Tremolo.</summary>
+    private static float Organ(float f, float t)
+    {
+        float trem = 1f + 0.08f * Mathf.Sin(2f * Mathf.PI * 5.5f * t);
+        return (Mathf.Sin(2f * Mathf.PI * f * t) + 0.35f * Mathf.Sin(2f * Mathf.PI * f * 3f * t) + 0.12f * Mathf.Sin(2f * Mathf.PI * f * 5f * t)) * trem;
     }
 
     private static float[] Rain()

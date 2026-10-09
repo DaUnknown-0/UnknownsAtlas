@@ -1027,7 +1027,7 @@ internal sealed class LanternsMechanic : IAtlasMechanic
     private Transform _match, _needle;
     private SpriteRenderer _flame;
     private bool _drag, _burning;
-    private float _strike, _burn, _wind, _gust, _st;
+    private float _strike, _burn, _wind, _gust;
     private Vector2 _strikeStart;
     private TextMeshPro _msg;
     private InputScript _script;

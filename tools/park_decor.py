@@ -226,7 +226,7 @@ def void(F, walk):
     for i, (kind, g, ang) in enumerate(sorted(items, key=lambda t: -t[1].centroid.y)):
         draw_hinterland(pen, kind, g, ang, rnd, i)
     # Lichterketten ueber der Dunkelheit (warme Punkte), nur ausserhalb der Wege
-    for _ in range(40):
+    for _ in range(14):                                                 # Review 09.10.: 40 waren zu unruhig
         ax, ay = rnd.uniform(x0, x1), rnd.uniform(y0, y1)
         ang = rnd.uniform(0, math.pi)
         ln = rnd.uniform(4, 9)
@@ -255,37 +255,56 @@ HINTERLAND = [   # (Art, Laenge, Breite, Gewicht)
 
 
 def hinterland_items(walk, rnd):
-    """Plaetze fuer das Rummel-Hinterland: im Streifen 1,2 bis 5,5 m hinter der begehbaren Flaeche, ohne
-    Ueberlappung, dicht an den Gebaeuden eher Kleinkram, weiter draussen Wagen und Zelte."""
+    """Plaetze fuer das Rummel-Hinterland im Streifen 1,2 bis 5,5 m hinter der begehbaren Flaeche.
+
+    Review 09.10.: frueher bis zu 110 Teile gleichmaessig ueber den ganzen Streifen gestreut, das wirkte
+    kleinteilig und unruhig. Jetzt kleine Lager: je Lager ein grosses Stueck (Wohnwagen, Zelt oder Lastwagen)
+    und drei bis fuenf Kleinteile dicht daneben, die Lager mindestens 7 m auseinander. Den Rest fuellen die
+    Baumkronen (void() setzt sie ueberall, wo kein Lager steht)."""
     x0, y0, x1, y1 = L.BOUNDS
     near = walk.buffer(5.5).difference(walk.buffer(1.2)).intersection(box(x0 + 0.5, y0 + 0.5, x1 - 0.5, y1 - 0.5))
     inner = walk.buffer(1.2)
-    items = []
-    placed = []
-    weights = [w for *_r, w in HINTERLAND]
-    tries = 0
-    while len(items) < 110 and tries < 4000:
-        tries += 1
-        kind, ln, wd, _w = rnd.choices(HINTERLAND, weights=weights)[0]
-        x, y = rnd.uniform(x0, x1), rnd.uniform(y0, y1)
+    big = [h for h in HINTERLAND if h[0] in ("wohnwagen", "zelt", "truck")]
+    small = [h for h in HINTERLAND if h[0] not in ("wohnwagen", "zelt", "truck")]
+    items, placed = [], []
+
+    def place(kind, ln, wd, x, y):
         p = Point(x, y)
         if not near.contains(p):
-            continue
-        d = inner.distance(p)
-        if kind in ("wohnwagen", "zelt", "truck") and d < 1.0:
-            continue
+            return False
+        if kind in ("wohnwagen", "zelt", "truck") and inner.distance(p) < 1.0:
+            return False
         ang = rnd.choice((0.0, math.pi / 2)) + rnd.uniform(-0.12, 0.12)
         if kind in ("kisten", "fass", "kabeltrommel"):
             ang = rnd.uniform(0, math.pi)
         c, s = math.cos(ang), math.sin(ang)
         hx, hy = ln / 2, wd / 2
         g = Polygon([(x + c * dx - s * dy, y + s * dx + c * dy) for dx, dy in ((-hx, -hy), (hx, -hy), (hx, hy), (-hx, hy))])
-        if g.buffer(0.35).intersects(inner):
-            continue
-        if any(g.buffer(0.3).intersects(q) for q in placed):
-            continue
+        if g.buffer(0.35).intersects(inner) or any(g.buffer(0.3).intersects(q) for q in placed):
+            return False
         placed.append(g)
         items.append((kind, g, ang))
+        return True
+
+    camps = []
+    for _ in range(3000):
+        if len(camps) >= 11:
+            break
+        x, y = rnd.uniform(x0, x1), rnd.uniform(y0, y1)
+        if not near.contains(Point(x, y)) or any(math.hypot(x - cx, y - cy) < 7.0 for cx, cy in camps):
+            continue
+        kind, ln, wd, _w = rnd.choices(big, weights=[w for *_r, w in big])[0]
+        if place(kind, ln, wd, x, y):
+            camps.append((x, y))
+    for cx, cy in camps:
+        want, got = rnd.randint(3, 5), 0
+        for _ in range(60):
+            if got >= want:
+                break
+            kind, ln, wd, _w = rnd.choices(small, weights=[w for *_r, w in small])[0]
+            a, r = rnd.uniform(0, 2 * math.pi), rnd.uniform(1.6, 3.0)
+            if place(kind, ln, wd, cx + math.cos(a) * r, cy + math.sin(a) * r):
+                got += 1
     return items
 
 

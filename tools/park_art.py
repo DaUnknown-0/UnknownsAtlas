@@ -34,6 +34,9 @@ KINDS = {"bude", "karussell", "kasse", "kassenhaeuschen", "turm", "tunnelwand", 
 PROP_H = {"bude": 3.2, "karussell": 4.6, "kasse": 3.0, "kassenhaeuschen": 3.0, "turm": 7.0, "tunnelwand": 2.4,
           "radnabe": 1.2, "riesenrad": 7.6, "theke": 1.6, "arena": 1.0, "zaun": 1.1, "mischpult": 1.3, "liege": 0.9,
           "spiegel": 2.5, "kuehltruhe": 1.0, "regal": 2.1, "lautsprecher": 2.3}
+# Leinwandrand je Objekt (Standard 0,3 m): das Karussell-Zeltdach samt Volant steht bis 0,48 m ueber die
+# Plattform hinaus und war seitlich abgeschnitten (Audit 08.10.)
+PROP_PAD = {"karussell": 0.75}
 BOOTH_SIGNS = ["POPCORN", "HOT DOGS", "CANDY"]
 
 
@@ -70,7 +73,7 @@ def striped_quad(c, xa0, xa1, ya, xb0, xb1, yb, n, cols):
 def draw(kind, shape, idx, ppm):
     x0, y0, x1, y1 = A.shape_bounds(shape)
     h = PROP_H[kind]
-    p = Prop(x0, y0, x1, y1, h, ppm)
+    p = Prop(x0, y0, x1, y1, h, ppm, pad=PROP_PAD.get(kind, 0.3))
     c = p.c
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     rnd = random.Random(idx * 131 + 7)
@@ -149,7 +152,9 @@ def draw(kind, shape, idx, ppm):
             t1 = math.pi + (i + 1) * math.pi / segs
             c.poly([(cx + (r + 0.2) * math.cos(t0), ring + ry * math.sin(t0) * 0.5), (cx + (r + 0.2) * math.cos(t1), ring + ry * math.sin(t1) * 0.5),
                     (cx, apex)], fill=(RED if i % 2 == 0 else CREAM))
-        c.poly([(cx - r - 0.2, ring), (cx + r + 0.2, ring), (cx, apex)], outline=OUTLINE, width=0.07)
+        # nur die beiden Schraegen umranden: die Grundlinie lag als gerader Strich quer ueber dem Dach,
+        # dessen Vorderkante gewoelbt ist (Review 09.10.)
+        c.line([(cx - r - 0.2, ring), (cx, apex), (cx + r + 0.2, ring)], fill=OUTLINE, width=0.07)
         for i in range(12):                                            # Volant
             t = math.pi + (i + 0.5) * math.pi / 12
             c.ellipse(cx + (r + 0.2) * math.cos(t), ring + ry * 0.5 * math.sin(t) - 0.12, 0.28, 0.16,

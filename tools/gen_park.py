@@ -33,7 +33,7 @@ OUT_DATA = PROJECT / "src" / "AtlasParkData.cs"
 OUT_LAYOUT = PROJECT / "src" / "AtlasParkLayout.cs"
 PREVIEW = HERE / "_park"
 
-FLOOR_PPM = 80                  # Park-Grafik (park_floor.py); Museum/Wald 160, der Park ist doppelt so gross
+FLOOR_PPM = 128                 # Park-Grafik (park_floor.py); 128 statt 80 (Review 09.10.): gleiche Pixelzahl wie das Museum bei 160
 FLOOR_TILES = (4, 3)            # je Kachel unter 2048 px
 LAMPS, LAMP_PIVOT = [], (0.5, 0.1)
 PROP_PPM = 160                  # wie Museum und Wald (Stilblatt: echte Objekte)

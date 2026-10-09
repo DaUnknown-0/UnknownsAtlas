@@ -274,7 +274,7 @@ internal static class AtlasMapShot
         byte[] png = ImageConversion.EncodeToPNG(tex).ToArray();
         string dir = Path.Combine(Paths.GameRootPath, "AtlasShots");
         Directory.CreateDirectory(dir);
-        string file = Path.Combine(dir, $"museum_{DateTime.Now:yyyyMMdd_HHmmss}.png");
+        string file = Path.Combine(dir, $"{AtlasMuseumBuilder.D.Key}_{DateTime.Now:yyyyMMdd_HHmmss}.png");   // Kartenname statt immer "museum_"
         File.WriteAllBytes(file, png);
 
         Object.Destroy(go);

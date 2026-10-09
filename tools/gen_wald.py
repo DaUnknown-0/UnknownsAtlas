@@ -36,6 +36,9 @@ FLOOR_PPM = 160
 FLOOR_TILES = (5, 4)
 PROP_PPM = 160
 BX0, BY0, BX1, BY1 = W.BOUNDS
+# Der Boden reicht 6 m ueber den Ostrand hinaus (Audit 08.10.): der Bach liegt am Kartenrand, wer am Steg stand,
+# sah hinter dem schmalen Gegenufer nur Schwarz. Kartengrenzen (Minimap, Massstab, MinX..MaxX) bleiben BOUNDS.
+FX1 = BX1 + 6.0
 
 OUTLINE = A.OUTLINE
 lift, shade, alpha, hexc = A.lift, A.shade, A.alpha, A.hexc
@@ -136,6 +139,11 @@ def build_floor_ops(walk, water, shells, doors, rooms):
                 crowns.append((c.x, c.y, r))
             x += rnd.uniform(1.25, 1.75)
         y -= rnd.uniform(1.05, 1.35)
+    # Kronen jenseits des Ostrands kommen danach mit eigenem Zufall (draw_east_crowns), damit der Wald
+    # innerhalb der Karte unveraendert bleibt
+    east = box(BX1 - 0.4, BY0 - 1.0, FX1 + 1.0, BY1 + 1.0).difference(water)
+    fill(ops, box(BX1, BY0, FX1, BY1), C["wald_grund"])
+    forest = forest.union(east)
     clip = forest.buffer(0.18)   # Kronen haengen minimal ueber den Rand
     for ci, (cx, cy, r) in enumerate(crowns):   # Norden zuerst, suedliche Kronen liegen vorne
         # Stilblatt: Kronenumriss mit leichtem Zittern statt sauberem Kreis
@@ -155,6 +163,8 @@ def build_floor_ops(walk, water, shells, doors, rooms):
             p = Point(cx + math.cos(a) * r * 0.55, cy + math.sin(a) * r * 0.55)
             if g.contains(p):
                 ops.ellipse(p.x, p.y, r * 0.16, r * 0.12, fill=alpha(shade(col, 0.7), 200))
+
+    draw_east_crowns(ops, water)
 
     # 2. Wasser (Stilblatt: Seeufer): Tiefenstufen, Wellenstruktur, Mondbahn, Seerosen; das Ufer selbst
     # (Uferband, Steine, Schilf) kommt in draw_shore NACH Gras und Kies, der Steg in draw_dock
@@ -850,11 +860,39 @@ def hut_lanes(doors):
     return lanes
 
 
+def draw_east_crowns(ops, water):
+    """Kronendach im Streifen hinter dem Ostrand (FX1), gleicher Stil wie in build_floor_ops. Die Kronen werden
+    ganz gezeichnet (nur das Wasser bleibt frei): an einer geraden Kante abgeschnitten, lag nord- und suedlich
+    des Bachs eine sichtbare Naht ueber den Kronen der Karte."""
+    rnd = random.Random(20261009)
+    east = box(BX1 + 0.3, BY0 - 1.0, FX1 + 1.0, BY1 + 1.0).difference(water.buffer(0.6))
+    crowns = []
+    y = BY1 + 1.0
+    while y > BY0 - 1.5:
+        x = BX1 - 0.2 + rnd.uniform(0, 0.8)
+        while x < FX1 + 1.0:
+            c = Point(x + rnd.uniform(-0.3, 0.3), y + rnd.uniform(-0.3, 0.3))
+            if east.contains(c):
+                crowns.append((c.x, c.y, rnd.uniform(0.95, 1.55)))
+            x += rnd.uniform(1.25, 1.75)
+        y -= rnd.uniform(1.05, 1.35)
+    clip = box(BX1 - 4.0, BY0 - 2.0, FX1 + 2.0, BY1 + 2.0).difference(water.buffer(0.15))
+    for ci, (cx, cy, r) in enumerate(crowns):
+        disk = Polygon(HD.wobble_ellipse(cx, cy, r, r, amp=r * 0.035, seed=5000 + ci)).buffer(0)
+        g = disk.intersection(clip)
+        if g.is_empty:
+            continue
+        col = rnd.choice(C["krone"])
+        fill(ops, g, col, outline=OUTLINE, width=0.05)
+        fill(ops, Point(cx - r * 0.28, cy + r * 0.28).buffer(r * 0.45, 16).intersection(g), alpha(C["krone_licht"], 150))
+        fill(ops, Point(cx + r * 0.32, cy - r * 0.34).buffer(r * 0.5, 16).intersection(g), alpha(shade(col, 0.72), 120))
+
+
 def render_floor(walk, water, shells, doors, rooms):
     ops = build_floor_ops(walk, water, shells, doors, rooms)
-    img = ops.render(BX0, BY0, BX1, BY1, FLOOR_PPM, A.VOID)
-    img = A.apply_wear(img, walk, BX0, BY0, BX1, BY1, lanes=hut_lanes(doors))
-    img = A.ambient_occlusion(img, walk, BX0, BY0, BX1, BY1)
+    img = ops.render(BX0, BY0, FX1, BY1, FLOOR_PPM, A.VOID)
+    img = A.apply_wear(img, walk, BX0, BY0, FX1, BY1, lanes=hut_lanes(doors))
+    img = A.ambient_occlusion(img, walk, BX0, BY0, FX1, BY1)
     if GRAIN:
         img = HD.paper_grain(img, GRAIN, seed=4, scale=2)
     img = img.filter(ImageFilter.GaussianBlur(0.7))
@@ -1375,7 +1413,9 @@ def draw_prop(kind, s, idx, ppm):
             sx, sy = cx + r * 0.8 * math.cos(a), cy + r * 0.8 * math.sin(a)
             c.ellipse(sx, sy, 0.18, 0.14, fill=C["fels"], outline=OUTLINE, width=0.025)
             c.ellipse(sx - 0.05, sy + 0.04, 0.07, 0.04, fill=shade(C["fels"], 1.18))
-        c.glow(cx, cy + 0.2, 2.5, hexc("#ffb347"), 0.45)
+        # Schein so gross wie die Leinwand (Feuer +-1,2 m plus 0,3 m Rand): mit 2,5 m Radius wurde er an der
+        # Leinwandkante gerade abgeschnitten, sichtbare Rechteckkante im Spiel (Audit 08.10.)
+        c.glow(cx, cy + 0.05, 1.45, hexc("#ffb347"), 0.55)
         for dx in (-0.2, 0, 0.2):
             c.line([(cx - 0.35, cy - 0.1 + dx), (cx + 0.35, cy + 0.1 + dx)], fill=wood_d, width=0.09)
         c.poly([(cx - 0.3, cy), (cx + 0.3, cy), (cx + 0.1, cy + 0.55), (cx, cy + 0.85), (cx - 0.12, cy + 0.5)], fill=hexc("#f08a2a"), outline=OUTLINE, width=0.03)
@@ -1797,7 +1837,7 @@ def main():
 
     # Vorschau: Boden (1/4) + Objekte + Konsolenpunkte
     fl = Image.open(PREVIEW / "floor_preview.jpg").convert("RGBA")
-    ppm = fl.width / (BX1 - BX0)
+    ppm = fl.width / (FX1 - BX0)
     order = sorted(range(len(images)), key=lambda i: -meta[i][3])
     for i in order:
         im = images[i][1]

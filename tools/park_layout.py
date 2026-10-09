@@ -175,16 +175,22 @@ OPAQUE = [
     (("rect", -20.9, -18.6, -19.4, -16.0), "regal"),           # Werkstatt
     (("rect", 16.4, 9.9, 18.0, 11.1), "lautsprecher"),         # Musikzentrale
 ]
+# Runde Objekte in schraeger Aufsicht (park_art zeichnet Zaun, Sockel und Podest als Ellipse mit
+# ry = 0,5..0,7 r): der Kollider ist deshalb dieselbe Ellipse, kein voller Kreis. Vorher ragte der
+# Riesenrad-Kreis 1,6 m ueber den gemalten Zaun nach Sueden, fast bis zur RIDE-Matte (User 08.10.:
+# "unten kommt man nicht ran, obwohl da nichts ist"). Das Sprite nimmt seine Masse aus der Breite,
+# die Hoehe der Form aendert die Grafik nicht (Prop-Leinwand hat 0,3 m Rand).
 GLASS = [
-    (("circle", WHEEL[0], WHEEL[1], 3.2), "riesenrad"),        # Radkranz: sperrt den Weg, man sieht durch
-    (("circle", WHEEL[0], WHEEL[1], 1.0), "radnabe"),          # Nabe: niedriges Podest (Plan: GLASS)
-    (("circle", TOWER[0], TOWER[1], 1.2), "turm"),             # Beleuchtungsturm: Gitterturm (Plan: GLASS)
+    (("ellipse", WHEEL[0], WHEEL[1], 3.2, 1.6), "riesenrad"),  # Radkranz: Zaun-Ellipse, man sieht durch
+    (("ellipse", WHEEL[0], WHEEL[1], 1.0, 0.7), "radnabe"),    # Nabe: niedriges Podest (Plan: GLASS)
+    (("ellipse", TOWER[0], TOWER[1], 1.2, 0.6), "turm"),       # Beleuchtungsturm: Sockel-Ellipse (Plan: GLASS)
     (("circle", -14.0, 1.5, 2.8), "karussell"),                # Karussell: Weg ueber die ganze Scheibe gesperrt
     (("rect", -19.0, 13.4, -11.0, 14.2), "theke"),             # Schiessbude
     (ARENA, "arena"),                                          # Autoscooter-Bahn
     (("rect", 18.8, 9.9, 21.8, 10.9), "mischpult"),            # Musikzentrale
     (("rect", 19.9, -20.6, 21.7, -19.0), "liege"),             # Sanitaetszelt
     (("rect", 9.4, -16.9, 11.4, -15.5), "kuehltruhe"),         # Kuehlhaus: Eistruhe, Hueftrhoehe (Plan: GLASS)
+    (("rect", 2.5, -18.3, 4.1, -17.3), None),                  # Umspannhaus: Transformator (im Boden gemalt, park_decor.substation_floor)
 ]
 
 # ------------------------------------------------------------------ Welt-System (AtlasParkWorld)

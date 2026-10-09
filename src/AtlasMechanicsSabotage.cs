@@ -526,7 +526,7 @@ internal sealed class SawMechanic : IAtlasMechanic
 {
     public string Name => "sawlog";
     const float Need = 9f;                     // Saegestrecke in Einheiten (etwa sechs kraeftige Zuege)
-    private Transform _saw, _logL, _logR;
+    private Transform _saw, _logL;
     private SpriteRenderer _cut;
     private float _done, _lastX;
     private bool _grab;

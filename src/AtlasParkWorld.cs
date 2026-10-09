@@ -71,7 +71,7 @@ internal static class AtlasParkWorld
         _root = null; _bridge = null;
         Crossings.Clear(); CarouselGates.Clear(); Turnstiles.Clear(); TurnInward.Clear(); MonitorFigures.Clear();
         _train = _boat = _ghostCar = _carousel = _flash = _monitor = null; _monitorText = null;
-        _ev = Ev.None; _nextEvent = -1f; _diagOneWay = 0; _diagCaptureAt = -1f;
+        _ev = Ev.None; _nextEvent = -1f; _diagOneWay = 0; _diagCaptureAt = -1f; _diagGuard = 0;
     }
 
     public static void Build(ShipStatus ship, Transform worldRoot)
@@ -294,6 +294,7 @@ internal static class AtlasParkWorld
             if (_flash != null && _flash.color.a > 0f)
                 _flash.color = new Color(1f, 1f, 1f, Mathf.Max(0f, _flash.color.a - dt * 2.5f));
             DiagOneWayTick();
+            DiagGuardTick();
             DiagCaptureTick();
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} tick: {e.Message}"); }
@@ -333,6 +334,8 @@ internal static class AtlasParkWorld
         if (g.Closed != closed)
         {
             g.Closed = closed;
+            // wer gerade im Durchgang steht, kommt auf der Seite heraus, von der er kam (AtlasBlockGuard)
+            if (closed && g.Blocker != null) AtlasBlockGuard.ClearLocal(g.Blocker.GetComponent<BoxCollider2D>(), g.Blocker.name);
             if (g.Blocker != null) g.Blocker.SetActive(closed);
             if (g.Bar != null) g.Bar.gameObject.SetActive(closed);
         }
@@ -452,6 +455,10 @@ internal static class AtlasParkWorld
             bool near = pos.x > min.x - 3f && pos.x < max.x + 3f;
             bool closed = jam || (alive && exitSide && near);
             var g = Turnstiles[i];
+            // Stau: wer im Drehkreuz steht, zurueck auf seine Seite. Die Einbahn-Sperre schaltet dagegen erst, wenn
+            // man schon auf der Ausgangsseite ist; dort darf die Physik weiter nach vorn schieben.
+            if (jam && closed && g.Blocker != null && !g.Blocker.activeSelf)
+                AtlasBlockGuard.ClearLocal(g.Blocker.GetComponent<BoxCollider2D>(), "turnstile jam");
             if (g.Blocker != null && g.Blocker.activeSelf != closed) g.Blocker.SetActive(closed);
             if (g.Bar != null && g.Bar.gameObject.activeSelf != jam) g.Bar.gameObject.SetActive(jam);
             g.Closed = closed;
@@ -493,6 +500,39 @@ internal static class AtlasParkWorld
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: dummy placed in the ghost train");
             return;
         }
+    }
+
+    // Diagnose "world:guard": Spieler kommt von Sueden in den Bahnuebergang 2 und bleibt darin stehen, dann
+    // faehrt die Achterbahn. Erwartet: AtlasBlockGuard setzt ihn an die Suedkante (Log "back where they came from").
+    private static int _diagGuard;
+    private static float _diagGuardAt;
+
+    public static void DiagGuard()
+    {
+        if (AtlasParkWorldData.Crossings.Length < 2) return;
+        var (min, max, _) = AtlasParkWorldData.Crossings[1];
+        float fo = AtlasMuseumBuilder.FeetOffset();
+        PlayerControl.LocalPlayer.NetTransform.SnapTo(new Vector2((min.x + max.x) / 2f, min.y - 0.9f + fo));
+        _diagGuard = 1; _diagGuardAt = Time.time + 0.6f;
+    }
+
+    private static void DiagGuardTick()
+    {
+        if (_diagGuard == 0 || Time.time < _diagGuardAt) return;
+        var (min, max, _) = AtlasParkWorldData.Crossings[1];
+        var lp = PlayerControl.LocalPlayer;
+        if (_diagGuard == 1)
+        {
+            lp.NetTransform.SnapTo(new Vector2((min.x + max.x) / 2f, (min.y + max.y) / 2f + AtlasMuseumBuilder.FeetOffset()));
+            EndEvent(); Apply(Ev.Coaster);
+            _diagGuard = 2; _diagGuardAt = Time.time + Announce + 0.8f;
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag guard: player placed inside crossing 1, coaster starting");
+            return;
+        }
+        var f = lp.GetTruePosition();
+        bool inside = f.x > min.x && f.x < max.x && f.y > min.y && f.y < max.y;
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag guard RESULT {(!inside && f.y < min.y ? "PASS" : "FAIL")}: feet ({f.x:F2},{f.y:F2}), crossing y {min.y:F2}..{max.y:F2}");
+        _diagGuard = 0;
     }
 
     private static int _diagOneWay;
