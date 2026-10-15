@@ -105,6 +105,7 @@ internal static class AtlasMuseumBuilder
             D = AtlasPlugin.SelectedMap();
             _blocks = null;
             VentArt.Clear(); SealedVentArt.Clear();
+            AtlasDoorCamArt.Reset();
             AtlasAssets.ReleaseOtherMaps(D);
             AtlasAssets.ResetTiming();
             var total = System.Diagnostics.Stopwatch.StartNew();
@@ -126,6 +127,8 @@ internal static class AtlasMuseumBuilder
         if (_builtFor != null && _builtFor != __instance) return;
         _builtFor = null;
         FadeProps.Clear();
+        AtlasDoorCamArt.Reset();
+        AtlasForeignTasks.Release();
         VentArt.Clear(); SealedVentArt.Clear();
         AppDomain.CurrentDomain.SetData(AppDomainKey, null);
     }
@@ -393,6 +396,7 @@ internal static class AtlasMuseumBuilder
             }
             MoveTo(c.transform, pos);
             SortLikePlayer(c.transform);
+            DisableOwnColliders(c.gameObject);
             c.checkWalls = false;
             c.onlySameRoom = false;
             c.onlyFromBelow = false;
@@ -420,6 +424,7 @@ internal static class AtlasMuseumBuilder
             else { pos = D.SurveillanceConsole; role = "surveillance"; }
             MoveTo(sc.transform, pos);
             SortLikePlayer(sc.transform);
+            DisableOwnColliders(sc.gameObject);
             sc.onlyFromBelow = false;
             if (needsMarker.Contains(sc.Pointer)) sc.Image = AddMarker(sc.gameObject, outlineMat, role);
             sc.Image = ApplyBlock(sc.gameObject, role switch
@@ -436,6 +441,7 @@ internal static class AtlasMuseumBuilder
             if (mc == null) continue;
             MoveTo(mc.transform, D.AdminTable);
             SortLikePlayer(mc.transform);
+            DisableOwnColliders(mc.gameObject);
             if (needsMarker.Contains(mc.Pointer)) mc.Image = AddMarker(mc.gameObject, outlineMat, "admin");
             mc.Image = ApplyBlock(mc.gameObject, "AdminTable", mc.Image, outlineMat);
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} map console '{mc.name}' -> admin table");
@@ -469,6 +475,7 @@ internal static class AtlasMuseumBuilder
         // Arrays auf Ueberlebende eindampfen (entfernte Vents, evtl. verlorene Konsolen).
         ship.AllConsoles = new Il2CppReferenceArray<Console>(ship.AllConsoles.Where(c => c != null).ToArray());
         ship.AllCameras = new Il2CppReferenceArray<SurvCamera>(ship.AllCameras.Where(c => c != null).ToArray());
+        try { AtlasForeignTasks.Build(ship, outlineMat); } catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} foreign tasks: {e}"); }
 
         ship.CameraColor = D.CameraColor;
 
@@ -488,6 +495,16 @@ internal static class AtlasMuseumBuilder
 
     // ------------------------------------------------------------------ Helfer
 
+    // Die Skeld-Konsolen bringen die Kollider ihrer alten Bilder mit (Funktisch 2,3 x 0,7 m, Steuerpult
+    // 0,8 x 1,7 m, Kabelkaesten 0,6 m): unsichtbar nach dem Bildtausch, man lief gegen nichts (User 15.10.).
+    // Nur die festen Kollider am Konsolenobjekt selbst; die Benutzbarkeit misst Abstand, nicht
+    // Trigger, und die Grundflaechen der eigenen Bloecke (AddFootprint) bleiben.
+    private static void DisableOwnColliders(GameObject owner)
+    {
+        foreach (var col in owner.GetComponents<Collider2D>())
+            if (col != null && !col.isTrigger && col.enabled) col.enabled = false;
+    }
+
     private static bool OwnsImage(SpriteRenderer image, Transform owner) =>
         image != null && image.transform.IsChildOf(owner);
 
@@ -499,7 +516,7 @@ internal static class AtlasMuseumBuilder
     }
 
     /// <summary>Setzt die Welt-xy, behaelt z (die Skeld-Tiefenstaffel stimmt so weiter).</summary>
-    private static void MoveTo(Transform t, Vector2 pos)
+    internal static void MoveTo(Transform t, Vector2 pos)
     {
         var p = t.position;
         t.position = new Vector3(pos.x, pos.y, p.z);
@@ -507,12 +524,44 @@ internal static class AtlasMuseumBuilder
 
     private static Dictionary<string, (int Atlas, int X, int Y, int W, int H, float PX, float PY)> _blocks;
 
+    /// <summary>Ein Bild aus dem Konsolen-Atlas der Karte als Sprite in Weltmetern fuer ein Kind von owner
+    /// (die Pixeldichte gleicht die Skalierung des Besitzers aus); null ohne Eintrag.</summary>
+    internal static Sprite SpriteFor(string key, Transform owner)
+    {
+        if (_blocks == null)
+        {
+            _blocks = new();
+            foreach (var b in D.ConsoleSprites) _blocks[b.Key] = (b.Atlas, b.X, b.Y, b.W, b.H, b.PivotX, b.PivotY);
+        }
+        if (!_blocks.TryGetValue(key, out var e)) return null;
+        var tex = AtlasAssets.MapConsolesTexture(D, e.Atlas);
+        if (tex == null) return null;
+        var sprite = Sprite.Create(tex, new Rect(e.X, e.Y, e.W, e.H), new Vector2(e.PX, e.PY), D.PropPixelsPerMeter, 0, SpriteMeshType.FullRect);
+        sprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
+        return sprite;
+    }
+
+    /// <summary>"key" (Ruhebild) plus "key/1".."key/n" als Bildfolge; null, wenn schon das Ruhebild fehlt.</summary>
+    internal static Sprite[] SpriteSet(string key, Transform owner)
+    {
+        var first = SpriteFor(key, owner);
+        if (first == null) return null;
+        var list = new List<Sprite> { first };
+        for (int k = 1; ; k++)
+        {
+            var f = SpriteFor($"{key}/{k}", owner);
+            if (f == null) break;
+            list.Add(f);
+        }
+        return list.ToArray();
+    }
+
     /// <summary>
     /// Eigener Task-Block (tools/museum_consoles.py) statt des Skeld-Bilds. Alle alten Renderer der
     /// Konsole werden abgeschaltet, der neue bekommt das Kontur-Material des alten Bilds, damit das
     /// gelbe Hervorheben beim Naehertreten weiter funktioniert. Ohne Eintrag bleibt alles wie es war.
     /// </summary>
-    private static SpriteRenderer ApplyBlock(GameObject owner, string key, SpriteRenderer current, Material outlineMat)
+    internal static SpriteRenderer ApplyBlock(GameObject owner, string key, SpriteRenderer current, Material outlineMat)
     {
         if (_blocks == null)
         {
@@ -575,7 +624,60 @@ internal static class AtlasMuseumBuilder
     // dass ein Zuruecksetzen dort beim Venten nicht griff (User 23.09.: "Vent geht zurueck zum
     // Original"). Der Kind-Renderer teilt die Material-Instanz von myRend, damit die rote/gelbe
     // Kontur (Vent.SetOutline schreibt in myRend.material) weiter sichtbar ist.
-    private static readonly List<(SpriteRenderer Orig, SpriteRenderer Art, Sprite S, Vent V)> VentArt = new();
+    //
+    // Optionale Klappen-Animation: liefert die Karte "Vent/<id>/1" .. "Vent/<id>/<n>" (gleiche Groesse und
+    // gleicher Anker wie "Vent/<id>", das dann den GESCHLOSSENEN Vent zeigt, das letzte Bild den offenen),
+    // spielt Ein- und Aussteigen (Vent.EnterVent/ExitVent laufen auf jedem Client) die Bilder auf, haelt
+    // offen und klappt wieder zu. Ohne diese Bilder bleibt das Vent-Bild wie bisher statisch.
+    private sealed class VentArtEntry
+    {
+        public SpriteRenderer Orig, Art;
+        public Sprite S;
+        public Sprite[] Frames;        // [0] = S (zu) .. [n] = offen; null ohne Animation
+        public Vent V;
+        public float AnimStart = -10f;
+    }
+    private static readonly List<VentArtEntry> VentArt = new();
+    private const float VentFrameSecs = 0.05f, VentHoldSecs = 0.35f;
+
+    private static Sprite VentFrameAt(VentArtEntry e)
+    {
+        if (e.Frames == null) return e.S;
+        int n = e.Frames.Length - 1;
+        float t = Time.time - e.AnimStart;
+        if (t < 0f) return e.S;
+        float up = n * VentFrameSecs;
+        int k;
+        if (t < up) k = Mathf.Min(n, (int)(t / VentFrameSecs) + 1);
+        else if (t < up + VentHoldSecs) k = n;
+        else k = n - (int)((t - up - VentHoldSecs) / VentFrameSecs) - 1;
+        return k <= 0 ? e.S : e.Frames[Mathf.Min(k, n)];
+    }
+
+    private static void StartVentAnim(Vent v)
+    {
+        if (!Active || v == null) return;
+        foreach (var e in VentArt)
+            if (e.V != null && e.Frames != null && e.V.Pointer == v.Pointer)
+            {
+                // laeuft die Animation schon (zweiter Spieler direkt hinterher): offen halten statt neu aufklappen
+                float t = Time.time - e.AnimStart, up = (e.Frames.Length - 1) * VentFrameSecs;
+                e.AnimStart = t >= 0f && t < up + VentHoldSecs + up ? Time.time - up : Time.time;
+                return;
+            }
+    }
+
+    [HarmonyPatch(typeof(Vent), nameof(Vent.EnterVent))]
+    private static class VentEnterAnimPatch
+    {
+        public static void Postfix(Vent __instance) { try { StartVentAnim(__instance); } catch { } }
+    }
+
+    [HarmonyPatch(typeof(Vent), nameof(Vent.ExitVent))]
+    private static class VentExitAnimPatch
+    {
+        public static void Postfix(Vent __instance) { try { StartVentAnim(__instance); } catch { } }
+    }
     private static readonly HashSet<int> SealedVentArt = new();
     private static float _sealCheckAt;
 
@@ -610,7 +712,17 @@ internal static class AtlasMuseumBuilder
         // Die Idle-Animation muss nicht mehr laufen; Ein-/Aussteigen spielt sie trotzdem (unsichtbar).
         try { var anim = v.myAnim; if (anim != null) anim.enabled = false; } catch { }
         foreach (var an in v.GetComponentsInChildren<Animator>(true)) an.enabled = false;
-        VentArt.Add((sr, art, sprite, v));
+        var frames = new List<Sprite> { sprite };
+        for (int k = 1; _blocks.TryGetValue($"Vent/{v.Id}/{k}", out var f); k++)
+        {
+            var ftex = AtlasAssets.MapConsolesTexture(D, f.Atlas);
+            if (ftex == null) break;
+            var fs = Sprite.Create(ftex, new Rect(f.X, f.Y, f.W, f.H), new Vector2(f.PX, f.PY),
+                D.PropPixelsPerMeter * Mathf.Abs(ls.x), 0, SpriteMeshType.FullRect);
+            fs.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
+            frames.Add(fs);
+        }
+        VentArt.Add(new VentArtEntry { Orig = sr, Art = art, S = sprite, V = v, Frames = frames.Count > 1 ? frames.ToArray() : null });
     }
 
     private static Sprite _markerSprite;
@@ -690,7 +802,7 @@ internal static class AtlasMuseumBuilder
 
     /// <summary>Konsole wie ein Objekt mit Standlinie an ihrer Position einsortieren (statt der
     /// Skeld-Tiefe ~6,8, die sie hinter jedes Museumsmoebel legen wuerde).</summary>
-    private static void SortLikePlayer(Transform t)
+    internal static void SortLikePlayer(Transform t)
     {
         var p = t.position;
         t.position = new Vector3(p.x, p.y, SortZ(p.y) - 0.0001f);
@@ -847,8 +959,35 @@ internal static class AtlasMuseumBuilder
     }
 
     private static readonly List<FadeProp> FadeProps = new();
+
+    /// <summary>Autotest: Grundflaeche und Hoehe des hoechsten ausblendbaren Moebels (x0, x1, Standlinie, Oberkante).</summary>
+    internal static (float, float, float, float) TallestFadeProp()
+    {
+        FadeProp best = null;
+        foreach (var f in FadeProps)
+        {
+            if (f.R == null || f.X0 < D.MinX || f.X1 > D.MaxX || f.Base < D.MinY || f.Top > D.MaxY) continue;   // nur Moebel der Variante
+            if (best == null || f.Top - f.Base > best.Top - best.Base) best = f;
+        }
+        return best == null ? (0f, 0f, 0f, 0f) : (best.X0, best.X1, best.Base, best.Top);
+    }
+    private static readonly List<Vector2> FadeFeet = new();
     private static readonly List<GameObject> OpaqueShadowObjects = new();
     private static readonly List<SpriteRenderer> PropRenderers = new();
+
+    /// <summary>Gebaute Moebel einer Art mit Index in D.Props und Standpunkt (fuer Karten-Plugins, AtlasMaps.Props).</summary>
+    internal static List<(int Index, SpriteRenderer Renderer, Vector2 Pos)> PropsOfKind(string kind)
+    {
+        var list = new List<(int, SpriteRenderer, Vector2)>();
+        if (D?.Props == null) return list;                       // nicht an Active binden: OnBuilt der Karten-Welt laeuft mitten im Bau
+        for (int i = 0; i < D.Props.Length && i < PropRenderers.Count; i++)
+        {
+            var p = D.Props[i];
+            if (p.Kind != kind || PropRenderers[i] == null) continue;
+            list.Add((i, PropRenderers[i], new Vector2((p.FootX0 + p.FootX1) / 2f, p.BaseY)));
+        }
+        return list;
+    }
 
     [HarmonyPostfix]
     [HarmonyPatch(typeof(HudManager), nameof(HudManager.Update))]
@@ -857,7 +996,9 @@ internal static class AtlasMuseumBuilder
         if (!Active) return;
         for (int i = 0; i < VentArt.Count; i++)
         {
-            var (orig, art, sp, vent) = VentArt[i];
+            var ve = VentArt[i];
+            var (orig, art, vent) = (ve.Orig, ve.Art, ve.V);
+            var sp = VentFrameAt(ve);
             // TOR shows a Security Guard seal (and the guard's half-transparent preview) on myRend and
             // renames the vent "SealedVent_" / "FutureSealedVent_". Such a vent shows TOR's renderer
             // instead of the Atlas art, or a sealed vent looks like any other (Opus audit 2026-10-02).
@@ -879,6 +1020,25 @@ internal static class AtlasMuseumBuilder
         if (lp == null) return;
         Vector2 feet;
         try { feet = lp.GetTruePosition(); } catch { return; }
+        // Seit 15.10. (User): nicht nur man selbst, jeder Spieler, den man ohne das Moebel sehen koennte
+        // (im Lichtradius, Sichtlinie frei), blendet es aus. Tote nur, wenn man selbst tot ist.
+        FadeFeet.Clear();
+        FadeFeet.Add(feet);
+        try
+        {
+            bool meDead = lp.Data != null && lp.Data.IsDead;
+            float radius = ShipStatus.Instance != null && lp.Data != null ? ShipStatus.Instance.CalculateLightRadius(lp.Data) : 5f;
+            float r2 = radius * radius;
+            foreach (var pc in PlayerControl.AllPlayerControls)
+            {
+                if (pc == null || pc == lp || pc.Data == null || !pc.Visible) continue;
+                if (pc.Data.IsDead && !meDead) continue;
+                Vector2 other = pc.GetTruePosition();
+                if ((other - feet).sqrMagnitude > r2) continue;
+                FadeFeet.Add(other);
+            }
+        }
+        catch { }
         float step = Mathf.Clamp01(Time.deltaTime * 8f);
         for (int i = 0; i < FadeProps.Count; i++)
         {
@@ -886,7 +1046,15 @@ internal static class AtlasMuseumBuilder
             if (f.R == null) continue;
             // Fuesse ueber der Grundflaeche (nicht dem Sprite mit Schattenrand) und klar hinter der
             // Standlinie. Test 22.09.: neben einer Vitrine zu stehen blendete sie schon aus.
-            bool behind = feet.x > f.X0 && feet.x < f.X1 && feet.y > f.Base + 0.1f && feet.y < f.Top - 0.15f;
+            bool behind = false;
+            for (int k = 0; k < FadeFeet.Count && !behind; k++)
+            {
+                var ft = FadeFeet[k];
+                if (!(ft.x > f.X0 && ft.x < f.X1 && ft.y > f.Base + 0.1f && ft.y < f.Top - 0.15f)) continue;
+                // andere Spieler nur, wenn die Sichtlinie frei ist (Waende); das Moebel selbst sperrt keine Sicht
+                if (k == 0) behind = true;
+                else { try { behind = !PhysicsHelpers.AnythingBetween(feet, ft, Constants.ShadowMask, false); } catch { behind = true; } }
+            }
             float target = behind ? FadeAlpha : 1f;
             if (Mathf.Approximately(f.Alpha, target)) continue;
             f.Alpha = Mathf.MoveTowards(f.Alpha, target, step);
@@ -1251,6 +1419,7 @@ internal static class AtlasMuseumBuilder
             t.position = new Vector3(p.x + slot.Center.x - c.x, p.y + slot.Center.y - c.y, p.z);
 
             d.Room = slot.Group;
+            try { AtlasDoorCamArt.ApplyDoor(d, slot); } catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} door art {slot.Label}: {e.Message}"); }
 
             var plain = d.TryCast<PlainDoor>();
             if (slot.SeeThrough && plain != null && plain.shadowCollider != null &&
@@ -1276,6 +1445,7 @@ internal static class AtlasMuseumBuilder
             var pos = D.Cameras[n];
             MoveTo(cam.transform, pos);
             LinkCameraRoom(ship, cam, pos, D.CameraViews.TryGetValue(n, out var view) ? view : (Vector2?)null);
+            try { AtlasDoorCamArt.ApplyCamera(cam, n); } catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} camera art {n}: {e.Message}"); }
             n++;
         }
         return n;

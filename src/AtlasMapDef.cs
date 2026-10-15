@@ -9,6 +9,7 @@
 // Oeffentlich, damit andere Plugins eigene Karten anmelden koennen (AtlasMaps.Register): sie fuellen
 // dieselbe Struktur und bringen ihre Grafik als eingebettete Ressourcen der eigenen Assembly mit.
 
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
@@ -46,6 +47,11 @@ public sealed class AtlasMapDef
     public HashSet<string> NoFadeKinds = new();
 
     public Dictionary<string, Vector2> Consoles;
+    /// <summary>
+    /// Aufgaben aus anderen Karten (AtlasForeignTasks): Aufgabenart, Karte (Index in AmongUsClient.ShipPrefabs, 4 =
+    /// Airship), Konsolen-Schluessel (Lage in Consoles, Bild in ConsoleSprites) und Raum. Leer = keine.
+    /// </summary>
+    public (TaskTypes Type, int ShipId, string ConsoleKey, SystemTypes Room)[] ForeignTasks = Array.Empty<(TaskTypes, int, string, SystemTypes)>();
     public Vector2 EmergencyButton, SurveillanceConsole, AdminTable, FreeplayLaptop, Spawn;
     public float SpawnRadius;
     public Dictionary<int, Vector2> Vents;
@@ -78,6 +84,9 @@ public sealed class AtlasMapDef
     public Dictionary<string, string> TaskArt = new();
     /// <summary>Minispiel-Texte dieser Karte, gleiche Schluesselregel wie TaskArt (AtlasTaskKit.T).</summary>
     public Dictionary<string, string> TaskText = new();
+    /// <summary>Welt-Mechaniken der Karte (API 2, seit 15.10.): Atlas ruft OnBuilt/Tick/VisionFactor/OnDestroy
+    /// wie fuer seine eigenen Welt-Systeme; null = keine. Die Factory liefert je Bau ein frisches Objekt.</summary>
+    public IAtlasMapWorld World;
 
     public static AtlasMapDef Museum() => new()
     {

@@ -132,6 +132,34 @@ internal static class AtlasTasks
                     _diagPhase = 11;
                     return;
                 }
+                // "doors:Cafeteria": neben die erste Tuer der Gruppe stellen, Gruppe schliessen, Fotos des Zuschwingens
+                if (kind.StartsWith("doors:", StringComparison.Ordinal) && Enum.TryParse(kind.Substring(6), out SystemTypes grp))
+                {
+                    BepInEx.Unity.IL2CPP.Utils.MonoBehaviourExtensions.StartCoroutine(HudManager.Instance, DoorDiag(grp));
+                    _diagPhase = 12;
+                    return;
+                }
+                // "fadetest": ein Dummy stellt sich hinter das hoechste ausblendbare Moebel, der Spieler davor; Foto
+                if (kind == "fadetest")
+                {
+                    BepInEx.Unity.IL2CPP.Utils.MonoBehaviourExtensions.StartCoroutine(HudManager.Instance, FadeDiag());
+                    _diagPhase = 12;
+                    return;
+                }
+                // "colliders": jeden Kollider der Karte (Lage, Groesse, Besitzer, Trigger) als Zeile ins Log
+                if (kind == "colliders")
+                {
+                    DumpColliders();
+                    _diagPhase = 4;
+                    return;
+                }
+                // "vent:6": neben Vent 6 stellen, hinein und wieder heraus, Fotos der Klappen-Animation
+                if (kind.StartsWith("vent:", StringComparison.Ordinal) && int.TryParse(kind.Substring(5), out int ventId))
+                {
+                    BepInEx.Unity.IL2CPP.Utils.MonoBehaviourExtensions.StartCoroutine(HudManager.Instance, VentDiag(ventId));
+                    _diagPhase = 12;
+                    return;
+                }
                 if (kind == "extraroom")
                 {
                     AtlasRoomDiag.Begin();
@@ -228,6 +256,14 @@ internal static class AtlasTasks
             case 2:
                 if (AtlasMinigame.DiagProgress >= 0.5f || _diagGame == null || _diagGame.amClosing != Minigame.CloseState.None)
                 { Shot(kind, "half"); _diagPhase = 3; _shotAt = Time.time + 60f; }
+                else if (Time.time > _shotAt + 60f)
+                {
+                    // kein Fortschritt in 60 s (15.10.: das Geisterbrett hing, die Diagnose wartete endlos)
+                    AtlasPlugin.Logger.LogWarning($"{LogPrefix} diag: {kind} made no progress in 60 s (progress {AtlasMinigame.DiagProgress:F2})");
+                    Shot(kind, "stuck");
+                    try { _diagGame.ForceClose(); } catch { }
+                    AtlasMinigame.DiagAuto = false; _diagPhase = 4;
+                }
                 break;
             case 3:
                 if (_diagGame == null || _diagGame.amClosing != Minigame.CloseState.None)
@@ -238,6 +274,89 @@ internal static class AtlasTasks
                 else if (Time.time > _shotAt) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} diag: {kind} did not finish in 60 s"); Shot(kind, "stuck"); _diagPhase = 4; }
                 break;
         }
+    }
+
+    private static System.Collections.IEnumerator DoorDiag(SystemTypes grp)
+    {
+        OpenableDoor door = null;
+        foreach (var d in ShipStatus.Instance.AllDoors) if (d != null && d.Room == grp) { door = d; break; }
+        if (door == null) { AtlasPlugin.Logger.LogError($"{LogPrefix} diag: no door of {grp}"); _diagPhase = 4; yield break; }
+        var lp = PlayerControl.LocalPlayer;
+        lp.NetTransform.RpcSnapTo((Vector2)door.transform.position + new Vector2(1.2f, -1.2f));
+        yield return new WaitForSeconds(1f);
+        Shot($"doors{grp}", "open");
+        ShipStatus.Instance.RpcCloseDoorsOfType(grp);
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: closing doors of {grp}");
+        foreach (float t in new[] { 0.06f, 0.1f, 0.1f, 1.5f })
+        {
+            yield return new WaitForSeconds(t);
+            Shot($"doors{grp}", "closing");
+        }
+        _diagPhase = 4;
+    }
+
+    private static System.Collections.IEnumerator FadeDiag()
+    {
+        var (x0, x1, baseY, top) = AtlasMuseumBuilder.TallestFadeProp();
+        if (top <= baseY) { AtlasPlugin.Logger.LogError($"{LogPrefix} diag: no fade prop"); _diagPhase = 4; yield break; }
+        PlayerControl dummy = null;
+        foreach (var pc in PlayerControl.AllPlayerControls) if (pc != null && pc != PlayerControl.LocalPlayer) { dummy = pc; break; }
+        if (dummy == null) { AtlasPlugin.Logger.LogError($"{LogPrefix} diag: no dummy"); _diagPhase = 4; yield break; }
+        float cx = (x0 + x1) / 2f;
+        PlayerControl.LocalPlayer.NetTransform.RpcSnapTo(new Vector2(cx, baseY - 1.6f));
+        dummy.NetTransform.SnapTo(new Vector2(cx + 0.3f, baseY + 0.7f));      // transform.position allein setzt der NetTransform zurueck
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: fade prop x {x0:F1}..{x1:F1}, base {baseY:F1}, top {top:F1}; dummy behind it");
+        yield return new WaitForSeconds(1.5f);
+        Shot("fade", "behind");
+        dummy.NetTransform.SnapTo(new Vector2(cx + 2.5f, baseY - 1.0f));
+        yield return new WaitForSeconds(1.5f);
+        Shot("fade", "away");
+        _diagPhase = 4;
+    }
+
+    private static void DumpColliders()
+    {
+        int n = 0;
+        foreach (var c in Object.FindObjectsOfType<Collider2D>())
+        {
+            if (c == null || !c.enabled || !c.gameObject.activeInHierarchy) continue;
+            var b = c.bounds;
+            string path = c.name;
+            for (var t = c.transform.parent; t != null && path.Length < 120; t = t.parent) path = t.name + "/" + path;
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} collider {c.GetIl2CppType().Name} trigger={c.isTrigger} layer={c.gameObject.layer} " +
+                $"min=({b.min.x:F2},{b.min.y:F2}) max=({b.max.x:F2},{b.max.y:F2}) {path}");
+            n++;
+        }
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} {n} collider(s) dumped");
+    }
+
+    private static System.Collections.IEnumerator VentDiag(int id)
+    {
+        Vent vent = null;
+        foreach (var v in ShipStatus.Instance.AllVents) if (v != null && v.Id == id) vent = v;
+        if (vent == null) { AtlasPlugin.Logger.LogError($"{LogPrefix} diag: no vent {id}"); _diagPhase = 4; yield break; }
+        var lp = PlayerControl.LocalPlayer;
+        lp.NetTransform.RpcSnapTo((Vector2)vent.transform.position + new Vector2(0.9f, 0f));
+        yield return new WaitForSeconds(1f);
+        Shot($"vent{id}", "rest");
+        lp.MyPhysics.RpcEnterVent(id);
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: entering vent {id}");
+        foreach (float t in new[] { 0.08f, 0.1f, 0.15f, 0.3f })
+        {
+            yield return new WaitForSeconds(t);
+            Shot($"vent{id}", "enter");
+        }
+        yield return new WaitForSeconds(1.5f);
+        lp.MyPhysics.RpcExitVent(id);
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: leaving vent {id}");
+        foreach (float t in new[] { 0.1f, 0.2f })
+        {
+            yield return new WaitForSeconds(t);
+            Shot($"vent{id}", "exit");
+        }
+        yield return new WaitForSeconds(1.5f);
+        Shot($"vent{id}", "after");
+        _diagPhase = 4;
     }
 
     internal static void Shot(string kind, string tag)
@@ -347,6 +466,13 @@ internal static class StepRepro
                         System.GC.Collect();
                         Il2CppSystem.GC.Collect();
                         AtlasPlugin.Logger.LogInfo("[Atlas/Step] forced il2cpp + managed GC while the minigame is open");
+                    }
+                    // Minispiele des Spiels (Aufgaben aus anderen Karten) spielen sich nicht selbst: Foto, schliessen
+                    if (Minigame.Instance != null && Minigame.Instance.TryCast<AtlasMinigame>() == null && Time.time > _t0 + 2.5f)
+                    {
+                        AtlasTasks.Shot($"mg_{_type}", "open");
+                        try { Minigame.Instance.Close(); } catch { }
+                        return false;
                     }
                     // warten, bis das Minispiel den Schritt gemacht und sich geschlossen hat
                     if (Minigame.Instance != null && Time.time < _t0 + 60f) return false;

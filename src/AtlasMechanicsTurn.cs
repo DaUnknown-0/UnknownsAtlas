@@ -481,6 +481,10 @@ internal sealed class SpliceMechanic : IAtlasMechanic
     private readonly List<(Vector2 P, Color Col, Transform Screw, Rotary Rot)> _clamps = new();
     private readonly float[] _screw = new float[3];
     private readonly bool[] _attached = new bool[3];
+    // Dreh-Hinweis je Klemme (User 15.10.): Kreispfeil, der nach dem Anklemmen um die Schraube kreist und
+    // pulsiert, bis sie festgeschraubt ist; die Schraube selbst wackelt, solange noch nicht gedreht wurde
+    private readonly SpriteRenderer[] _hints = new SpriteRenderer[3];
+    private float _hintT;
     private int _drag = -1, _done;
     private InputScript _script;
     static readonly float AnchorX = -3.3f;
@@ -506,6 +510,8 @@ internal sealed class SpliceMechanic : IAtlasMechanic
             MatchKit.Symbol(root, cp + new Vector2(0.72f, 0f), idx[order[i]], 0.24f, ink, 3);
             var screw = AtlasTaskKit.Sprite(root, "task_screw.png", 100f, cp + new Vector2(0f, 0f), 6).transform;
             screw.gameObject.SetActive(false);
+            _hints[i] = AtlasTaskKit.Sprite(root, "task_turn_hint.png", 100f, cp, 7);
+            _hints[i].gameObject.SetActive(false);
             _clamps.Add((cp, cols[order[i]], screw, new Rotary(cp, 0f, 0.55f)));
         }
         for (int i = 0; i < 3; i++)
@@ -543,6 +549,7 @@ internal sealed class SpliceMechanic : IAtlasMechanic
                     w.End.localPosition = new Vector3(tip.x, tip.y, w.End.localPosition.z);
                     MatchKit.Set(w.Wire, 1, tip, 3);
                     cl.Screw.gameObject.SetActive(true);
+                    _hints[w.Clamp].gameObject.SetActive(true);
                 }
                 else
                 {
@@ -554,6 +561,8 @@ internal sealed class SpliceMechanic : IAtlasMechanic
             return;
         }
         // angeklemmte Adern festschrauben (Kreisbewegung, egal welche Richtung)
+        _hintT += dt;
+        float pulse = 0.5f + 0.5f * Mathf.Sin(_hintT * 5f);
         for (int i = 0; i < 3; i++)
         {
             int wi = _wires.FindIndex(w => w.Clamp == i);
@@ -561,8 +570,22 @@ internal sealed class SpliceMechanic : IAtlasMechanic
             cl.Rot.Tick(mouse, down, pressed);
             if (!_attached[wi] || _screw[i] >= Need) continue;
             _screw[i] += Mathf.Abs(cl.Rot.Delta);
-            cl.Screw.localEulerAngles = new Vector3(0, 0, -_screw[i]);
-            if (_screw[i] >= Need) { cl.Screw.GetComponent<SpriteRenderer>().color = new Color(0.7f, 1f, 0.7f); if (++_done >= 3) Done = true; }
+            // Hinweis: kreist im Uhrzeigersinn wie die Schraube, pulsiert und verblasst mit dem Fortschritt
+            float left = 1f - _screw[i] / Need;
+            var h = _hints[i];
+            h.transform.localEulerAngles = new Vector3(0, 0, -_hintT * 150f);
+            h.transform.localScale = Vector3.one * (1f + 0.08f * pulse);
+            h.color = new Color(1f, 0.93f, 0.55f, (0.45f + 0.5f * pulse) * left);
+            // die Schraube wackelt, bis die erste Drehung kommt
+            float wobble = _screw[i] <= 0f ? 12f * Mathf.Sin(_hintT * 7f) : 0f;
+            cl.Screw.localEulerAngles = new Vector3(0, 0, -_screw[i] + wobble);
+            if (_screw[i] >= Need)
+            {
+                h.gameObject.SetActive(false);
+                cl.Screw.localEulerAngles = new Vector3(0, 0, -_screw[i]);
+                cl.Screw.GetComponent<SpriteRenderer>().color = new Color(0.7f, 1f, 0.7f);
+                if (++_done >= 3) Done = true;
+            }
         }
     }
 

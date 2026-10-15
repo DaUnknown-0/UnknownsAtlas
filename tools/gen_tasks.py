@@ -1151,6 +1151,20 @@ def splice():
     c.rrect(46, 18, 68, 32, 3, (206, 170, 90, 255), lw=4, sh=(0.3, 0.3))
     c.line([(52, 25), (64, 25)], (150, 120, 60, 255), 2)
     c.save("task_wire_end.png")
+    # Dreh-Hinweis (User 15.10.): Kreispfeil im Uhrzeigersinn um die Schraube, weiss mit dunkler Kontur,
+    # der Code toent und dreht ihn, solange die angeklemmte Ader noch nicht festgeschraubt ist
+    c = C(120, 120)
+    cx, cy, r = 60, 60, 44
+    box = (cx - r, cy - r, cx + r, cy + r)
+    c.arc(box, 200, 470, INK, 15)
+    c.arc(box, 200, 470, WHITE, 9)
+    t = math.radians(110)                                             # Bogenende, Pfeil tangential weiter
+    px, py = cx + math.cos(t) * r, cy + math.sin(t) * r
+    dx, dy = -math.sin(t), math.cos(t)
+    nx, ny = math.cos(t), math.sin(t)
+    tip = [(px + dx * 24, py + dy * 24), (px - nx * 15 - dx * 2, py - ny * 15 - dy * 2), (px + nx * 15 - dx * 2, py + ny * 15 - dy * 2)]
+    c.poly(tip, WHITE, lw=3)
+    c.save("task_turn_hint.png")
 
 
 def binoculars():

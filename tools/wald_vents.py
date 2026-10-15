@@ -23,6 +23,7 @@
 #               der Rueckwand, hochgeklappter Bretterdeckel mit Eisenbaendern, Nieten und Ring.
 
 import json
+import math
 from pathlib import Path
 
 from PIL import ImageChops, ImageFilter
@@ -245,6 +246,139 @@ def hatch(ppm, seed=0):
     # Innenkante des Rahmens (Lichtkante links/oben im Loch)
     c.line([(ix0 + 0.015, iy0 + 0.02), (ix0 + 0.015, iy1 - 0.02)], fill=alpha(C["balken"], 90), width=0.012)
     return _result(c, ppm)
+
+
+# ------------------------------------------------- Gebaeude: Luke als Bildfolge
+# Karten anderer Plugins koennen die Luke beim Ein- und Aussteigen abspielen: geschlossen ->
+# offen -> geschlossen. hatch() bleibt unveraendert (die Forstkarte nutzt das statische Bild); die Teile
+# sind hier als Helfer noch einmal aufgebaut, damit der Deckel in jeder Stellung gezeichnet werden kann.
+
+HATCH_ANGLES = (0, 20, 40, 65, 80, 90)      # Oeffnungswinkel je Bild in Grad (0 = liegt flach, 90 = steht)
+
+
+def _hatch_frame(c, x0, y0, x1, y1, ow, oh, fb, ft):
+    """Balkenkranz der Luke (flach, Hoehe ft) mit Gehrungsfugen und Licht-/Schattenkanten."""
+    c.rect(x0, y0, x1, y0 + ft * K, fill=C["balken_dunkel"], outline=OUTLINE, width=OUT_W)
+    c.rect(x0, y0 + ft * K, x1, y1 + ft * K, fill=C["balken"], outline=OUTLINE, width=OUT_W)
+    top_off = ft * K
+    ix0, iy0, ix1, iy1 = -ow / 2, -oh / 2 + top_off, ow / 2, oh / 2 + top_off
+    for (ax, ay, bx, by) in ((x0, y0 + top_off, ix0, iy0), (x1, y0 + top_off, ix1, iy0), (x0, y1 + top_off, ix0, iy1), (x1, y1 + top_off, ix1, iy1)):
+        c.line([(ax, ay), (bx, by)], fill=C["balken_dunkel"], width=0.014)
+    c.line([(x0 + 0.035, y1 + top_off - 0.03), (x1 - 0.035, y1 + top_off - 0.03)], fill=shade(C["balken"], 1.3), width=0.016)
+    c.line([(x0 + 0.03, y0 + top_off + 0.03), (x0 + 0.03, y1 + top_off - 0.03)], fill=shade(C["balken"], 1.25), width=0.012)
+    c.line([(x1 - 0.03, y0 + top_off + 0.03), (x1 - 0.03, y1 + top_off - 0.03)], fill=alpha((0, 0, 0, 255), 60), width=0.012)
+
+
+def _hatch_hinges(c, lx0, lx1, y1, fb, ft):
+    """Zwei Scharnierplatten auf dem Nordbalken."""
+    top_off = ft * K
+    for sx in (lx0 + 0.11, lx1 - 0.11):
+        c.rect(sx - 0.045, y1 + top_off - fb * 0.75, sx + 0.045, y1 + top_off - fb * 0.2, fill=IRON, outline=OUTLINE, width=0.02)
+        c.ellipse(sx, y1 + top_off - fb * 0.48, 0.012, 0.012, fill=IRON_L, outline=IRON_D, width=0.008)
+
+
+def _hatch_shaft(c, ow, oh, ft):
+    """Schacht: Rueckwand oben mit Leitersprossen, darunter schwarz, Lichtkante links."""
+    top_off = ft * K
+    ix0, iy0, ix1, iy1 = -ow / 2, -oh / 2 + top_off, ow / 2, oh / 2 + top_off
+    c.rect(ix0, iy0, ix1, iy1, fill=HOLE_WALL, outline=OUTLINE, width=0.035)
+    c.rect(ix0 + 0.02, iy0 + 0.02, ix1 - 0.02, iy1 - 0.13, fill=HOLE)
+    c.line([(ix0 + 0.03, iy1 - 0.13), (ix1 - 0.03, iy1 - 0.13)], fill=alpha((0, 0, 0, 255), 120), width=0.03)
+    c.line([(-0.16, iy1 - 0.07), (0.16, iy1 - 0.07)], fill=OUTLINE, width=0.04)
+    c.line([(-0.16, iy1 - 0.07), (0.16, iy1 - 0.07)], fill=RUNG, width=0.02)
+    c.line([(-0.16, iy1 - 0.17), (0.16, iy1 - 0.17)], fill=shade(RUNG, 0.45), width=0.018)
+    for sx in (-0.16, 0.16):
+        c.line([(sx, iy1 - 0.02), (sx, iy1 - 0.2)], fill=shade(RUNG, 0.6), width=0.016)
+    c.line([(ix0 + 0.015, iy0 + 0.02), (ix0 + 0.015, iy1 - 0.02)], fill=alpha(C["balken"], 90), width=0.012)
+
+
+def _lid_plate(c, lx0, lx1, hinge_y, far_y, sin_a):
+    """Bretterdeckel als Bildrechteck zwischen Scharnierkante hinge_y und freier Kante far_y (die freie
+    Kante darf ueber oder unter dem Scharnier liegen; die Drehachse laeuft Ost-West, deshalb bleibt der
+    Deckel im Bild ein achsparalleles Rechteck, nur seine Bildhoehe aendert sich). sin_a (0..1) = Neigung,
+    steuert, wie weit der Zugring vom Beschlag haengt. Bretter, Eisenbaender und Nieten skalieren mit."""
+    ya, yb = min(hinge_y, far_y), max(hinge_y, far_y)
+    H = yb - ya
+    # Stirn (Deckeldicke) an der unteren Bildkante; bei fast kantiger Sicht bleibt nur sie und der Umriss
+    c.rect(lx0, ya - 0.02, lx1, ya + 0.012, fill=LID_D, outline=OUTLINE, width=0.02)
+    # Umriss schmaler als OUT_W: liegt der Deckel auf, bleibt sonst vom Balkenkranz nur der Umriss uebrig
+    c.rect(lx0, ya, lx1, yb, fill=LID, outline=OUTLINE, width=0.04)
+    if H < 0.05:
+        c.line([(lx0 + 0.03, yb - 0.012), (lx1 - 0.03, yb - 0.012)], fill=LID_L, width=0.012)
+        return
+    f = min(1.0, H / 0.3)              # Massstab der Details gegenueber dem stehenden Deckel
+    m = min(0.04, H * 0.15)
+    n = 3
+    pw = (lx1 - lx0) / n
+    for i in range(n):
+        px0 = lx0 + pw * i
+        if i:
+            c.line([(px0, ya + 0.015), (px0, yb - 0.015)], fill=LID_D, width=0.022)
+        c.line([(px0 + 0.03, ya + m), (px0 + 0.03, yb - m)], fill=LID_L, width=0.012)
+        gy = yb - (0.08 + (i % 2) * 0.07) * f
+        c.line([(px0 + pw * 0.4, gy), (px0 + pw * 0.75, gy + 0.005)], fill=shade(LID, 0.78), width=0.01)
+    c.line([(lx0 + 0.035, yb - 0.035 * f), (lx1 - 0.035, yb - 0.035 * f)], fill=LID_L, width=0.018)
+    c.line([(lx1 - 0.035, ya + 0.03 * f), (lx1 - 0.035, yb - 0.03 * f)], fill=alpha((0, 0, 0, 255), 70), width=0.014)
+
+    def at(t):                         # Bild-y auf dem Deckel, t = 0 Scharnier .. 1 freie Kante
+        return hinge_y + (far_y - hinge_y) * t
+
+    up = far_y > hinge_y
+    for sx in (lx0 + 0.11, lx1 - 0.11):
+        a0, a1 = sorted((at(0.03), at(0.7)))
+        c.rect(sx - 0.04, a0, sx + 0.04, a1, fill=IRON, outline=OUTLINE, width=0.02)
+        c.poly([(sx - 0.04, at(0.7)), (sx + 0.04, at(0.7)), (sx, at(0.87))], fill=IRON, outline=OUTLINE, width=0.02)
+        c.line([(sx - 0.022, a0 + 0.02 * f), (sx - 0.022, a1 - 0.01)], fill=IRON_L, width=0.01)
+        if H >= 0.12:
+            for t in (0.2, 0.47, 0.57):
+                c.ellipse(sx, at(t), 0.013, 0.013, fill=IRON_L, outline=IRON_D, width=0.008)
+    # Zugring: Beschlagplatte bei 55 % der Deckeltiefe; der Ring liegt flach auf (Ellipse) oder haengt
+    rcy = at(0.55)
+    ph = 0.025 * max(0.4, f)
+    c.rect(-0.045, rcy - ph, 0.045, rcy + ph, fill=IRON, outline=OUTLINE, width=0.015)
+    ry = 0.03 + 0.02 * sin_a
+    off = 0.05 + 0.02 * sin_a
+    if not up and H < 0.2:
+        ry, off = min(ry, max(0.012, H * 0.12)), min(off, 0.03)
+    c.ellipse(0, rcy - off, 0.055, ry, outline=OUTLINE, width=0.05)
+    c.ellipse(0, rcy - off, 0.055, ry, outline=IRON_L, width=0.022)
+
+
+def hatch_frames(ppm, seed=0):
+    """Bodenluke wie hatch(), aber als Bildfolge fuer die Ein-/Ausstiegsanimation: [0] Deckel liegt flach
+    auf dem Rahmen (Ring liegt auf), [5] voll hochgeklappt wie hatch(); dazwischen schwenkt der Deckel am
+    Nordscharnier hoch (perspektivisch verkuerzt), ab Bild 2 ist der Schacht sichtbar. Alle Bilder nutzen
+    die Leinwand von hatch() und haben damit dieselbe Groesse und denselben Anker (Mitte der Oeffnung).
+    Rueckgabe: Liste aus (PIL RGBA, anchor_x_px, anchor_y_px)."""
+    ow, oh = 0.55, 0.40
+    fb = 0.09
+    ft = 0.035
+    x0, y0, x1, y1 = -ow / 2 - fb, -oh / 2 - fb, ow / 2 + fb, oh / 2 + fb
+    lid_h = 0.30                   # Bildhoehe des stehenden Deckels (wie hatch)
+    lid_d = oh + fb                # Tiefe des flachen Deckels: Scharniermitte bis Mitte des Suedbalkens
+    lx0, lx1 = -ow / 2 - 0.03, ow / 2 + 0.03
+    ly0 = y1 - fb * 0.5 + ft * K   # Scharnierkante
+    frames = []
+    for ang in HATCH_ANGLES:
+        a = math.radians(ang)
+        c = Canvas(x0 - MARGIN, y0 - ft * K - 0.06 - MARGIN, x1 + MARGIN, y1 + ft * K + lid_h + 0.05 + MARGIN, ppm)
+        c.soft_shadow([(x0 + 0.06, y0 - 0.07), (x1 + 0.08, y0 - 0.07), (x1 + 0.08, y1), (x0 + 0.06, y1)], 80, 0.06)
+        # freie Kante: nach Sueden um lid_d*cos, nach oben um lid_h*sin (Bildhoehe des stehenden Deckels)
+        far = ly0 - lid_d * math.cos(a) + lid_h * math.sin(a)
+        if far > ly0:
+            # Deckel lehnt nach Norden: liegt hinter dem Rahmen, Schacht frei
+            _lid_plate(c, lx0, lx1, ly0, far, math.sin(a))
+            _hatch_frame(c, x0, y0, x1, y1, ow, oh, fb, ft)
+            _hatch_hinges(c, lx0, lx1, y1, fb, ft)
+            _hatch_shaft(c, ow, oh, ft)
+        else:
+            # Deckel liegt auf oder ist erst angehoben: deckt Rahmen und Schacht zum Teil ab
+            _hatch_frame(c, x0, y0, x1, y1, ow, oh, fb, ft)
+            _hatch_shaft(c, ow, oh, ft)
+            _lid_plate(c, lx0, lx1, ly0, far, math.sin(a))
+            _hatch_hinges(c, lx0, lx1, y1, fb, ft)
+        frames.append(_result(c, ppm))
+    return frames
 
 
 # ----------------------------------------------------------------- Einstieg

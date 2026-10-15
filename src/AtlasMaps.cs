@@ -18,14 +18,16 @@
 // solche Karte gewaehlt, sperrt der Host den Start, bis alle dieselbe haben.
 
 using System;
+using System.Collections.Generic;
 using System.Reflection;
+using UnityEngine;
 
 namespace UnknownsAtlas;
 
 public static class AtlasMaps
 {
     /// <summary>Version dieser Schnittstelle (steigt bei inkompatiblen Aenderungen).</summary>
-    public const int ApiVersion = 1;
+    public const int ApiVersion = 2;        // 2 (15.10.): AtlasMapDef.World + die Helfer unten
 
     /// <summary>
     /// Meldet eine Karte an. key: eindeutiger Schluessel (auch AppDomain "UnknownsAtlas.ActiveMap"),
@@ -57,4 +59,41 @@ public static class AtlasMaps
 
     /// <summary>Schluessel der fuer die naechste Runde gewaehlten Karte (Lobby/Freeplay), sonst null.</summary>
     public static string SelectedKey => AtlasSelection.CurrentKey;
+
+    // ------------------------------------------------------------------ Welt-Mechaniken (API 2, seit 15.10.)
+    // Helfer fuer AtlasMapDef.World: der Use-Knopf, die gebauten Moebel, Bildfolgen, Geraeusche und der
+    // Autotest. Alles nur waehrend eine Atlas-Karte steht; sonst still ohne Wirkung.
+
+    /// <summary>Den Use-Knopf fuer diesen Frame anbieten (aus Tick heraus): Beschriftung, Symbol (256-px-Datei,
+    /// zuerst aus dem Kartenpaket, sonst Atlas), Aktion; always = auch wenn Vanilla ein Ziel hat; enabled = false
+    /// zeigt ihn ausgegraut. Das erste Angebot eines Frames gewinnt, Atlas' eigene Mechaniken kommen zuerst.</summary>
+    public static void OfferUse(string label, string iconFile, Action onUse, bool always = false, bool enabled = true)
+    {
+        if (!AtlasMuseumBuilder.Active) return;
+        AtlasUse.Offer(label, iconFile, onUse, always, enabled);
+    }
+
+    /// <summary>Lokaler Spieler lebt, kann sich bewegen, hat nichts offen und steht naeher als radius an spot.</summary>
+    public static bool CanReach(Vector2 spot, float radius) => AtlasUse.CanReach(PlayerControl.LocalPlayer, spot, radius);
+
+    /// <summary>Gebaute Moebel einer Art (AtlasMapDef.Props[].Kind): Index, Renderer, Standpunkt (Fussmitte).</summary>
+    public static List<(int Index, SpriteRenderer Renderer, Vector2 Pos)> Props(string kind) => AtlasMuseumBuilder.PropsOfKind(kind);
+
+    /// <summary>Ein Bild des Konsolen-Atlas der Karte (AtlasMapDef.ConsoleSprites, Schluessel) als Sprite; null ohne Eintrag.</summary>
+    // Nicht an Active binden: IAtlasMapWorld.OnBuilt laeuft mitten im Kartenbau, Active wird erst danach true
+    // (Test 16.10.: alle Tauschbilder einer angemeldeten Karte fehlten).
+    public static Sprite SpriteFor(string key) => AtlasMuseumBuilder.D?.ConsoleSprites != null ? AtlasMuseumBuilder.SpriteFor(key, null) : null;
+
+    /// <summary>"key" plus "key/1".."key/n" als Bildfolge; null, wenn schon das Ruhebild fehlt.</summary>
+    public static Sprite[] SpriteSet(string key) => AtlasMuseumBuilder.D?.ConsoleSprites != null ? AtlasMuseumBuilder.SpriteSet(key, null) : null;
+
+    /// <summary>Einzelgeraeusch aus Atlas' Klangvorrat (creak, whoosh, thud, slam, grind, clack, chime, ding, clock ...).</summary>
+    public static void Sfx(string clip, float volume) => AtlasWeatherFx.Sfx(clip, volume);
+
+    /// <summary>Autotest-Lauf (Freeplay mit Diagnostics.ForceMap oder TaskTest): nur dann darf ein Plugin den
+    /// Spieler von selbst bewegen oder fotografieren.</summary>
+    public static bool AutotestRun => AtlasMapShot.AutotestRun;
+
+    /// <summary>Bildschirmfoto nach &lt;Spiel&gt;/AtlasShots/task_&lt;kind&gt;_&lt;tag&gt;_&lt;Uhrzeit&gt;.png (Autotest).</summary>
+    public static void Shot(string kind, string tag) => AtlasTasks.Shot(kind, tag);
 }

@@ -197,16 +197,29 @@ internal static class AtlasAssets
         return sprite;
     }
 
+    /// <summary>Ressource und Assembly einer Minispiel-Grafik: erst das Paket der angemeldeten Karte (seit 15.10.,
+    /// damit Karten anderer Plugins ihre Minispiel-Bilder selbst mitbringen), sonst die eigenen Ressourcen.</summary>
+    private static (string Res, Assembly Asm) TaskRes(string file)
+    {
+        file = AtlasTaskKit.Art(file);                                // Kartengrafik (AtlasMapDef.TaskArt)
+        var m = AtlasMuseumBuilder.D;
+        if (m != null && m.ResourceAssembly != null && !string.IsNullOrEmpty(m.ResourceNamespace))
+        {
+            string own = $"{m.ResourceNamespace}.{file}";
+            try { if (m.ResourceAssembly.GetManifestResourceInfo(own) != null) return (own, m.ResourceAssembly); } catch { }
+        }
+        return ($"UnknownsAtlas.Resources.{file}", null);
+    }
+
     /// <summary>Grafik eines eigenen Minispiels (assets/task_*.png), gecacht.</summary>
     public static Sprite TaskSprite(string file, float ppu, Vector2 pivot)
     {
-        file = AtlasTaskKit.Art(file);                                // Kartengrafik (AtlasMapDef.TaskArt)
-        string res = $"UnknownsAtlas.Resources.{file}";
+        var (res, asm) = TaskRes(file);
         string key = $"{res}@{ppu:F1}@{pivot.x:F3},{pivot.y:F3}";
         if (MapSprites.TryGetValue(key, out var cached) && cached != null) return cached;
         if (!MapTextures.TryGetValue(res, out var tex) || tex == null)
         {
-            tex = LoadTexture(res);
+            tex = LoadTexture(res, asm: asm);
             if (tex == null) { AtlasPlugin.Logger.LogError($"[Atlas] embedded resource missing: {res}"); return null; }
             tex.wrapMode = TextureWrapMode.Clamp;
             tex.filterMode = FilterMode.Bilinear;
@@ -220,7 +233,11 @@ internal static class AtlasAssets
     }
 
     /// <summary>Frische, LESBARE Kopie einer Minispiel-Textur (z. B. die Staubschicht, die man wegwischt).</summary>
-    public static Texture2D TaskTextureCopy(string file) => LoadTexture($"UnknownsAtlas.Resources.{AtlasTaskKit.Art(file)}");
+    public static Texture2D TaskTextureCopy(string file)
+    {
+        var (res, asm) = TaskRes(file);
+        return LoadTexture(res, asm: asm);
+    }
 
     /// <summary>Minimap der Karte in Kartenraum-Einheiten (Weltmeter / MapScale).</summary>
     public static Sprite MapMinimapSprite(AtlasMapDef m, float mapScale)

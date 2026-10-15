@@ -133,6 +133,12 @@ internal static class AtlasWorld
         // Kanu: Bootssteg (A) <-> Anleger am Wasserwerk (B), langsamer als zu Fuss nicht, aber gut sichtbar
         if (Wald) AtlasFerry.Create(_root, "canoe", "task_wald_canoe.png", AtlasWaldData.CanoePath,
             AtlasWaldData.CanoeA, AtlasWaldData.CanoeB, 3.6f, 6f, 0.85f, "task_btn_canoe.png", "splash");
+        // Welt-Mechaniken einer Karte aus einem anderen Plugin (IAtlasMapWorld, API 2)
+        if (D.World != null)
+        {
+            try { D.World.OnBuilt(_root); }
+            catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} map world OnBuilt failed: {e}"); }
+        }
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} ready: {TreeSpots.Count} tree spot(s), {Lasers.Count} laser(s)");
     }
 
@@ -416,6 +422,8 @@ internal static class AtlasWorld
         if (Wald) f *= AtlasDusk.VisionFactor;                    // Daemmerung: nachts etwas weniger
         if (Park) f *= AtlasParkWorld.VisionFactor(pos) * AtlasParkFun.VisionFactor;   // Riesenrad: oben weiter
         if (Museum) f *= AtlasPlanetarium.VisionFactor(pos);                          // Show: dunkle Kuppel
+        var world = AtlasMuseumBuilder.D?.World;                                       // Karten anderer Plugins (API 2)
+        if (world != null) { try { f *= world.VisionFactor(pos); } catch { } }
         return f;
     }
 
@@ -971,12 +979,26 @@ internal static class AtlasWorld
             AtlasFerry.TickAll(dt);                                // Pendelwagen (Park), Kanu (Wald)
             AtlasRex.Tick(dt);
             AtlasLookout.Tick(dt);
+            var world = AtlasMuseumBuilder.D?.World;               // Karten anderer Plugins (API 2)
+            if (world != null)
+            {
+                try { world.Tick(dt); }
+                catch (Exception e) { if (_worldErrors++ < 5) AtlasPlugin.Logger.LogWarning($"{LogPrefix} map world tick: {e}"); }
+            }
             AtlasUse.Commit();                                     // nach allen Mechaniken, die den Knopf anbieten
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} tick: {e.Message}"); }
     }
 
+    private static int _worldErrors;
+
     [HarmonyPostfix]
     [HarmonyPatch(typeof(ShipStatus), nameof(ShipStatus.OnDestroy))]
-    internal static void ShipStatus_OnDestroy_Postfix() => Reset();
+    internal static void ShipStatus_OnDestroy_Postfix()
+    {
+        var world = AtlasMuseumBuilder.D?.World;
+        if (world != null) { try { world.OnDestroy(); } catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} map world OnDestroy: {e.Message}"); } }
+        _worldErrors = 0;
+        Reset();
+    }
 }
