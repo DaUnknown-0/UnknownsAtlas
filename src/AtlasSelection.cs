@@ -13,6 +13,9 @@
 // Ein Vanilla-Kartenknopf setzt die Auswahl zurueck. Spieler ohne Atlas sehen die Skeld.
 //
 // RPC 236 (ID-Registry): [236][Karten-Index] 0 = keine, 1 = Museum, 2 = Wald, 3 = Park. Nur vom Host.
+// Karten anderer Plugins (AtlasMaps.Register) haengen hinten an; fuer sie folgt dem Index der Kartenschluessel
+// als String, weil die Reihenfolge der Anmeldung nicht auf jedem Client gleich sein muss. Wer die Karte nicht
+// hat, faellt auf "keine" zurueck; das Start-Gate (AtlasHandshake) haelt die Runde dann an.
 
 using System;
 using System.Collections.Generic;
@@ -34,12 +37,22 @@ internal static class AtlasSelection
     // Reihenfolge = Index im RPC (+1)
     // Button = eingebettetes Logo fuer den Freeplay-Knopf (1000 x 250, tools/gen_buttons.py); null = Schrift
     // Icon = rundes Symbol fuer den Lobby-Kartenwaehler (256 x 256, tools/gen_icons.py)
-    private static readonly (string Key, string Label, Func<AtlasMapDef> Make, string Button, string Icon)[] Maps =
+    // Asm/Ns = Herkunft von Logo und Symbol (null = Atlas); External = von einem anderen Plugin angemeldet
+    internal sealed class MapEntry
     {
-        ("museum", "Museum", AtlasMapDef.Museum, "button_museum.png", "icon_museum.png"),
-        ("wald", "Forest", AtlasMapDef.Wald, "button_wald.png", "icon_wald.png"),
-        ("park", "Carnival", AtlasMapDef.Park, "button_park.png", "icon_park.png"),
+        public string Key, Label, Button, Icon, Ns, ContentVersion = "";
+        public Func<AtlasMapDef> Make;
+        public System.Reflection.Assembly Asm;
+        public bool External;
+    }
+
+    private static readonly List<MapEntry> Maps = new()
+    {
+        new() { Key = "museum", Label = "Museum", Make = AtlasMapDef.Museum, Button = "button_museum.png", Icon = "icon_museum.png" },
+        new() { Key = "wald", Label = "Forest", Make = AtlasMapDef.Wald, Button = "button_wald.png", Icon = "icon_wald.png" },
+        new() { Key = "park", Label = "Carnival", Make = AtlasMapDef.Park, Button = "button_park.png", Icon = "icon_park.png" },
     };
+    private const int BuiltInCount = 3;
 
     private static int _current;   // 0 = keine
     private static float _pickedAt = -100f;   // Schonfrist fuer den Karten-Abgleich nach einer Atlas-Wahl
@@ -47,6 +60,40 @@ internal static class AtlasSelection
     private static int _cachedIndex = -1;
 
     public static string CurrentKey => _current == 0 ? null : Maps[_current - 1].Key;
+    /// <summary>Ist die gewaehlte Karte die eines anderen Plugins?</summary>
+    internal static bool CurrentIsExternal => _current > 0 && Maps[_current - 1].External;
+    internal static IEnumerable<MapEntry> ExternalMaps => Maps.FindAll(m => m.External);
+
+    /// <summary>Anmeldung einer Karte aus einem anderen Plugin (AtlasMaps.Register).</summary>
+    internal static bool Register(MapEntry e)
+    {
+        if (e == null || string.IsNullOrEmpty(e.Key) || e.Make == null) return false;
+        if (Maps.Exists(m => string.Equals(m.Key, e.Key, StringComparison.OrdinalIgnoreCase)))
+        {
+            AtlasPlugin.Logger.LogWarning($"{LogPrefix} map key '{e.Key}' is already taken - registration ignored");
+            return false;
+        }
+        e.External = true;
+        Maps.Add(e);
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} external map registered: {e.Key} ({e.Label}), index {Maps.Count}");
+        return true;
+    }
+
+    /// <summary>
+    /// Vor jedem Kartenbau: Karten anderer Plugins neu erzeugen. Deren Factory liest eigene Einstellungen
+    /// (z. B. eine Groessen-Variante), die sich seit der letzten Runde geaendert haben koennen.
+    /// </summary>
+    internal static void RefreshExternal()
+    {
+        if (_cachedIndex > BuiltInCount) _cachedIndex = -1;
+    }
+
+    private static int IndexOfKey(string key)
+    {
+        for (int i = 0; i < Maps.Count; i++)
+            if (string.Equals(Maps[i].Key, key, StringComparison.OrdinalIgnoreCase)) return i + 1;
+        return 0;
+    }
 
     /// <summary>Gewaehlte Karte oder null. Diagnostics.ForceMap ueberstimmt (Autotests).</summary>
     public static AtlasMapDef Selected()
@@ -57,16 +104,28 @@ internal static class AtlasSelection
         // erzwungene Karte, auch wenn der Host Vanilla gewaehlt hatte, und kein Gate merkte es.
         bool freeplay = AmongUsClient.Instance != null && AmongUsClient.Instance.NetworkMode == NetworkModes.FreePlay;
         if (!string.IsNullOrEmpty(force) && freeplay)
-            for (int i = 0; i < Maps.Length; i++)
-                if (string.Equals(Maps[i].Key, force, StringComparison.OrdinalIgnoreCase)) idx = i + 1;
+        {
+            int forced = IndexOfKey(force);
+            if (forced > 0) idx = forced;
+        }
         if (idx == 0) return null;
-        if (_cachedIndex != idx) { _cached = Maps[idx - 1].Make(); _cachedIndex = idx; }
+        if (_cachedIndex != idx)
+        {
+            try { _cached = Maps[idx - 1].Make(); }
+            catch (Exception e)
+            {
+                // Eine fremde Factory darf Atlas nicht mitreissen: dann eben keine Karte (Vanilla-Skeld)
+                AtlasPlugin.Logger.LogError($"{LogPrefix} map factory '{Maps[idx - 1].Key}' failed: {e}");
+                _cached = null;
+            }
+            _cachedIndex = idx;
+        }
         return _cached;
     }
 
     private static void Set(int idx, bool broadcast)
     {
-        if (idx < 0 || idx > Maps.Length) idx = 0;
+        if (idx < 0 || idx > Maps.Count) idx = 0;
         bool changed = _current != idx;
         if (changed)
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} map -> {(idx == 0 ? "vanilla" : Maps[idx - 1].Key)}");
@@ -88,6 +147,7 @@ internal static class AtlasSelection
         {
             var w = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, RpcId, SendOption.Reliable, -1);
             w.Write((byte)_current);
+            if (_current > BuiltInCount) w.Write(Maps[_current - 1].Key);   // fremde Karte: per Schluessel
             AmongUsClient.Instance.FinishRpcImmediately(w);
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} broadcast failed: {e.Message}"); }
@@ -102,10 +162,24 @@ internal static class AtlasSelection
         {
             var client = AmongUsClient.Instance;
             if (client == null || __instance == null || __instance.OwnerId != client.HostId) return;
-            Set(reader.ReadByte(), broadcast: false);
+            int idx = reader.ReadByte();
+            if (idx > BuiltInCount)
+            {
+                string key = reader.BytesRemaining > 0 ? reader.ReadString() : null;
+                int local = key != null ? IndexOfKey(key) : 0;
+                if (local == 0 && key != null && _missingLogged != key)
+                {
+                    _missingLogged = key;
+                    AtlasPlugin.Logger.LogWarning($"{LogPrefix} host chose map '{key}', which is not installed here - staying on the Skeld");
+                }
+                idx = local;
+            }
+            Set(idx, broadcast: false);
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} rpc read failed: {e.Message}"); }
     }
+
+    private static string _missingLogged;
 
     [HarmonyPostfix]
     [HarmonyPatch(typeof(AmongUsClient), nameof(AmongUsClient.OnGameJoined))]
@@ -113,6 +187,7 @@ internal static class AtlasSelection
     {
         // Als Gast gilt nur, was der Host sagt. Der Host behaelt seine letzte Wahl.
         if (!AmHost) Set(0, broadcast: false);
+        _missingLogged = null;
         _resendTimer = 1f;
     }
 
@@ -134,6 +209,7 @@ internal static class AtlasSelection
     {
         if (LobbyBehaviour.Instance == null) return;
         LobbyVisualTick();
+        AtlasPreload.Tick();
         if (!AmHost) return;
         _resendTimer -= Time.deltaTime;
         if (_resendTimer > 0f) return;
@@ -174,7 +250,7 @@ internal static class AtlasSelection
         try
         {
             string skeld = TranslationController.Instance.GetString(StringNames.MapNameSkeld, new Il2CppSystem.Object[0]);
-            string name = Maps[_current - 1].Make().DisplayName;
+            string name = Selected()?.DisplayName ?? Maps[_current - 1].Label;
             foreach (var t in __instance.GetComponentsInChildren<TextMeshPro>(true))
                 if (t != null && t.text != null && t.text.Contains(skeld)) t.text = t.text.Replace(skeld, name);
         }
@@ -190,7 +266,8 @@ internal static class AtlasSelection
 
     private static Sprite Logo(float width)
     {
-        var sp = AtlasAssets.ButtonSprite(Maps[_current - 1].Button, width);
+        var e = Maps[_current - 1];
+        var sp = AtlasAssets.ButtonSprite(e.Button, width, e.Asm, e.Ns);
         if (sp != null) OwnLogos.Add(sp);
         return sp;
     }
@@ -362,7 +439,7 @@ internal static class AtlasSelection
             int idx = 0;
             string n = button != null ? button.name : null;
             if (n != null && n.StartsWith("Atlas_", StringComparison.Ordinal))
-                for (int i = 0; i < Maps.Length; i++)
+                for (int i = 0; i < Maps.Count; i++)
                     if (n == $"Atlas_{Maps[i].Key}") { idx = i + 1; break; }
             Set(idx, false);
         }
@@ -404,19 +481,22 @@ internal static class AtlasSelection
         float rowStep = rows.Count > 1 ? rows[1] - rows[0] : 0.8f;
         float rowY = rows[0] - rowStep;
 
-        for (int i = 0; i < Maps.Length; i++)
+        for (int i = 0; i < Maps.Count; i++)
         {
             var clone = Object.Instantiate(skeld.gameObject, skeld.transform.parent);
             clone.name = $"Atlas_{Maps[i].Key}";
-            // Zeile 1: links Museum, rechts Wald. Zeile 2: der Park allein in der Mitte, wie der
-            // Fungle-Knopf im Vanilla-Raster (in der Mitte von Zeile 1 ueberlappte er beide, Test 23.09.)
+            // Je Zeile zwei Knoepfe (links, rechts); steht einer allein in seiner Zeile, kommt er in die
+            // Mitte, wie der Fungle-Knopf im Vanilla-Raster (Park bei drei Karten; in der Mitte von Zeile 1
+            // ueberlappte er beide, Test 23.09.)
+            int row = i / 2;
+            bool alone = i % 2 == 0 && i == Maps.Count - 1;
             float x = cols.Count >= 2
-                ? (i == 0 ? cols[0] : i == 1 ? cols[cols.Count - 1] : (cols[0] + cols[cols.Count - 1]) / 2f)
+                ? (alone ? (cols[0] + cols[cols.Count - 1]) / 2f : i % 2 == 0 ? cols[0] : cols[cols.Count - 1])
                 : cols[0] + (i - 1f) * 2.6f;
-            float y = i < 2 ? rowY : rowY - rowStep;
+            float y = rowY - rowStep * row;
             clone.transform.localPosition = new Vector3(x, y, skeld.transform.localPosition.z);
             // Skeld-Logo abdunkeln, Kartenname als Schrift darueber (keine eigene Grafik)
-            if (!ApplyButtonArt(clone, Maps[i].Button))
+            if (!ApplyButtonArt(clone, Maps[i]))
             {
                 Tint(clone, i == 0 ? new Color(0.22f, 0.17f, 0.10f) : new Color(0.09f, 0.20f, 0.12f));
                 AddLabel(clone, Maps[i].Label, popover.gameObject);
@@ -437,7 +517,7 @@ internal static class AtlasSelection
             list.AddRange(added);
             popover.buttons = list.ToArray();
         }
-        AtlasPlugin.Logger.LogInfo($"{LogPrefix} freeplay: {Maps.Length} map buttons added ({popover.buttons?.Length ?? 0} in the menu)");
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} freeplay: {Maps.Count} map buttons added ({popover.buttons?.Length ?? 0} in the menu)");
     }
 
     // ------------------------------------------------------------- Lobby-Picker
@@ -481,7 +561,7 @@ internal static class AtlasSelection
         }
         float step = buttons.Length > 1 ? (last.transform.localPosition.x - first.transform.localPosition.x) / (buttons.Length - 1) : 1f;
 
-        for (int i = 0; i < Maps.Length; i++)
+        for (int i = 0; i < Maps.Count; i++)
         {
             int idx = i + 1;
             var clone = Object.Instantiate(first.gameObject, first.transform.parent);
@@ -490,9 +570,9 @@ internal static class AtlasSelection
             var msb = clone.GetComponent<MapSelectButton>();
             // eigenes rundes Symbol in derselben Groesse wie das Skeld-Symbol; Kreis, Ring und
             // Haken bleiben die des Vanilla-Knopfs
-            if (msb != null && msb.MapIcon != null && msb.MapIcon.sprite != null)
+            if (msb != null && msb.MapIcon != null && msb.MapIcon.sprite != null && !string.IsNullOrEmpty(Maps[i].Icon))
             {
-                var icon = AtlasAssets.ButtonSprite(Maps[i].Icon, msb.MapIcon.sprite.bounds.size.x);
+                var icon = AtlasAssets.ButtonSprite(Maps[i].Icon, msb.MapIcon.sprite.bounds.size.x, Maps[i].Asm, Maps[i].Ns);
                 if (icon != null) msb.MapIcon.sprite = icon;
             }
             var pb = msb != null ? msb.Button : clone.GetComponent<PassiveButton>();
@@ -513,7 +593,7 @@ internal static class AtlasSelection
         FitLobbyRow(picker, step);
         MarkLobby(_current);
         if (_current > 0) ShowAtlasInPicker(picker, _current);
-        AtlasPlugin.Logger.LogInfo($"{LogPrefix} lobby picker: {Maps.Length} map buttons added (step {step:F2})");
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} lobby picker: {Maps.Count} map buttons added (step {step:F2})");
     }
 
     // Mit Submerged stehen 9 Symbole in der Reihe; Forest und Carnival lagen rechts ausserhalb des
@@ -562,7 +642,8 @@ internal static class AtlasSelection
             {
                 if (!OwnLogos.Contains(name.sprite))
                 {
-                    var logo = AtlasAssets.ButtonSprite(Maps[idx - 1].Button, name.sprite.bounds.size.x);
+                    var e = Maps[idx - 1];
+                    var logo = AtlasAssets.ButtonSprite(e.Button, name.sprite.bounds.size.x, e.Asm, e.Ns);
                     if (logo != null) { OwnLogos.Add(logo); name.sprite = logo; }
                 }
             }
@@ -583,8 +664,9 @@ internal static class AtlasSelection
     // ------------------------------------------------------------------ Optik
 
     /// <summary>Ersetzt das Skeld-Logo des geklonten Knopfs durch das eigene Logo, gleiche Weltgroesse.</summary>
-    private static bool ApplyButtonArt(GameObject clone, string resource)
+    private static bool ApplyButtonArt(GameObject clone, MapEntry entry)
     {
+        string resource = entry.Button;
         if (string.IsNullOrEmpty(resource)) return false;
         // Aufbau des Vanilla-Knopfs (Log 23.09.): Wurzel = Logo-Sprite (2,10 x 0,47), Kind
         // "Background" = weisser Rahmen als 9-Slice-Sprite. Zum Show-Zeitpunkt ist die Skalierung
@@ -601,7 +683,7 @@ internal static class AtlasSelection
             sr.enabled = false;
         }
         if (width <= 0.01f && logo.sprite != null) width = logo.sprite.bounds.size.x * 1.1f;
-        var sprite = AtlasAssets.ButtonSprite(resource, width);
+        var sprite = AtlasAssets.ButtonSprite(resource, width, entry.Asm, entry.Ns);
         if (sprite == null) return false;
         logo.sprite = sprite;
         logo.color = Color.white;

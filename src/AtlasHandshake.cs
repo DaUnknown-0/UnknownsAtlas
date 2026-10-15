@@ -44,7 +44,16 @@ internal static class AtlasHandshake
     {
         public readonly Version Version;
         public readonly bool Enabled;
-        public Peer(Version version, bool enabled) { Version = version; Enabled = enabled; }
+        /// <summary>Karten anderer Plugins: Schluessel -> Inhaltsversion. null = Client vor dieser Erweiterung.</summary>
+        public readonly Dictionary<string, string> Maps;
+        public Peer(Version version, bool enabled, Dictionary<string, string> maps) { Version = version; Enabled = enabled; Maps = maps; }
+    }
+
+    private static Dictionary<string, string> LocalExternalMaps()
+    {
+        var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in AtlasSelection.ExternalMaps) d[m.Key] = m.ContentVersion ?? "";
+        return d;
     }
 
     private static readonly Dictionary<int, Peer> Peers = new();
@@ -70,12 +79,17 @@ internal static class AtlasHandshake
         var ac = AmongUsClient.Instance;
         if (ac == null || PlayerControl.LocalPlayer == null) return;
         var v = Local;
-        Peers[ac.ClientId] = new Peer(v, LocalEnabled);
+        var maps = LocalExternalMaps();
+        Peers[ac.ClientId] = new Peer(v, LocalEnabled, maps);
         _boardDirty = true;
         AtlasWorld.Send(OpHello, w =>
         {
             w.Write((byte)v.Major); w.Write((byte)v.Minor); w.Write((byte)v.Build); w.Write((byte)v.Revision);
             w.Write(LocalEnabled);
+            // Erweiterung (aeltere Clients lesen nur bis hier): Karten anderer Plugins mit Inhaltsversion
+            w.Write((byte)Math.Min(maps.Count, 255));
+            int n = 0;
+            foreach (var kv in maps) { if (n++ >= 255) break; w.Write(kv.Key); w.Write(kv.Value); }
         });
     }
 
@@ -90,7 +104,14 @@ internal static class AtlasHandshake
             {
                 byte a = reader.ReadByte(), b = reader.ReadByte(), c = reader.ReadByte(), d = reader.ReadByte();
                 bool enabled = reader.ReadBoolean();
-                Peers[sender.OwnerId] = new Peer(new Version(a, b, c, d), enabled);
+                Dictionary<string, string> maps = null;
+                if (reader.BytesRemaining > 0)
+                {
+                    maps = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    int count = reader.ReadByte();
+                    for (int i = 0; i < count && reader.BytesRemaining > 0; i++) maps[reader.ReadString()] = reader.ReadString();
+                }
+                Peers[sender.OwnerId] = new Peer(new Version(a, b, c, d), enabled, maps);
                 _boardDirty = true;
                 break;
             }
@@ -145,6 +166,14 @@ internal static class AtlasHandshake
         var ac = AmongUsClient.Instance;
         if (ac == null || ac.allClients == null) return list;
         var local = Local;
+        // A map of another plugin needs that plugin's map (same content version) on every client as well.
+        string extKey = AtlasSelection.CurrentIsExternal ? AtlasSelection.CurrentKey : null;
+        string extVer = null, extName = null;
+        if (extKey != null)
+        {
+            LocalExternalMaps().TryGetValue(extKey, out extVer);
+            extName = AtlasPlugin.SelectedMap()?.DisplayName ?? extKey;
+        }
         // The host checks itself too (Opus audit 2026-10-02): with BuildPocMap off the host stays on the
         // plain Skeld while every guest builds the Atlas map - walls, vents and consoles in different
         // places, noticed only by the self-check 3 s into the round.
@@ -169,6 +198,11 @@ internal static class AtlasHandshake
             if (!Peers.TryGetValue(c.Id, out var p)) list.Add($"{name}: Unknown's Atlas missing or outdated");
             else if (p.Version != local) list.Add($"{name}: Atlas v{Fmt(p.Version)} (host v{Fmt(local)})");
             else if (!p.Enabled) list.Add($"{name}: Atlas map building switched off");
+            else if (extKey != null)
+            {
+                if (p.Maps == null || !p.Maps.TryGetValue(extKey, out var pv)) list.Add($"{name}: {extName} not installed");
+                else if (!string.Equals(pv, extVer, StringComparison.Ordinal)) list.Add($"{name}: {extName} v{pv} (host v{extVer})");
+            }
         }
         return list;
     }

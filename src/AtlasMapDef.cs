@@ -5,17 +5,33 @@
 // Alles, was der Builder (AtlasMuseumBuilder) je Karte braucht, steht hier als Daten; die
 // Werte kommen aus den generierten Klassen (AtlasMuseumData/Layout, AtlasWaldData/Layout).
 // Karte #3 kostet damit nur eine weitere Factory-Methode unten.
+//
+// Oeffentlich, damit andere Plugins eigene Karten anmelden koennen (AtlasMaps.Register): sie fuellen
+// dieselbe Struktur und bringen ihre Grafik als eingebettete Ressourcen der eigenen Assembly mit.
 
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 
 namespace UnknownsAtlas;
 
-internal sealed class AtlasMapDef
+public sealed class AtlasMapDef
 {
     public string Key;                 // AppDomain "UnknownsAtlas.ActiveMap" + Ressourcen-Praefix
     public string DisplayName;
     public string ResourcePrefix;      // museum_floor_{i}.jpg ...
+    /// <summary>Assembly mit dem Kartenpaket (Boden, Objekte, Konsolen, Minimap). null = Atlas selbst.</summary>
+    public Assembly ResourceAssembly;
+    /// <summary>Namensraum der eingebetteten Ressourcen ("&lt;Namensraum&gt;.&lt;Datei&gt;").</summary>
+    public string ResourceNamespace = "UnknownsAtlas.Resources";
+    /// <summary>Minimap-Datei; null = "&lt;Praefix&gt;_minimap.png". Varianten einer Karte teilen Boden und
+    /// Objekte, haben aber eigene Grenzen und damit eine eigene Minimap.</summary>
+    public string MinimapFile;
+    /// <summary>
+    /// false fuer angemeldete Karten anderer Plugins: Raumton, Einzelgeraeusche und die Welt-Effekte
+    /// sichtbarer Tasks gehoeren zu Museum, Wald und Park und bleiben dort aus.
+    /// </summary>
+    public bool BuiltInEffects = true;
 
     public float MinX, MinY, MaxX, MaxY;
     public Vector2[][] Walls, ShadowWalls, Opaque, Glass, Hallways;

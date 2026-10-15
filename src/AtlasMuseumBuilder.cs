@@ -86,6 +86,7 @@ internal static class AtlasMuseumBuilder
     [HarmonyPatch(typeof(ShipStatus), nameof(ShipStatus.Awake))]
     internal static void ShipStatus_Awake_Postfix(ShipStatus __instance)
     {
+        AtlasSelection.RefreshExternal();     // fremde Karten: Factory liest ihre aktuellen Einstellungen
         if (!ShouldBuild(__instance)) return;
         D = AtlasPlugin.SelectedMap();
         // Spawn frueh setzen: SpawnPlayer liest InitialSpawnCenter, bevor wir bauen koennten.
@@ -105,7 +106,12 @@ internal static class AtlasMuseumBuilder
             _blocks = null;
             VentArt.Clear(); SealedVentArt.Clear();
             AtlasAssets.ReleaseOtherMaps(D);
+            AtlasAssets.ResetTiming();
+            var total = System.Diagnostics.Stopwatch.StartNew();
             Build(__instance);
+            AtlasPlugin.Logger.LogInfo($"[Atlas/Timing] {D.Key}: build {total.ElapsedMilliseconds} ms ({_phases}); " +
+                $"textures {AtlasAssets.TexturesLoaded} loaded in {AtlasAssets.TextureMs:F0} ms " +
+                $"({AtlasAssets.TexturesPacked} packed, the others came from the lobby preload)");
             _builtFor = __instance;
             AppDomain.CurrentDomain.SetData(AppDomainKey, D.Key);
             AtlasMapShot.Arm();
@@ -253,8 +259,14 @@ internal static class AtlasMuseumBuilder
         ship.SpawnRadius = D.SpawnRadius;
     }
 
+    /// <summary>Zeiten der Bauabschnitte fuer die Rundenstart-Diagnose ("floor 120, walls 40, ...").</summary>
+    private static string _phases = "";
+
     private static void Build(ShipStatus ship)
     {
+        var lap = System.Diagnostics.Stopwatch.StartNew();
+        var phases = new List<string>();
+        void Lap(string name) { phases.Add($"{name} {lap.ElapsedMilliseconds}"); lap.Restart(); }
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} BEGIN BUILD over '{ship.name}' (MapScale={ship.MapScale:F3})");
         ApplySpawn(ship);
 
@@ -354,11 +366,16 @@ internal static class AtlasMuseumBuilder
         world.transform.localScale = new Vector3(1f / ls.x, 1f / ls.y, 1f / ls.z);
         world.transform.position = Vector3.zero;
 
+        Lap("prepare");
         BuildFloor(world);
+        Lap("floor");
         int walls = BuildWalls(world);
+        Lap("walls");
         int props = BuildProps(world);
+        Lap("props");
         int lit = UnmaskOccluders();
         BuildRooms(ship, world);
+        Lap("rooms");
 
         // 5. Umsetzen.
         int placed = 0, unplaced = 0;
@@ -455,9 +472,13 @@ internal static class AtlasMuseumBuilder
 
         ship.CameraColor = D.CameraColor;
 
+        Lap("place");
         try { AtlasWorld.OnBuilt(ship); } catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} world: {e}"); }
+        Lap("world");
         RebuildMinimap(ship);
         Physics2D.SyncTransforms();
+        Lap("minimap");
+        _phases = string.Join(", ", phases);
 
         AtlasPlugin.Logger.LogInfo(
             $"{LogPrefix} BUILD DONE: consoles {placed} placed/{unplaced} parked, vents {ventCount}, " +

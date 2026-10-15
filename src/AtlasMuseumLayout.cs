@@ -21,7 +21,7 @@ using UnityEngine;
 
 namespace UnknownsAtlas;
 
-internal static class AtlasMuseumLayout
+public static class AtlasMuseumLayout
 {
     // ------------------------------------------------------------ Konsolen
 

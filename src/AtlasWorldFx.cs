@@ -32,6 +32,7 @@ internal static class AtlasWorldFx
     internal static void PlayerControl_PlayAnimation_Postfix(PlayerControl __instance, byte __0)
     {
         if (!AtlasMuseumBuilder.Active || ShipStatus.Instance == null) return;
+        if (!AtlasMuseumBuilder.D.BuiltInEffects) return;     // Karten anderer Plugins bringen eigene Effekte mit
         try
         {
             if (!VisualTasksOn()) return;

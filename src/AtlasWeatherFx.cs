@@ -295,6 +295,8 @@ internal static class AtlasWeatherFx
     {
         if (SoundManager.Instance == null) return;
         bool inGame = MeetingHud.Instance == null && ExileController.Instance == null;
+        // Karten anderer Plugins: kein Museums-Raumton als Rueckfall, laufende Schleifen ausblenden
+        if (!AtlasMuseumBuilder.D.BuiltInEffects) inGame = false;
         bool museum = AtlasMuseumBuilder.D.Key == "museum";
         bool park = AtlasMuseumBuilder.D.Key == "park";
         // Park seit 09.10. mit eigenem Raumton (Review: auf der Karte war es nach dem Abschalten der Skeld-Klaenge still)

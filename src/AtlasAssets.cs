@@ -14,6 +14,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace UnknownsAtlas;
@@ -29,10 +30,12 @@ internal static class AtlasAssets
     /// Objektatlanten werden deshalb nach dem Laden DXT-komprimiert und nicht lesbar gemacht.
     /// Museumstexturen laden MIT Mipmaps und trilinear (User 22.09.: feine Linien flimmerten beim
     /// Laufen), Kosten +33 % Speicher.
+    /// Schnelle Kompression (false): die hochwertige brauchte im Hauptthread je Textur ein Mehrfaches und
+    /// trug den groessten Teil der 12 s Rundenstart-Pause vom 09.10. (siehe AtlasPreload).
     /// </summary>
     private static void Shrink(Texture2D tex)
     {
-        try { tex.Compress(true); }
+        try { tex.Compress(false); }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"[Atlas] texture compress failed: {e.Message}"); }
         tex.Apply(false, true);
     }
@@ -56,10 +59,11 @@ internal static class AtlasAssets
         try
         {
             // A map pack is "<prefix>_floor_*", "_props_*", "_consoles_*" or "_minimap" (see above);
-            // task art and buttons have other names and stay.
-            string keepPrefix = $"UnknownsAtlas.Resources.{keep.ResourcePrefix}_";
+            // task art and buttons have other names and stay. Maps of other plugins carry their own
+            // namespace ("<Plugin>.Resources.<prefix>_floor_0.jpg"), hence the open namespace part.
+            string keepPrefix = Res(keep, $"{keep.ResourcePrefix}_");
             var pack = new System.Text.RegularExpressions.Regex(
-                @"^UnknownsAtlas\.Resources\.[A-Za-z0-9]+_(floor_|props_|consoles_|minimap)");
+                @"^[A-Za-z0-9_.]*\.Resources\.[A-Za-z0-9]+_(floor_|props_|consoles_|minimap)");
             // Minispiel- und Weltgrafik (task_*) haengt an der Karte (AtlasMapDef.TaskArt) und lag nach einem
             // Kartenwechsel weiter unkomprimiert im Speicher (Review 09.10.). Beim Wechsel wird sie mit
             // freigegeben und bei Bedarf neu geladen; beim Bau derselben Karte bleibt sie. Kein lebendes Objekt
@@ -71,6 +75,8 @@ internal static class AtlasAssets
                 (!key.StartsWith(keepPrefix, StringComparison.Ordinal) && pack.IsMatch(key)) ||
                 (switching && key.StartsWith(taskPrefix, StringComparison.Ordinal));
             int freed = 0;
+            foreach (var key in new List<string>(Pending.Keys))
+                if (Other(key)) Pending.Remove(key);              // laufende Tasks enden von selbst, das Ergebnis verfaellt
             foreach (var key in new List<string>(MapSprites.Keys))
                 if (Other(key)) { var s = MapSprites[key]; if (s != null) UnityEngine.Object.Destroy(s); MapSprites.Remove(key); }
             foreach (var key in new List<string>(MapTextures.Keys))
@@ -80,32 +86,91 @@ internal static class AtlasAssets
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"[Atlas] releasing other maps failed: {e.Message}"); }
     }
 
-    private static Texture2D MapTexture(string res)
+    /// <summary>Voller Ressourcenname einer Datei des Kartenpakets (Atlas oder ein anderes Plugin).</summary>
+    private static string Res(AtlasMapDef m, string file) =>
+        $"{(string.IsNullOrEmpty(m.ResourceNamespace) ? "UnknownsAtlas.Resources" : m.ResourceNamespace)}.{file}";
+
+    // ------------------------------------------------------------ Vorkomprimierte Pakete (.atx)
+
+    /// <summary>Im Hintergrund entpackte .atx, die auf das Hochladen im Hauptthread warten (Schluessel = Ressource).</summary>
+    private static readonly Dictionary<string, Task<PackedTexture>> Pending = new();
+
+    /// <summary>Zeitmessung fuer die Rundenstart-Diagnose: Hauptthread-Zeit fuer Kartentexturen seit ResetTiming.</summary>
+    internal static int TexturesLoaded, TexturesPacked;
+    internal static double TextureMs;
+
+    internal static void ResetTiming() { TexturesLoaded = 0; TexturesPacked = 0; TextureMs = 0; }
+
+    internal static bool IsLoaded(string res) => MapTextures.TryGetValue(res, out var t) && t != null;
+
+    /// <summary>
+    /// Startet das Entpacken einer .atx im Hintergrund (nur reine .NET-Arbeit, kein Unity-Aufruf). false, wenn die
+    /// Karte fuer diese Textur kein Paket mitbringt (dann laedt MapTexture wie frueher PNG/JPG).
+    /// </summary>
+    internal static bool BeginPrepare(string res, Assembly asm)
+    {
+        asm ??= Assembly.GetExecutingAssembly();
+        if (IsLoaded(res) || Pending.ContainsKey(res)) return true;
+        if (!AtlasTexturePack.Has(asm, res)) return false;
+        Pending[res] = Task.Run(() => AtlasTexturePack.Read(asm, res));
+        return true;
+    }
+
+    /// <summary>true, wenn die Textur ohne Warten fertig werden kann (geladen, entpackt oder ohne Paket).</summary>
+    internal static bool IsReady(string res) =>
+        IsLoaded(res) || !Pending.TryGetValue(res, out var task) || task.IsCompleted;
+
+    internal static string FloorRes(AtlasMapDef m, int i) => Res(m, $"{m.ResourcePrefix}_floor_{i}.jpg");
+    internal static string PropsRes(AtlasMapDef m, int k) => Res(m, $"{m.ResourcePrefix}_props_{k}.png");
+    internal static string ConsolesRes(AtlasMapDef m, int k) => Res(m, $"{m.ResourcePrefix}_consoles_{k}.png");
+
+    private static Texture2D MapTexture(string res, Assembly asm)
     {
         if (MapTextures.TryGetValue(res, out var cached) && cached != null) return cached;
-        var tex = LoadTexture(res, mips: true);
-        if (tex == null) { AtlasPlugin.Logger.LogError($"[Atlas] embedded resource missing: {res}"); return null; }
+        asm ??= Assembly.GetExecutingAssembly();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        Texture2D tex = null;
+        bool packed = false;
+        // Paket: entpacken (im Vorladen schon im Hintergrund geschehen, sonst hier), dann nur hochladen.
+        PackedTexture pt = null;
+        if (Pending.TryGetValue(res, out var task)) { Pending.Remove(res); pt = task.Result; }
+        else if (AtlasTexturePack.Has(asm, res)) pt = AtlasTexturePack.Read(asm, res);
+        if (pt != null)
+        {
+            try { tex = AtlasTexturePack.Upload(pt); packed = true; }
+            catch (Exception e) { AtlasPlugin.Logger.LogWarning($"[Atlas] packed texture upload failed ({res}): {e.Message}"); }
+        }
+        else if (AtlasTexturePack.Has(asm, res))
+            AtlasPlugin.Logger.LogWarning($"[Atlas] packed texture unreadable, falling back: {res}");
+
+        if (tex == null)
+        {
+            // Alter Weg (Karten ohne .atx): dekodieren, Mipmaps, DXT-Kompression, alles im Hauptthread.
+            tex = LoadTexture(res, mips: true, asm: asm);
+            if (tex == null) { AtlasPlugin.Logger.LogError($"[Atlas] embedded resource missing: {res}"); return null; }
+            Shrink(tex);
+        }
         tex.wrapMode = TextureWrapMode.Clamp;
         tex.filterMode = FilterMode.Trilinear;
-        Shrink(tex);
         MapTextures[res] = tex;
+        TexturesLoaded++;
+        if (packed) TexturesPacked++;
+        TextureMs += sw.Elapsed.TotalMilliseconds;
         return tex;
     }
 
     /// <summary>Objektatlas k der Karte (Sprites schneidet der Builder aus AtlasMapDef.Props).</summary>
-    public static Texture2D MapPropsTexture(AtlasMapDef m, int k) =>
-        MapTexture($"UnknownsAtlas.Resources.{m.ResourcePrefix}_props_{k}.png");
+    public static Texture2D MapPropsTexture(AtlasMapDef m, int k) => MapTexture(PropsRes(m, k), m.ResourceAssembly);
 
     /// <summary>Atlas k der eigenen Task-Bloecke.</summary>
-    public static Texture2D MapConsolesTexture(AtlasMapDef m, int k) =>
-        MapTexture($"UnknownsAtlas.Resources.{m.ResourcePrefix}_consoles_{k}.png");
+    public static Texture2D MapConsolesTexture(AtlasMapDef m, int k) => MapTexture(ConsolesRes(m, k), m.ResourceAssembly);
 
     /// <summary>Bodenkachel i, Pivot links unten, Massstab AtlasMapDef.FloorPixelsPerMeter.</summary>
     public static Sprite MapFloorTile(AtlasMapDef m, int i)
     {
-        string res = $"UnknownsAtlas.Resources.{m.ResourcePrefix}_floor_{i}.jpg";
+        string res = FloorRes(m, i);
         if (MapSprites.TryGetValue(res, out var cached) && cached != null) return cached;
-        var tex = MapTexture(res);
+        var tex = MapTexture(res, m.ResourceAssembly);
         if (tex == null) return null;
         var sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.zero,
             m.FloorPixelsPerMeter, 0, SpriteMeshType.FullRect);
@@ -114,13 +179,14 @@ internal static class AtlasAssets
         return sprite;
     }
 
-    /// <summary>Logo-Knopf (Freeplay-Menue) in der Breite widthUnits (Lokalraum des Vanilla-Knopfs).</summary>
-    public static Sprite ButtonSprite(string file, float widthUnits)
+    /// <summary>Logo-Knopf (Freeplay-Menue) in der Breite widthUnits (Lokalraum des Vanilla-Knopfs).
+    /// asm/ns: Herkunft bei Karten anderer Plugins (null = Atlas).</summary>
+    public static Sprite ButtonSprite(string file, float widthUnits, Assembly asm = null, string ns = null)
     {
-        string res = $"UnknownsAtlas.Resources.{file}";
+        string res = $"{(string.IsNullOrEmpty(ns) ? "UnknownsAtlas.Resources" : ns)}.{file}";
         string key = $"{res}@{widthUnits:F3}";
         if (MapSprites.TryGetValue(key, out var cached) && cached != null) return cached;
-        var tex = LoadTexture(res, mips: true);
+        var tex = LoadTexture(res, mips: true, asm: asm);
         if (tex == null) { AtlasPlugin.Logger.LogError($"[Atlas] embedded resource missing: {res}"); return null; }
         tex.wrapMode = TextureWrapMode.Clamp;
         tex.filterMode = FilterMode.Trilinear;
@@ -159,10 +225,10 @@ internal static class AtlasAssets
     /// <summary>Minimap der Karte in Kartenraum-Einheiten (Weltmeter / MapScale).</summary>
     public static Sprite MapMinimapSprite(AtlasMapDef m, float mapScale)
     {
-        string res = $"UnknownsAtlas.Resources.{m.ResourcePrefix}_minimap.png";
+        string res = Res(m, string.IsNullOrEmpty(m.MinimapFile) ? $"{m.ResourcePrefix}_minimap.png" : m.MinimapFile);
         string key = $"{res}@{mapScale:F3}";
         if (MapSprites.TryGetValue(key, out var cached) && cached != null) return cached;
-        var tex = LoadTexture(res);
+        var tex = LoadTexture(res, asm: m.ResourceAssembly);
         if (tex == null) { AtlasPlugin.Logger.LogError($"[Atlas] embedded resource missing: {res}"); return null; }
         tex.wrapMode = TextureWrapMode.Clamp;
         tex.filterMode = FilterMode.Bilinear;
@@ -208,11 +274,11 @@ internal static class AtlasAssets
         return _consoleMarker;
     }
 
-    private static Texture2D LoadTexture(string path, bool mips = false)
+    private static Texture2D LoadTexture(string path, bool mips = false, Assembly asm = null)
     {
         try
         {
-            var asm = Assembly.GetExecutingAssembly();
+            asm ??= Assembly.GetExecutingAssembly();
             using Stream stream = asm.GetManifestResourceStream(path);
             if (stream == null) return null;
 
