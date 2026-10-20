@@ -162,6 +162,10 @@ public class AtlasMinigame : Minigame
         "spirit" => new SpiritMechanic(),
         "rexmusic" => new MusicBoxMechanic(),
         "rexlight" => new NightLightMechanic(),
+        "ticketpunch" => new TicketPunchMechanic(),
+        "brakelever" => new BrakeLeverMechanic(),
+        "handbrake" => new HandbrakeMechanic(),
+        "hatchcrank" => new HatchCrankMechanic(),
         // Moonlight Carnival: bekannte Bausteine, eigene Grafik und Texte ueber AtlasMapDef.TaskArt/TaskText
         "lightstring" => new SpliceMechanic(),
         "motors" => new ClimateMechanic(),
@@ -311,7 +315,7 @@ internal static class AtlasTaskKit
 
     private static string Lookup(Dictionary<string, string> map, string key)
     {
-        if (map == null || map.Count == 0 || string.IsNullOrEmpty(key) || !AtlasMuseumBuilder.Active) return key;
+        if (map == null || map.Count == 0 || string.IsNullOrEmpty(key) || !(AtlasMuseumBuilder.Active || AtlasMuseumBuilder.Building)) return key;
         if (Kind != null && map.TryGetValue(Kind + ":" + key, out var own)) return own;
         return map.TryGetValue(key, out var all) ? all : key;
     }

@@ -38,7 +38,14 @@ internal static class AtlasAutoFreeplay
             bool ok = false;
             try { ok = EOSManager.Instance != null && EOSManager.Instance.HasFinishedLoginFlow(); } catch { }
             if (ok) break;
-            if (Time.time - t0 > 45f) { AtlasPlugin.Logger.LogError("[Atlas/Diag] auto freeplay: EOS login timeout"); yield break; }
+            // Freeplay braucht keine Online-Dienste: haengt der Login-Ablauf (20.10.: Freundescode-Abfrage kam leer zurueck,
+            // das Spiel zeigte sein Timeout-Fenster), das Fenster schliessen und trotzdem starten
+            if (Time.time - t0 > 45f)
+            {
+                AtlasPlugin.Logger.LogWarning("[Atlas/Diag] auto freeplay: EOS login flow not finished after 45 s, starting freeplay anyway");
+                try { foreach (var popup in Object.FindObjectsOfType<TimeOutPopupHandler>()) popup.gameObject.SetActive(false); } catch { }
+                break;
+            }
             yield return null;
         }
         try

@@ -75,6 +75,10 @@ namespace UnknownsAtlas {
             }
         }
 
+        public void Update() {
+            try { AtlasAssetStore.Tick(); } catch (Exception e) { AtlasPlugin.Logger?.LogWarning($"[Atlas] asset tick: {e.Message}"); }
+        }
+
         private void Start() {
             if (_busy) return;
             this.StartCoroutine(CoCheckForUpdate());

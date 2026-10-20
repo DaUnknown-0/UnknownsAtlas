@@ -94,6 +94,7 @@ internal static class AtlasAssets
 
     /// <summary>Im Hintergrund entpackte .atx, die auf das Hochladen im Hauptthread warten (Schluessel = Ressource).</summary>
     private static readonly Dictionary<string, Task<PackedTexture>> Pending = new();
+    private static readonly HashSet<string> NotYetLogged = new();
 
     /// <summary>Zeitmessung fuer die Rundenstart-Diagnose: Hauptthread-Zeit fuer Kartentexturen seit ResetTiming.</summary>
     internal static int TexturesLoaded, TexturesPacked;
@@ -120,7 +121,40 @@ internal static class AtlasAssets
     internal static bool IsReady(string res) =>
         IsLoaded(res) || !Pending.TryGetValue(res, out var task) || task.IsCompleted;
 
-    internal static string FloorRes(AtlasMapDef m, int i) => Res(m, $"{m.ResourcePrefix}_floor_{i}.jpg");
+    /// <summary>Bodenkachel i: PNG (mit Alpha, z. B. Zugkarte mit bewegtem Hintergrund darunter) vor JPG.</summary>
+    internal static string FloorRes(AtlasMapDef m, int i)
+    {
+        string png = Res(m, $"{m.ResourcePrefix}_floor_{i}.png");
+        return MapResExists(m, png) ? png : Res(m, $"{m.ResourcePrefix}_floor_{i}.jpg");
+    }
+
+    private static bool MapResExists(AtlasMapDef m, string res)
+    {
+        try
+        {
+            var asm = m.ResourceAssembly ?? Assembly.GetExecutingAssembly();
+            if (asm.GetManifestResourceInfo(res) != null) return true;
+            if (AtlasAssetStore.Exists(asm, res) || AtlasTexturePack.Has(asm, res)) return true;
+            // ausgelagert, aber noch nicht geladen: die Datei gibt es (der Aufrufer bekommt bis dahin null)
+            if (AtlasAssetStore.Owns(asm, res, out _) || AtlasAssetStore.Owns(asm, AtlasTexturePack.PackedName(res), out _)) return true;
+        }
+        catch { }
+        return false;
+    }
+
+    /// <summary>Gibt es die Datei im Kartenpaket (Welt-Grafik wie train_scroll_0.png)?</summary>
+    public static bool MapFileExists(AtlasMapDef m, string file) => m != null && !string.IsNullOrEmpty(file) && MapResExists(m, Res(m, file));
+
+    /// <summary>Beliebige Textur des Kartenpakets (gecacht, mit dem Paket freigegeben).</summary>
+    public static Texture2D MapFileTexture(AtlasMapDef m, string file) => m == null ? null : MapTexture(Res(m, file), m.ResourceAssembly);
+
+    /// <summary>Gibt es eine Minispiel-Grafik (Kartenpaket oder Atlas)?</summary>
+    public static bool TaskArtExists(string file)
+    {
+        var (res, asm) = TaskRes(file);
+        try { return (asm ?? Assembly.GetExecutingAssembly()).GetManifestResourceInfo(res) != null || AtlasAssetStore.Exists(asm, res); }
+        catch { return false; }
+    }
     internal static string PropsRes(AtlasMapDef m, int k) => Res(m, $"{m.ResourcePrefix}_props_{k}.png");
     internal static string ConsolesRes(AtlasMapDef m, int k) => Res(m, $"{m.ResourcePrefix}_consoles_{k}.png");
 
@@ -146,6 +180,12 @@ internal static class AtlasAssets
         if (tex == null)
         {
             // Alter Weg (Karten ohne .atx): dekodieren, Mipmaps, DXT-Kompression, alles im Hauptthread.
+            if (AtlasAssetStore.Owns(asm, AtlasTexturePack.PackedName(res), out var file)
+                || (AtlasAssetStore.Owns(asm, res, out file) && !AtlasAssetStore.Exists(asm, res)))
+            {
+                if (NotYetLogged.Add(file)) AtlasPlugin.Logger.LogWarning($"[Atlas] {file} not downloaded yet, filled in when it arrives");
+                return null;
+            }
             tex = LoadTexture(res, mips: true, asm: asm);
             if (tex == null) { AtlasPlugin.Logger.LogError($"[Atlas] embedded resource missing: {res}"); return null; }
             Shrink(tex);
@@ -202,11 +242,20 @@ internal static class AtlasAssets
     private static (string Res, Assembly Asm) TaskRes(string file)
     {
         file = AtlasTaskKit.Art(file);                                // Kartengrafik (AtlasMapDef.TaskArt)
-        var m = AtlasMuseumBuilder.D;
+        // nur bei gebauter (oder gerade im Bau befindlicher) Atlas-Karte: D zeigt sonst auf die zuletzt gebaute Karte
+        // (Vanilla-Krisen holten Zuggrafik). Waehrend Build() ist Active noch false; ohne Building suchten die
+        // Sabotage-Knoepfe der Minikarte (AddMapButtons, im Bau) task_ticket_button.png unter UnknownsAtlas.Resources
+        // statt im Paket der Zugkarte ("embedded resource missing").
+        var m = AtlasMuseumBuilder.Active || AtlasMuseumBuilder.Building ? AtlasMuseumBuilder.D : null;
         if (m != null && m.ResourceAssembly != null && !string.IsNullOrEmpty(m.ResourceNamespace))
         {
             string own = $"{m.ResourceNamespace}.{file}";
-            try { if (m.ResourceAssembly.GetManifestResourceInfo(own) != null) return (own, m.ResourceAssembly); } catch { }
+            try
+            {
+                if (m.ResourceAssembly.GetManifestResourceInfo(own) != null || AtlasAssetStore.Owns(m.ResourceAssembly, own, out _))
+                    return (own, m.ResourceAssembly);
+            }
+            catch { }
         }
         return ($"UnknownsAtlas.Resources.{file}", null);
     }
@@ -220,13 +269,53 @@ internal static class AtlasAssets
         if (!MapTextures.TryGetValue(res, out var tex) || tex == null)
         {
             tex = LoadTexture(res, asm: asm);
-            if (tex == null) { AtlasPlugin.Logger.LogError($"[Atlas] embedded resource missing: {res}"); return null; }
+            if (tex == null) { Missing(res, asm); return null; }
             tex.wrapMode = TextureWrapMode.Clamp;
             tex.filterMode = FilterMode.Bilinear;
             tex.Apply(false, true);                                   // nicht lesbar: kein CPU-Abbild
             MapTextures[res] = tex;
         }
         var sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), pivot, ppu);
+        sprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
+        MapSprites[key] = sprite;
+        return sprite;
+    }
+
+    private static readonly Dictionary<string, Texture2D> OwnTextures = new();
+
+    /// <summary>Eigene eingebettete Grafik (UnknownsAtlas.Resources, z. B. Kartenknoepfe und Effekte der Vanilla-Krisen),
+    /// gecacht und unabhaengig von Kartenpaketen (ReleaseOtherMaps gibt sie nicht frei). Nicht lesbar; HideAndDontSave
+    /// (aus LoadTexture) schliesst DontUnloadUnusedAsset ein. compress: DXT (Seiten durch 4 teilbar), fuer Symbole.</summary>
+    public static Texture2D OwnTexture(string file, bool mips, TextureWrapMode wrap, bool compress = false, bool whiteRgb = false)
+    {
+        if (OwnTextures.TryGetValue(file, out var have) && have != null) return have;
+        var tex = LoadTexture($"UnknownsAtlas.Resources.{file}", mips: mips);
+        if (tex == null) { Missing($"UnknownsAtlas.Resources.{file}", null); return null; }
+        tex.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+        tex.wrapMode = wrap;
+        tex.filterMode = mips ? FilterMode.Trilinear : FilterMode.Bilinear;
+        if (whiteRgb)
+        {
+            // Schnee: durchsichtige Pixel sind schwarz gespeichert, Bilinear-Filter zieht sonst graue Raender um die
+            // Flocken. Farbe ueberall weiss, nur Alpha zaehlt.
+            var px = tex.GetPixels32();
+            for (int i = 0; i < px.Length; i++) px[i] = new Color32(255, 255, 255, px[i].a);
+            tex.SetPixels32(px);
+        }
+        if (compress) Shrink(tex); else tex.Apply(false, true);
+        OwnTextures[file] = tex;
+        return tex;
+    }
+
+    /// <summary>Sprite aus OwnTexture: Breite widthUnits, Mitte als Pivot, FullRect (fuer Kacheln).</summary>
+    public static Sprite OwnSprite(string file, float widthUnits, bool mips, TextureWrapMode wrap, bool compress = false, bool whiteRgb = false)
+    {
+        string key = $"own:{file}@{widthUnits:F3}";
+        if (MapSprites.TryGetValue(key, out var cached) && cached != null) return cached;
+        var tex = OwnTexture(file, mips, wrap, compress, whiteRgb);
+        if (tex == null) return null;
+        var sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f),
+            tex.width / Mathf.Max(0.01f, widthUnits), 0, SpriteMeshType.FullRect);
         sprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
         MapSprites[key] = sprite;
         return sprite;
@@ -291,12 +380,24 @@ internal static class AtlasAssets
         return _consoleMarker;
     }
 
+    /// <summary>Grafik nicht ladbar: noch im Download (eine Warnzeile je Datei, Aufrufer zeigen Ersatz) oder wirklich
+    /// fehlend (Fehler, ebenfalls nur einmal je Datei; frueher bei jedem Aufruf).</summary>
+    private static void Missing(string res, Assembly asm)
+    {
+        if (!NotYetLogged.Add(res)) return;
+        if (AtlasAssetStore.Waiting(asm, res))
+            AtlasPlugin.Logger.LogWarning($"[Atlas] {res} not downloaded yet, shown when it arrives");
+        else if (AtlasAssetStore.Owns(asm, res, out _))
+            AtlasPlugin.Logger.LogWarning($"[Atlas] {res} not available (download failed), a substitute is shown");
+        else AtlasPlugin.Logger.LogError($"[Atlas] embedded resource missing: {res}");
+    }
+
     private static Texture2D LoadTexture(string path, bool mips = false, Assembly asm = null)
     {
         try
         {
             asm ??= Assembly.GetExecutingAssembly();
-            using Stream stream = asm.GetManifestResourceStream(path);
+            using Stream stream = AtlasAssetStore.Open(asm, path);
             if (stream == null) return null;
 
             var data = new byte[stream.Length];

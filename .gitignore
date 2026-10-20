@@ -9,3 +9,6 @@ __pycache__/
 # Vorschau- und Arbeitsbilder der Generatoren
 tools/_*/
 tools/_*.png
+
+# lokale Agent-Notizen
+.claude/

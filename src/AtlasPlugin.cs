@@ -26,7 +26,7 @@ public class AtlasPlugin : BasePlugin
 {
     public const string Id = "com.daunknown0.atlas";
     public const string PluginName = "Unknown's Atlas";
-    public const string VersionString = "1.0.1";
+    public const string VersionString = "1.0.1.1";
     public static readonly System.Version Version = System.Version.Parse(VersionString);
 
     public static BepInEx.Logging.ManualLogSource Logger = null!;
@@ -39,6 +39,7 @@ public class AtlasPlugin : BasePlugin
     public static ConfigEntry<bool> CfgEnabled = null!;
     public static ConfigEntry<bool> CfgBuildPocMap = null!;
     public static ConfigEntry<bool> CfgErrorStackTraces = null!;
+    public static ConfigEntry<bool> CfgMapFileTest = null!;
     public static ConfigEntry<string> CfgForceMap = null!;
     public static ConfigEntry<bool> CfgMapShot = null!;
     public static ConfigEntry<bool> CfgUiShot = null!;
@@ -46,6 +47,7 @@ public class AtlasPlugin : BasePlugin
     public static ConfigEntry<bool> CfgLobbyShot = null!;
     public static ConfigEntry<string> CfgTaskTest = null!;
     public static ConfigEntry<bool> CfgViewTestVanilla = null!;
+    public static ConfigEntry<string> CfgAssetSource = null!;
 
     /// <summary>Die Karte fuer die naechste Skeld-Runde (Auswahl im Freeplay-/Lobby-Menue).</summary>
     internal static AtlasMapDef SelectedMap() => AtlasSelection.Selected();
@@ -76,6 +78,13 @@ public class AtlasPlugin : BasePlugin
             "shots and view spots after the round start only run in autotests (freeplay with ForceMap or TaskTest).");
         CfgViewTestVanilla = Config.Bind("Diagnostics", "ViewTestVanilla", false,
             "Diagnostics only: on an UNMODIFIED map, snap the local player to a test spot and take a screen shot + vision log once per round.");
+        CfgMapFileTest = Config.Bind("Diagnostics", "MapFileTest", false,
+            "Diagnostics only: export the built-in maps as map.json to <game>/AtlasShots/maps, check the round trip " +
+            "and register the museum a second time from its file as 'museum_file'.");
+        AtlasVanillaOptions.Bind(Config);
+        CfgAssetSource = Config.Bind("Assets", "Download source", "",
+            "Where the map images are downloaded from. Empty = the UnknownsAtlas-Assets repository at the tag of " +
+            "this build. Only that repository or a local test server (http://127.0.0.1:...) is accepted.");
         CfgErrorStackTraces = Config.Bind("Diagnostics", "ErrorStackTraces", true,
             "Ask Unity for script stack traces on errors. Answers WHERE the NullReferenceExceptions " +
             "after the map wipe come from - Unity logs them without a trace by default.");
@@ -133,9 +142,19 @@ public class AtlasPlugin : BasePlugin
         Logger.LogInfo("[Atlas] Patches applied (map build, map selection, diagnostics)");
         AtlasMuseumBuilder.PatchTaskNames(Harmony);
 
+        // Karten als Datei (map.json): eingebettet und unter plugins/AtlasMaps
+        try { if (CfgMapFileTest.Value) AtlasMapFile.DiagTest(); } catch (System.Exception e) { Logger.LogError($"[Atlas] map file test: {e}"); }
+        AtlasMapFile.Worlds["train"] = () => new AtlasTrainWorld();            // Polaris Express: Fahrt, Rauch, Funken
+        try { AtlasMapFile.RegisterAll(); } catch (System.Exception e) { Logger.LogError($"[Atlas] map files: {e}"); }
+
         // Self-updater: checks the GitHub releases and offers an in-game update (main menu and
         // Mod Manager), like the family's other mods.
-        AddComponent<AtlasUpdater>();
+        var updater = AddComponent<AtlasUpdater>();
+
+        // Kartenbilder aus dem Asset-Repo (nicht mehr in der DLL): bei jedem Start pruefen, Fehlendes laden,
+        // Ordner auf Aenderungen ueberwachen (AtlasAssetStore).
+        try { AtlasAssetStore.Start(updater, CfgAssetSource.Value); }
+        catch (System.Exception e) { Logger.LogError($"[Atlas] asset store: {e}"); }
     }
 }
 

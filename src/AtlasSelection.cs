@@ -207,6 +207,7 @@ internal static class AtlasSelection
     [HarmonyPatch(typeof(HudManager), nameof(HudManager.Update))]
     internal static void LobbyBehaviour_Update_Postfix()
     {
+        AtlasAssetStore.LobbyTick();
         if (LobbyBehaviour.Instance == null) return;
         LobbyVisualTick();
         AtlasPreload.Tick();

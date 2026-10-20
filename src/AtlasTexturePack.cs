@@ -42,7 +42,7 @@ internal static class AtlasTexturePack
 
     public static bool Has(Assembly asm, string res)
     {
-        try { return asm.GetManifestResourceInfo(PackedName(res)) != null; }
+        try { return AtlasAssetStore.Exists(asm, PackedName(res)); }
         catch { return false; }
     }
 
@@ -51,7 +51,7 @@ internal static class AtlasTexturePack
     {
         try
         {
-            using var s = asm.GetManifestResourceStream(PackedName(res));
+            using var s = AtlasAssetStore.Open(asm, PackedName(res));
             if (s == null) return null;
             var head = new byte[HeaderSize];
             if (!ReadFully(s, head)) return null;

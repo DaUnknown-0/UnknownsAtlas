@@ -133,7 +133,7 @@ internal static class AtlasRex
     /// tote Impostoren duerfen wie bei Vanilla sabotieren, User 04.10.).</summary>
     internal static bool HostTryStart()
     {
-        if (!Museum || Active) return false;
+        if (!Museum || Active || AtlasWorld.CriticalActive()) return false;
         var sab = SabKit.Sys<SabotageSystemType>(SystemTypes.Sabotage);
         // wie jede Sabotage: nicht waehrend einer anderen und nicht in der gemeinsamen Abklingzeit
         if (sab != null && (sab.AnyActive || sab.Timer > 0f))
@@ -239,12 +239,13 @@ internal static class AtlasRex
         if (result == EndLost) EndGame();
     }
 
-    /// <summary>Waehrend der Rex wach ist, kann keine andere Sabotage starten: die gemeinsame Abklingzeit
-    /// der Sabotage-Karte bleibt oben (die Knoepfe zeigen sie wie nach jeder Sabotage an).</summary>
+    /// <summary>Waehrend der Rex wach ist, kann keine andere Sabotage starten: wie bei einer Vanilla-Sabotage
+    /// (User 19.10.) bekommen die anderen Sabotagen beim Ausloesen die normale Abklingzeit von 30 s, die bis
+    /// zum Ende eingefroren bleibt und erst danach ablaeuft (vorher 10 s, die Knoepfe zeigten "9").</summary>
     private static void LockSabotages()
     {
         var sab = SabKit.Sys<SabotageSystemType>(SystemTypes.Sabotage);
-        if (sab != null && sab.Timer < 5f) SetSabotageTimer(10f);
+        if (sab != null && sab.Timer < 29.5f) SetSabotageTimer(30f);
     }
 
     internal static void SetSabotageTimer(float t)
@@ -299,6 +300,7 @@ internal static class AtlasRex
         ClearArrows();
         ShowHint(null, default);
         StripTaskLine();
+        AtlasCrisisHud.Hide("rex");
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} ended: {(result == EndSlept ? "Rex sleeps" : result == EndMeeting ? "meeting" : "impostors win")}");
     }
 
@@ -322,6 +324,10 @@ internal static class AtlasRex
         }
         ArrowsTick();
         TaskLineTick();
+        // Restzeit und Schlafbalken fuer alle oben in der Bildmitte, auch fuer Geister (User 19.10.)
+        bool blink = Mathf.Repeat(Time.time, 1f) < 0.5f;
+        AtlasCrisisHud.Show("rex", $"REX AWAKE  {Mathf.CeilToInt(TimeLeft)}s   (asleep {Mathf.FloorToInt(Sleep)}%)",
+                            blink ? new Color(1f, 0.45f, 0.4f) : new Color(1f, 0.29f, 0.25f));
         ClickTick();
         MelodyTick(dt, true);
     }
@@ -623,7 +629,7 @@ internal static class AtlasRex
     }
 
     /// <summary>Pfeil aus einer Sabotageaufgabe der Karte (Reaktor zuerst), wie ihn Vanilla zu den Konsolen zeigt.</summary>
-    private static ArrowBehaviour VanillaArrow()
+    internal static ArrowBehaviour VanillaArrow()
     {
         var ship = ShipStatus.Instance;
         if (ship == null || ship.SpecialTasks == null) return null;
@@ -643,7 +649,7 @@ internal static class AtlasRex
         return any;
     }
 
-    private static Sprite ArrowSprite()
+    internal static Sprite ArrowSprite()
     {
         if (_arrowSprite != null) return _arrowSprite;
         const int N = 64;
@@ -694,11 +700,17 @@ internal static class AtlasRex
         catch { }
     }
 
+    // entfernt die eigene Zeile auch, wenn eine andere Krise (Rex/Ticket/Runaway/Smoke) ihre davor gesetzt hat;
+    // vorher nur am Textanfang, dann setzte jede Krise ihre Zeile pro Takt erneut davor (Liste wuchs)
     private static string Strip(string text)
     {
-        if (!text.StartsWith(TaskMark, StringComparison.Ordinal)) return text;
-        int nl = text.IndexOf('\n');
-        return nl >= 0 ? text.Substring(nl + 1) : "";
+        int at;
+        while ((at = text.IndexOf(TaskMark, StringComparison.Ordinal)) >= 0)
+        {
+            int nl = text.IndexOf('\n', at);
+            text = text.Substring(0, at) + (nl >= 0 ? text.Substring(nl + 1) : "");
+        }
+        return text;
     }
 
     // ------------------------------------------------------------------ Stationen anklicken

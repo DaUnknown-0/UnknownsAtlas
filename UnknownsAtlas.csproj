@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <TargetFramework>net6.0</TargetFramework>
-        <Version>1.0.1</Version>
+        <Version>1.0.1.1</Version>
         <Description>UNKNOWN'S ATLAS - custom maps for Among Us, built into the Skeld (relocate-in-place). Current map: Vesper Museum. Built for AU 2024.11.26 / BepInEx 6.0.0-be.697 / Reactor 2.3.1.</Description>
         <Authors>DaUnknown-0</Authors>
         <LangVersion>latest</LangVersion>
@@ -19,26 +19,20 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- Kartenbilder (Boden-/Objekt-/Konsolenatlanten aller eingebauten Karten, Minispiel- und Rauswurfbilder)
+             liegen NICHT mehr in der DLL: AtlasAssetStore laedt sie aus dem Repo UnknownsAtlas-Assets (Liste und
+             Pruefsummen in src/AtlasAssetCatalog.g.cs, erzeugt von tools/build_assets_repo.py). Nach jedem
+             Neuerzeugen einer Karte: pack_textures.py, dann build_assets_repo.py mit neuem Tag, Asset-Repo taggen. -->
         <!-- Vesper-Museum, erzeugt von tools/gen_museum.py -->
         <!-- Boden als Kacheln (160 px/m, Unity-Grenze 8192), Objekte in mehreren Atlanten.
              Boden-, Objekt- und Konsolenbilder liegen als .atx bei (fertiges DXT mit Mipmaps, AtlasTexturePack):
              nach jedem Neuerzeugen der Karte python tools/pack_textures.py assets museum wald park ausfuehren.
              Die PNG/JPG-Quellen bleiben im Repo, kommen aber nicht mehr in die DLL. -->
-        <EmbeddedResource Include="assets\museum_floor_*.atx"
-                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
-        <EmbeddedResource Include="assets\museum_consoles_*.atx"
-                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
-        <EmbeddedResource Include="assets\museum_props_*.atx"
-                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
         <EmbeddedResource Include="assets\button_*.png"
                           LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
         <EmbeddedResource Include="assets\icon_*.png"
                           LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
-        <EmbeddedResource Include="assets\task_*.png"
-                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
         <!-- Rauswurf-Hintergruende, erzeugt von tools/gen_eject.py (deckend, daher JPG) -->
-        <EmbeddedResource Include="assets\task_eject_*.jpg"
-                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
         <!-- Regie der Rauswurf-Szenen, erzeugt von tools/eject_scenes.py (EjectEngine) -->
         <EmbeddedResource Include="assets\eject_scenes.json"
                           LogicalName="UnknownsAtlas.Resources.eject_scenes.json" />
@@ -46,25 +40,25 @@
         <EmbeddedResource Include="assets\sfx_*.wav"
                           LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
         <!-- Forststation Nadelkamm v6, erzeugt von tools/gen_wald.py -->
-        <EmbeddedResource Include="assets\wald_floor_*.atx"
-                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
-        <EmbeddedResource Include="assets\wald_props_*.atx"
-                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
-        <EmbeddedResource Include="assets\wald_consoles_*.atx"
-                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
         <EmbeddedResource Include="assets\wald_minimap.png"
                           LogicalName="UnknownsAtlas.Resources.wald_minimap.png" />
         <EmbeddedResource Include="assets\museum_minimap.png"
                           LogicalName="UnknownsAtlas.Resources.museum_minimap.png" />
         <!-- Moonlight Carnival (Graybox), erzeugt von tools/gen_park.py -->
-        <EmbeddedResource Include="assets\park_floor_*.atx"
-                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
-        <EmbeddedResource Include="assets\park_props_*.atx"
-                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
-        <EmbeddedResource Include="assets\park_consoles_*.atx"
-                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
         <EmbeddedResource Include="assets\park_minimap.png"
                           LogicalName="UnknownsAtlas.Resources.park_minimap.png" />
+        <!-- Karten im Dateiformat (docs/MAP_FORMAT.md): je Ordner map.json + Paket, AtlasMapFile findet sie
+             als "UnknownsAtlas.Maps.<key>.<datei>". Polaris Express aus tools/gen_train.py.
+             Eingebettet nur, was vor dem ersten Download gebraucht wird (map.json fuer die Anmeldung, Kartenknopf,
+             Symbol, Minikarte, Benutzen-Knoepfe); Boden, Objekte, Hintergrund, Effekte und Minispielbilder kommen
+             aus dem Asset-Repo (tools/build_assets_repo.py, Gruppe "train"). -->
+        <EmbeddedResource Include="assets\train\map.json;assets\train\button_*.png;assets\train\icon_*.png;assets\train\*_minimap.png;assets\train\task_*_button.png"
+                          LogicalName="UnknownsAtlas.Maps.train.%(Filename)%(Extension)" />
+        <!-- Zusatz-Sabotagen der Vanilla-Karten (AtlasVanillaCrisis), erzeugt von tools/vc_art.py. Eingebettet nur die
+             Kartenknoepfe (icon_vc_*); Minispiel-Tafeln (task_vc_*) und Effektbilder (fx_vc_*) kommen aus dem
+             Asset-Repo. Fehlen sie noch, zeichnen Minispiele und Effekte ihre Laufzeitformen wie vorher. -->
+        <EmbeddedResource Include="assets\vanilla_crises\icon_vc_*.png"
+                          LogicalName="UnknownsAtlas.Resources.%(Filename)%(Extension)" />
     </ItemGroup>
 
     <ItemGroup>

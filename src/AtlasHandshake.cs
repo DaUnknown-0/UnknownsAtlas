@@ -207,6 +207,25 @@ internal static class AtlasHandshake
         return list;
     }
 
+    /// <summary>Vanilla-Krisen (AtlasVanillaCrisis): jeder Mitspieler braucht dieselbe Atlas-Version, sonst sieht er die
+    /// Krise nicht und kann sie nicht beheben. Der Kartenbau-Schalter spielt hier keine Rolle. Leer = alle passen.</summary>
+    internal static List<string> VersionMismatches()
+    {
+        var list = new List<string>();
+        var ac = AmongUsClient.Instance;
+        if (ac == null || ac.allClients == null) return list;
+        var local = Local;
+        for (int i = 0; i < ac.allClients.Count; i++)
+        {
+            var c = ac.allClients[i];
+            if (c == null || c.Id == ac.ClientId || c.Character == null || c.Character == PlayerControl.LocalPlayer) continue;
+            string name = c.Character.Data != null ? c.Character.Data.PlayerName : $"#{c.Id}";
+            if (!Peers.TryGetValue(c.Id, out var p)) list.Add($"{name}: Unknown's Atlas missing or outdated");
+            else if (p.Version != local) list.Add($"{name}: Atlas v{Fmt(p.Version)} (host v{Fmt(local)})");
+        }
+        return list;
+    }
+
     // Lobby: Hallo senden, Mod-Check-Spalte pflegen, beim Host die Warnung ueber dem Startknopf.
     // Priority.Low: nach TORs Postfix, der GameStartText jeden Frame neu setzt oder leert.
     [HarmonyPostfix]

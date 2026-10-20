@@ -39,7 +39,7 @@ internal static class AtlasPreload
 
     private static string _key;                 // Karte, deren Warteschlange laeuft oder fertig ist
     private static bool _queued;
-    private static float _changedAt, _next, _startedAt;
+    private static float _changedAt, _next, _startedAt, _foreignAt;
     private static int _total;
     private static double _mainMs;
     private static readonly List<Item> Work = new();
@@ -54,6 +54,13 @@ internal static class AtlasPreload
             _changedAt = Time.time;
             _queued = false;
             Work.Clear();
+        }
+        // Quellkarten fremder Aufgaben (AtlasForeignTasks), auch nach jeder Runde erneut; zweimal je Sekunde reicht
+        if (Time.time >= _foreignAt && Time.time - _changedAt >= SettleSeconds)
+        {
+            _foreignAt = Time.time + 0.5f;
+            try { AtlasForeignTasks.Preload(key != null ? AtlasSelection.Selected() : null); }
+            catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} foreign maps: {e.Message}"); }
         }
         if (key == null) return;
         if (!_queued)

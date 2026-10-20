@@ -36,7 +36,7 @@ internal static class AtlasForeignTasks
 
     internal static void Build(ShipStatus ship, Material outlineMat)
     {
-        Release();
+        ReleaseCopies();            // die vorgeladenen Quellkarten bleiben (Preload), nur alte Kopien weg
         var defs = AtlasMuseumBuilder.D.ForeignTasks;
         if (defs == null || defs.Length == 0) return;
         var t0 = System.Diagnostics.Stopwatch.StartNew();
@@ -113,18 +113,69 @@ internal static class AtlasForeignTasks
 
     private static ShipStatus SourceShip(int shipId)
     {
-        if (!Handles.TryGetValue(shipId, out var h))
+        var t0 = System.Diagnostics.Stopwatch.StartNew();
+        bool preloaded = Handles.TryGetValue(shipId, out var h);
+        if (!preloaded)
         {
-            var prefabs = AmongUsClient.Instance?.ShipPrefabs;
-            if (prefabs == null || shipId < 0 || shipId >= prefabs.Count || prefabs[shipId] == null) return null;
-            var t0 = System.Diagnostics.Stopwatch.StartNew();
-            h = Addressables.LoadAssetAsync<GameObject>(prefabs[shipId].RuntimeKey);
-            h.WaitForCompletion();
-            Handles[shipId] = h;
-            AtlasPlugin.Logger.LogInfo($"{LogPrefix} map {shipId} loaded in {t0.ElapsedMilliseconds} ms ({h.Status})");
+            if (!StartLoad(shipId, out h)) return null;
         }
+        // Rundenstart vor dem Ende des Vorladens (oder ohne Lobby, Freeplay): den Rest abwarten
+        if (!h.IsDone) h.WaitForCompletion();
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} map {shipId} {(preloaded ? "from the lobby preload" : "loaded")}, waited {t0.ElapsedMilliseconds} ms ({h.Status})");
         if (h.Status != AsyncOperationStatus.Succeeded || h.Result == null) return null;
         return h.Result.GetComponent<ShipStatus>();
+    }
+
+    private static bool StartLoad(int shipId, out AsyncOperationHandle<GameObject> h)
+    {
+        h = default;
+        var prefabs = AmongUsClient.Instance?.ShipPrefabs;
+        if (prefabs == null || shipId < 0 || shipId >= prefabs.Count || prefabs[shipId] == null) return false;
+        h = Addressables.LoadAssetAsync<GameObject>(prefabs[shipId].RuntimeKey);
+        Handles[shipId] = h;
+        return true;
+    }
+
+    // ------------------------------------------------------------------ Vorladen in der Lobby
+    //
+    // 17.10.: Die Villa borgt sich eine Aufgabe der Airship. Deren Prefab wurde beim Rundenstart synchron geladen
+    // (WaitForCompletion): 804 ms Stillstand im Hauptthread, der groesste Rest des Erstlade-Freezes nach den
+    // vorkomprimierten Texturen. Jetzt laedt der Lobby-Takt (AtlasPreload) die Quellkarten asynchron vor;
+    // ShipStatus.OnDestroy gibt sie nach der Runde frei, die Lobby laedt sie dann erneut.
+
+    private static readonly HashSet<int> _loggedReady = new();
+    private static readonly Dictionary<int, float> _preloadStart = new();
+
+    /// <summary>Aus dem Lobby-Takt: Quellkarten der gewaehlten Karte asynchron laden, andere freigeben.</summary>
+    internal static void Preload(AtlasMapDef def)
+    {
+        var need = new HashSet<int>();
+        if (def?.ForeignTasks != null) foreach (var d in def.ForeignTasks) need.Add(d.ShipId);
+        foreach (var id in new List<int>(Handles.Keys))
+        {
+            if (need.Contains(id) || _holder != null) continue;             // waehrend einer Runde nichts freigeben
+            try { Addressables.Release(Handles[id]); } catch { }
+            Handles.Remove(id);
+            _loggedReady.Remove(id);
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} map {id} released (not needed by {def?.Key ?? "the vanilla map"})");
+        }
+        foreach (int id in need)
+        {
+            if (!Handles.ContainsKey(id))
+            {
+                if (StartLoad(id, out _)) { _preloadStart[id] = Time.time; _loggedReady.Remove(id); }
+                continue;
+            }
+            var h = Handles[id];
+            if (h.IsDone && _loggedReady.Add(id))
+                AtlasPlugin.Logger.LogInfo($"{LogPrefix} map {id} preloaded in the lobby after {Time.time - (_preloadStart.TryGetValue(id, out var s) ? s : Time.time):F1} s ({h.Status})");
+        }
+    }
+
+    private static void ReleaseCopies()
+    {
+        try { if (_holder != null) Object.Destroy(_holder); } catch { }
+        _holder = null;
     }
 
     private static Il2CppReferenceArray<NormalPlayerTask> Append(Il2CppReferenceArray<NormalPlayerTask> list, NormalPlayerTask t)
@@ -141,5 +192,6 @@ internal static class AtlasForeignTasks
         _holder = null;
         foreach (var h in Handles.Values) try { Addressables.Release(h); } catch { }
         Handles.Clear();
+        _loggedReady.Clear();
     }
 }

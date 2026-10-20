@@ -40,13 +40,13 @@ internal static class AtlasMuseumBuilder
     public const string AppDomainKey = "UnknownsAtlas.ActiveMap";
 
     // Physik-Ebenen (Nightfall-Survey: Ship 9, Shadow 10, ShortObjects 12, Ignore Raycast 2).
-    private const int LayerShip = 9;
+    internal const int LayerShip = 9;
     private const int LayerShadow = 10;
     private const int LayerShortObjects = 12;
     private const int LayerIgnoreRaycast = 2;
 
     // Weltmeter -> z. Skeld: Boeden ~8, Konsolen ~6,8, Spieler ~y/1000.
-    private const float FloorZ = 9f;
+    internal const float FloorZ = 9f;
     private const float ColliderZ = 8f;   // Skeld-Wandtiefe, siehe BuildWalls
 
     private static ShipStatus _builtFor;
@@ -64,6 +64,8 @@ internal static class AtlasMuseumBuilder
 
     /// <summary>true, solange eine Museumsrunde laeuft (fuer die Raumnamen).</summary>
     internal static bool Active => _builtFor != null;
+    /// <summary>true waehrend Build() laeuft (Active ist dann noch false, D aber schon die neue Karte).</summary>
+    internal static bool Building { get; private set; }
 
     /// <summary>Name und Flaechenmitte je Raum-Typ der gebauten Karte, auch fuer Raum-Typen, die die
     /// Skeld nicht kennt (Park-Konzept: zusaetzliche Raeume). Gefuellt in BuildRooms.</summary>
@@ -109,7 +111,8 @@ internal static class AtlasMuseumBuilder
             AtlasAssets.ReleaseOtherMaps(D);
             AtlasAssets.ResetTiming();
             var total = System.Diagnostics.Stopwatch.StartNew();
-            Build(__instance);
+            Building = true;
+            try { Build(__instance); } finally { Building = false; }
             AtlasPlugin.Logger.LogInfo($"[Atlas/Timing] {D.Key}: build {total.ElapsedMilliseconds} ms ({_phases}); " +
                 $"textures {AtlasAssets.TexturesLoaded} loaded in {AtlasAssets.TextureMs:F0} ms " +
                 $"({AtlasAssets.TexturesPacked} packed, the others came from the lobby preload)");
@@ -468,7 +471,7 @@ internal static class AtlasMuseumBuilder
                 var t = ship.DummyLocations[i];
                 if (t == null) continue;
                 float a = Mathf.PI * 2f * i / Mathf.Max(1, n);
-                MoveTo(t, D.Spawn + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 3.6f);
+                MoveTo(t, D.Spawn + new Vector2(Mathf.Cos(a) * D.DummyRadius.x, Mathf.Sin(a) * D.DummyRadius.y));
             }
         }
 
@@ -809,6 +812,22 @@ internal static class AtlasMuseumBuilder
     }
 
     /// <summary>Moebel, Vitrinen, Exponate: je ein Sprite aus dem Objektatlas, Pivot links unten.</summary>
+    // Nachsetzen (AtlasAssetStore): fehlten Kartenbilder beim Bau, weil der Download noch lief, bekommen Boden und
+    // Objekte ihre Grafik, sobald alle Dateien der Karte da sind. Mechanik und Kollision stehen ab dem Bau.
+    private static readonly List<System.Action> LateFill = new();
+    private static string _lateFillMap;
+
+    /// <summary>Aus dem Takt des Asset-Speichers: fehlende Grafiken nachtragen, wenn die Karte jetzt komplett ist.</summary>
+    internal static void TryLateFill()
+    {
+        if (LateFill.Count == 0 || D == null || D.ResourcePrefix != _lateFillMap) return;
+        if (!AtlasAssetStore.MapReady(D.ResourcePrefix)) return;
+        int n = LateFill.Count;
+        foreach (var a in LateFill) { try { a(); } catch (System.Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} late fill: {e.Message}"); } }
+        LateFill.Clear();
+        AtlasPlugin.Logger.LogInfo($"{LogPrefix} map images arrived after the build: {n} floor tiles/objects filled in");
+    }
+
     private static int BuildProps(GameObject world)
     {
         FadeProps.Clear();
@@ -818,16 +837,31 @@ internal static class AtlasMuseumBuilder
         foreach (var p in D.Props)
         {
             var tex = AtlasAssets.MapPropsTexture(D, p.Atlas);
-            // Platzhalter, damit PropRenderers[i] immer zu D.Props[i] gehoert (UnmaskOccluders).
-            if (tex == null) { PropRenderers.Add(null); continue; }
-            var sprite = Sprite.Create(tex, new Rect(p.X, p.Y, p.W, p.H), Vector2.zero, D.PropPixelsPerMeter);
-            sprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
+            Sprite sprite = null;
+            if (tex != null)
+            {
+                sprite = Sprite.Create(tex, new Rect(p.X, p.Y, p.W, p.H), Vector2.zero, D.PropPixelsPerMeter);
+                sprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
+            }
             var go = Child(root, $"Prop_{p.Kind}_{n}", LayerShortObjects);
             float sortLine = PropSortLine(p.BaseY, p.FootX0, p.FootX1);
             if (sortLine > p.BaseY) backSorted++;
             go.transform.position = new Vector3(p.WorldX, p.WorldY, SortZ(sortLine));
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite = sprite;
+            if (sprite == null)
+            {
+                var pp = p;
+                _lateFillMap = D.ResourcePrefix;
+                LateFill.Add(() =>
+                {
+                    var t2 = AtlasAssets.MapPropsTexture(D, pp.Atlas);
+                    if (t2 == null || sr == null) return;
+                    var s2 = Sprite.Create(t2, new Rect(pp.X, pp.Y, pp.W, pp.H), Vector2.zero, D.PropPixelsPerMeter);
+                    s2.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
+                    sr.sprite = s2;
+                });
+            }
             Mask(sr);
             PropRenderers.Add(sr);
             float top = p.WorldY + p.H / D.PropPixelsPerMeter;
@@ -1071,10 +1105,10 @@ internal static class AtlasMuseumBuilder
         var root = new GameObject("Atlas_Floor") { layer = LayerShip };
         root.transform.SetParent(world.transform, false);
         int n = 0;
+        LateFill.Clear();
         foreach (var t in D.FloorTiles)
         {
             var sprite = AtlasAssets.MapFloorTile(D, t.Index);
-            if (sprite == null) continue;
             var go = new GameObject($"Tile_{t.Index}") { layer = LayerShip };
             go.transform.SetParent(root.transform, false);
             go.transform.localPosition = new Vector3(t.WorldX, t.WorldY, FloorZ);
@@ -1082,6 +1116,13 @@ internal static class AtlasMuseumBuilder
             sr.sprite = sprite;
             sr.sortingOrder = -1000;
             Mask(sr);
+            if (sprite == null)
+            {
+                int idx = t.Index;
+                _lateFillMap = D.ResourcePrefix;
+                LateFill.Add(() => { if (sr != null) sr.sprite = AtlasAssets.MapFloorTile(D, idx); });
+                continue;
+            }
             n++;
         }
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} floor: {n}/{D.FloorTiles.Length} tiles");
@@ -1602,7 +1643,9 @@ internal static class AtlasMuseumBuilder
             foreach (var room in copy.infectedOverlay.rooms)
             {
                 if (room == null) continue;
-                if (!D.MapButtons.TryGetValue(room.room, out var w) && !RoomCenter(room.room, out w))
+                // Eigene kritische Sabotagen ersetzen Reaktor und O2 (Zugkarte): die Vanilla-Knoepfe weg
+                bool replaced = (room.room == SystemTypes.Reactor && D.RunawaySeconds > 0f) || (room.room == SystemTypes.LifeSupp && D.SmokeHatches != null && D.SmokeHatches.Length > 0);
+                if (replaced || (!D.MapButtons.TryGetValue(room.room, out var w) && !RoomCenter(room.room, out w)))
                 {
                     room.gameObject.SetActive(false);
                     continue;

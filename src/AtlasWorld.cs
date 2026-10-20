@@ -20,6 +20,10 @@
 //  14 Show [...]                        Museum: Planetarium-Show (AtlasPlanetarium)
 //  15 Ferry [sub][...]                  Faehren/Fahrzeuge auf festen Strecken (AtlasFerry)
 //  16 SabWait [a][b] (je ushort)        Host -> alle: Restzeit der Sabotage-Abklingzeiten in Zehntelsekunden
+//  17 Ticket [sub][...]                 Zug-Sabotage "Conductor's Round" (AtlasTicket)
+//  18 Runaway [sub][...]                Zug-Sabotage "Runaway Train" (AtlasRunaway)
+//  19 Smoke [sub][...]                  Zug-Sabotage "Smoke in the Cars" (AtlasSmoke)
+//  20 Crisis [sub][...]                 Krisen auf den Vanilla-Karten (AtlasVanillaCrisis), auch ohne Atlas-Karte
 //                                       (a gemeinsam, b Rex). Lag bis 08.10. faelschlich auf 8 und wurde
 //                                       dort vom Hello-Handshake abgefangen; Clients ohne Op 16 ignorieren es.
 //
@@ -50,6 +54,9 @@ internal static class AtlasWorld
     private const byte OpWeather = 1, OpStrike = 2, OpSabStart = 3, OpSabReq = 4, OpRepair = 5, OpSabEnd = 6, OpEjectScene = 7, OpSabWait = 16;
     public const byte SabTrees = 1;
     public const byte SabRex = 3;          // 2 = AtlasParkWorld.SabRide
+    public const byte SabTicket = 5;       // "Conductor's Round" (AtlasTicket), jede Karte mit "ticket" in der Kartendatei
+    public const byte SabRunaway = 6;      // "Runaway Train" (AtlasRunaway, Kartendatei "runaway", ersetzt den Reaktor)
+    public const byte SabSmoke = 7;        // "Smoke in the Cars" (AtlasSmoke, Kartendatei "smoke", ersetzt O2)
 
     public enum Weather : byte { Clear, Rain, Fog, Storm }
 
@@ -86,10 +93,14 @@ internal static class AtlasWorld
         AtlasGallery.Reset();
         AtlasParkWorld.Reset();
         AtlasRex.Reset();
+        AtlasTicket.Reset();
+        AtlasRunaway.Reset();
+        AtlasSmoke.Reset();
         AtlasLookout.Reset();
         AtlasFigure.Reset();
         AtlasView.Reset();
         AtlasUse.Reset();
+        AtlasStairs.Reset();
         AtlasBlockGuard.Reset();
     }
 
@@ -133,6 +144,7 @@ internal static class AtlasWorld
         // Kanu: Bootssteg (A) <-> Anleger am Wasserwerk (B), langsamer als zu Fuss nicht, aber gut sichtbar
         if (Wald) AtlasFerry.Create(_root, "canoe", "task_wald_canoe.png", AtlasWaldData.CanoePath,
             AtlasWaldData.CanoeA, AtlasWaldData.CanoeB, 3.6f, 6f, 0.85f, "task_btn_canoe.png", "splash");
+        AtlasStairs.Build(D);                                     // Treppen zwischen Ebenen (Kartenfeld "stairs")
         // Welt-Mechaniken einer Karte aus einem anderen Plugin (IAtlasMapWorld, API 2)
         if (D.World != null)
         {
@@ -172,6 +184,8 @@ internal static class AtlasWorld
             byte op = reader.ReadByte();
             // Versions-Abgleich und Bau-Meldung gelten auch in der Lobby bzw. ohne gebaute Karte
             if (op == AtlasHandshake.OpHello || op == AtlasHandshake.OpBuildFailed) { AtlasHandshake.Receive(op, __instance, reader); return; }
+            // Krisen der Vanilla-Karten laufen ohne gebaute Atlas-Karte
+            if (op == AtlasVanillaCrisis.OpCrisis) { AtlasVanillaCrisis.Receive(__instance, fromHost, reader); return; }
             if (!AtlasMuseumBuilder.Active) return;
             switch (op)
             {
@@ -195,6 +209,9 @@ internal static class AtlasWorld
                     break;
                 case AtlasParkWorld.OpParkEvent when fromHost: AtlasParkWorld.Receive(reader); break;
                 case AtlasRex.OpRex: AtlasRex.Receive(__instance, fromHost, reader); break;
+                case AtlasTicket.OpTicket: AtlasTicket.Receive(__instance, fromHost, reader); break;
+                case AtlasRunaway.OpRunaway: AtlasRunaway.Receive(__instance, fromHost, reader); break;
+                case AtlasSmoke.OpSmoke: AtlasSmoke.Receive(__instance, fromHost, reader); break;
                 case AtlasLookout.OpLookout: AtlasLookout.Receive(__instance, reader); break;
                 case AtlasParkFun.OpFun: AtlasParkFun.Receive(__instance, fromHost, reader); break;
                 case AtlasPlanetarium.OpShow when fromHost: AtlasPlanetarium.Start(); break;
@@ -223,7 +240,7 @@ internal static class AtlasWorld
     {
         var r = SabKit.Sys<ReactorSystemType>(SystemTypes.Reactor);
         var o = SabKit.Sys<LifeSuppSystemType>(SystemTypes.LifeSupp);
-        return (r != null && r.IsActive) || (o != null && o.IsActive) || AtlasRex.Active;
+        return (r != null && r.IsActive) || (o != null && o.IsActive) || AtlasRex.Active || AtlasTicket.Active || AtlasRunaway.Active || AtlasSmoke.Active;
     }
 
     /// <summary>Gemeinsame Abklingzeit der Welt-Sabotagen (AtlasRex nach dem Ende).</summary>
@@ -310,7 +327,8 @@ internal static class AtlasWorld
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} sabotage {kind} refused: requester is no impostor");
             return;
         }
-        if (Time.time < _sabCooldownUntil || CriticalActive() || (kind != SabRex && VanillaSabBlocks()))
+        bool own = kind == SabRex || kind == SabTicket || kind == SabRunaway || kind == SabSmoke;   // pruefen selbst
+        if (Time.time < _sabCooldownUntil || CriticalActive() || (!own && VanillaSabBlocks()))
         {
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} sabotage {kind} refused: cooldown {Mathf.Max(0f, _sabCooldownUntil - Time.time):F0} s, critical {CriticalActive()}, vanilla {VanillaSabBlocks()}");
             HostSendWait();
@@ -325,6 +343,24 @@ internal static class AtlasWorld
         if (kind == SabRex)
         {
             if (Museum && AtlasRex.HostTryStart()) _sabCooldownUntil = Time.time + 30f;
+            HostSendWait();
+            return;
+        }
+        if (kind == SabTicket)
+        {
+            if (AtlasTicket.HostTryStart()) _sabCooldownUntil = Time.time + 30f;
+            HostSendWait();
+            return;
+        }
+        if (kind == SabRunaway)
+        {
+            if (AtlasRunaway.HostTryStart()) _sabCooldownUntil = Time.time + 30f;
+            HostSendWait();
+            return;
+        }
+        if (kind == SabSmoke)
+        {
+            if (AtlasSmoke.HostTryStart()) _sabCooldownUntil = Time.time + 30f;
             HostSendWait();
             return;
         }
@@ -721,6 +757,9 @@ internal static class AtlasWorld
             if (Wald && TreeSpots.Count > 0) list.Add((SabTrees, TreeSpots[0].C, "task_fallen_tree.png", 0.16f));
             if (Park) list.Add((AtlasParkWorld.SabRide, AtlasParkWorld.RideButtonSpot(), "task_button.png", 0.45f));
             if (Museum) list.Add((SabRex, AtlasMuseumLayout.RexMapButton, "task_museum_dino.png", 0.2f));
+            if (AtlasTicket.Available) list.Add((SabTicket, D.TicketButton, AtlasTicket.Icon, 0.2f));
+            if (AtlasRunaway.Available) list.Add((SabRunaway, D.RunawayButton, AtlasAssets.TaskArtExists(AtlasRunaway.Icon) ? AtlasRunaway.Icon : "task_button.png", 0.2f));
+            if (AtlasSmoke.Available) list.Add((SabSmoke, D.SmokeButton, AtlasAssets.TaskArtExists(AtlasSmoke.Icon) ? AtlasSmoke.Icon : "task_button.png", 0.2f));
             foreach (var (kind, w, icon, scale) in list)
             {
                 var go = Object.Instantiate(template.gameObject, ov.transform);
@@ -819,7 +858,7 @@ internal static class AtlasWorld
         foreach (var (b, r, kind) in MapButtons)
         {
             if (r == null) continue;
-            bool active = Trees.Count > 0 || AtlasParkWorld.EventActive || AtlasRex.Active;
+            bool active = Trees.Count > 0 || AtlasParkWorld.EventActive || AtlasRex.Active || AtlasTicket.Active || AtlasRunaway.Active || AtlasSmoke.Active;
             bool wait = cooling || (kind == SabRex && rexLeft > 0f);
             r.color = active ? new Color(1f, 0.4f, 0.4f) : wait ? new Color(0.5f, 0.5f, 0.5f) : Color.white;
         }
@@ -828,8 +867,8 @@ internal static class AtlasWorld
     // ------------------------------------------------------------------ Diagnose (AtlasTasks, "world:<was>")
 
     public static string DiagState() =>
-        $"weather {CurrentWeather}, trees {Trees.Count}, lasers {Lasers.Count}, log {LaserLog.Count}" +
-        (Park ? "; " + AtlasParkWorld.DiagState() + "; " + AtlasParkFun.DiagState() : "") + (Museum ? "; " + AtlasRex.DiagState() + "; " + AtlasPlanetarium.DiagState() : "") + (Wald ? "; " + AtlasDusk.DiagState() + "; " + AtlasFerry.Find("canoe")?.DiagState() : "");
+        $"weather {CurrentWeather}, trees {Trees.Count}, lasers {Lasers.Count}, log {LaserLog.Count}; {AtlasStairs.DiagState()}" +
+        (Park ? "; " + AtlasParkWorld.DiagState() + "; " + AtlasParkFun.DiagState() : "") + (Museum ? "; " + AtlasRex.DiagState() + "; " + AtlasPlanetarium.DiagState() : "") + (Wald ? "; " + AtlasDusk.DiagState() + "; " + AtlasFerry.Find("canoe")?.DiagState() : "") + (AtlasTicket.Available ? "; " + AtlasTicket.DiagState() : "") + (AtlasRunaway.Available ? "; " + AtlasRunaway.DiagState() + "; " + AtlasTrainWorld.DiagState() : "") + (AtlasSmoke.Available ? "; " + AtlasSmoke.DiagState() : "");
 
     private static void Snap(Vector2 p)
     {
@@ -927,12 +966,19 @@ internal static class AtlasWorld
             case "cams": AtlasMapShot.OpenCamerasForDiag(); break;
             // Museum-Sabotage "Rex erwacht": rex, rexmusic, rexlight, rexboth, rexlose (AtlasRex.Diag)
             case var r when r.StartsWith("rex", StringComparison.Ordinal) || r == "arrowinfo": AtlasRex.Diag(r, Snap); break;
+            // Zug-Sabotage "Conductor's Round": ticket, ticketstamp, ticketlose (AtlasTicket.Diag)
+            case var tk when tk.StartsWith("ticket", StringComparison.Ordinal): AtlasTicket.Diag(tk, Snap); break;
+            // Zug-Sabotagen: runaway, runawaybrake, runawaywheel, runawayboth, runawaylose; smoke, smokehatch, smokeall, smokelose
+            case var ra when ra.StartsWith("runaway", StringComparison.Ordinal): AtlasRunaway.Diag(ra, Snap); break;
+            case var sm when sm.StartsWith("smoke", StringComparison.Ordinal): AtlasSmoke.Diag(sm, Snap); break;
             // Forest-Hochsitz: lookoutbase, lookout1..3 (Sichtstufen), lookoutdown, lookoutdummy (AtlasLookout.Diag)
             case var l when l.StartsWith("lookout", StringComparison.Ordinal): AtlasLookout.Diag(l, Snap); break;
             // Park-Attraktionen: funlukas, funlukasmap, funcostume, funcostumedummy, funwheel, funwheeldummy,
             // funshuttle, funshuttleback (AtlasParkFun.Diag)
             case var f when f.StartsWith("fun", StringComparison.Ordinal): AtlasParkFun.Diag(f, Snap); break;
             case "canoe": AtlasFerry.Find("canoe")?.Diag(0, Snap); break;
+            // Treppen: stairs, stairsback, stairs:2, stairsback:2 (AtlasStairs.Diag)
+            case var st when st.StartsWith("stairs", StringComparison.Ordinal): AtlasStairs.Diag(st, Snap); break;
             case "canoeback": AtlasFerry.Find("canoe")?.Diag(1, Snap); break;
             case "dusk":
                 AtlasDusk.DiagAdvance(400f);
@@ -978,7 +1024,11 @@ internal static class AtlasWorld
             AtlasGallery.Tick(dt);
             AtlasFerry.TickAll(dt);                                // Pendelwagen (Park), Kanu (Wald)
             AtlasRex.Tick(dt);
+            AtlasTicket.Tick(dt);
+            AtlasRunaway.Tick(dt);
+            AtlasSmoke.Tick(dt);
             AtlasLookout.Tick(dt);
+            AtlasStairs.Tick(dt);
             var world = AtlasMuseumBuilder.D?.World;               // Karten anderer Plugins (API 2)
             if (world != null)
             {

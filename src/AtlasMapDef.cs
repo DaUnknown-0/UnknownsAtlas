@@ -54,6 +54,12 @@ public sealed class AtlasMapDef
     public (TaskTypes Type, int ShipId, string ConsoleKey, SystemTypes Room)[] ForeignTasks = Array.Empty<(TaskTypes, int, string, SystemTypes)>();
     public Vector2 EmergencyButton, SurveillanceConsole, AdminTable, FreeplayLaptop, Spawn;
     public float SpawnRadius;
+    /// <summary>Freeplay-Dummies stehen auf einer Ellipse um den Spawn (Halbachsen in m). Schmale Raeume
+    /// (Zugwagen) brauchen eine flache Ellipse, sonst stehen die Dummies in der Wand.</summary>
+    public Vector2 DummyRadius = new(3.6f, 3.6f);
+    /// <summary>Treppen zwischen Ebenen (AtlasStairs): je Treppe zwei Absaetze und die Knopftexte dort. Der
+    /// Use-Knopf an A bringt einen zu B und umgekehrt. Leer = keine.</summary>
+    public (Vector2 A, Vector2 B, string LabelA, string LabelB)[] Stairs = Array.Empty<(Vector2, Vector2, string, string)>();
     public Dictionary<int, Vector2> Vents;
     public int[][] VentNetworks;
     /// <summary>Zusaetzliche Verbindung zweier Vents ueber den dritten Nachbarn (Vent.Center), z. B. zwischen
@@ -84,6 +90,23 @@ public sealed class AtlasMapDef
     public Dictionary<string, string> TaskArt = new();
     /// <summary>Minispiel-Texte dieser Karte, gleiche Schluesselregel wie TaskArt (AtlasTaskKit.T).</summary>
     public Dictionary<string, string> TaskText = new();
+    /// <summary>Sabotage "Conductor's Round" (AtlasTicket, Kartendatei "ticket"): Fahrkarten-Lochzangen, Kartenknopf und
+    /// Sekunden bis zum Rauswurf. Leer = die Karte hat die Sabotage nicht.</summary>
+    public Vector2[] TicketStations = Array.Empty<Vector2>();
+    public Vector2 TicketButton;
+    public float TicketSeconds = 60f;
+    /// <summary>Sabotage "Runaway Train" (AtlasRunaway, Kartendatei "runaway", ersetzt den Reaktor): Dampfbremse,
+    /// Handbremse, Kartenknopf, Countdown. Sekunden 0 = die Karte hat sie nicht.</summary>
+    public Vector2 RunawayButton, RunawayBrake, RunawayHandbrake;
+    public float RunawaySeconds;
+    /// <summary>Sabotage "Smoke in the Cars" (AtlasSmoke, Kartendatei "smoke", ersetzt O2): Dachluken, Feuerquelle,
+    /// Kartenknopf, Countdown. Keine Luken = die Karte hat sie nicht.</summary>
+    public Vector2[] SmokeHatches = Array.Empty<Vector2>();
+    public Vector2 SmokeButton, SmokeSource;
+    public float SmokeSeconds;
+    /// <summary>Bewegte Hintergrund-Ebenen (Kartendatei "scroll", Welt-Mechanik train): nahtlos kachelbare Streifen
+    /// unter dem Boden, Breite in m, Parallaxe (1 = Fahrgeschwindigkeit).</summary>
+    public (string File, float Ppm, float Y0, float Y1, float WidthM, float Parallax)[] Scroll = Array.Empty<(string, float, float, float, float, float)>();
     /// <summary>Welt-Mechaniken der Karte (API 2, seit 15.10.): Atlas ruft OnBuilt/Tick/VisionFactor/OnDestroy
     /// wie fuer seine eigenen Welt-Systeme; null = keine. Die Factory liefert je Bau ein frisches Objekt.</summary>
     public IAtlasMapWorld World;
