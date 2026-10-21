@@ -138,7 +138,7 @@ internal static class AtlasForeignTasks
 
     // ------------------------------------------------------------------ Vorladen in der Lobby
     //
-    // 17.10.: Die Villa borgt sich eine Aufgabe der Airship. Deren Prefab wurde beim Rundenstart synchron geladen
+    // 17.10.: Eine Plugin-Karte borgt sich eine Aufgabe der Airship. Deren Prefab wurde beim Rundenstart synchron geladen
     // (WaitForCompletion): 804 ms Stillstand im Hauptthread, der groesste Rest des Erstlade-Freezes nach den
     // vorkomprimierten Texturen. Jetzt laedt der Lobby-Takt (AtlasPreload) die Quellkarten asynchron vor;
     // ShipStatus.OnDestroy gibt sie nach der Runde frei, die Lobby laedt sie dann erneut.

@@ -519,7 +519,11 @@ internal static class AtlasVanillaCrisis
         var ship = ShipStatus.Instance;
         if (ship.Pointer != _ship)
         {
+            // Ein Gast, der seinen ShipStatus erst nach den drei Freigaben des Hosts baut, hat die Maske schon:
+            // nicht wegwerfen (das Rundenende raeumt sie in ShipStatus.OnDestroy ab).
+            ushort keepMask = _allowed; bool keepKnown = _allowKnown;
             Reset();
+            if (!AmHost && keepKnown) { _allowed = keepMask; _allowKnown = true; }
             _ship = ship.Pointer;
             if (AmHost) HostPrepare();
         }
