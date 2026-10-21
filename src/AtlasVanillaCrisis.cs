@@ -678,6 +678,7 @@ internal static class AtlasVanillaCrisis
     {
         foreach (var sr in new[] { _tint, _snowA, _snowB, _dark, _noise, _burst, _heat }) if (sr != null) Object.Destroy(sr.gameObject);
         _tint = _snowA = _snowB = _dark = _noise = _burst = _heat = null;
+        if (FakeTargets.Count > 0) RestoreArrows();
         FakeTargets.Clear();
         _nextImpact = _impactUntil = 0f;
     }
@@ -766,6 +767,15 @@ internal static class AtlasVanillaCrisis
                 FakeTargets[nt.Arrow.Pointer] = new Vector3(p.x + Mathf.Cos(a) * dist, p.y + Mathf.Sin(a) * dist, 0f);
             }
         }
+        // Falsche Ziele jedes Bild selbst setzen (dieser Tick laeuft im HudManager.Update-Postfix). Bis 21.10. tat das ein
+        // Prefix auf ArrowBehaviour.Update: Il2Cpp dedupliziert diese winzige Methode, der Detour traf fremden Code und
+        // legte prozessweit alle UnityWebRequests lahm (leere Antworten, EOS-Anmeldung haengt, "We are offline").
+        foreach (var t in lp.myTasks)
+        {
+            var nt = t != null ? t.TryCast<NormalPlayerTask>() : null;
+            if (nt == null || nt.Arrow == null) continue;
+            if (FakeTargets.TryGetValue(nt.Arrow.Pointer, out var ft)) nt.Arrow.target = ft;
+        }
         var map = MapBehaviour.Instance;
         bool open = map != null && map.IsOpen && MeetingHud.Instance == null;
         if (!open) { if (_noise != null) _noise.gameObject.SetActive(false); return; }
@@ -787,12 +797,18 @@ internal static class AtlasVanillaCrisis
         _noise.transform.localPosition = new Vector3(UnityEngine.Random.Range(-NoiseTile / 2f, NoiseTile / 2f), UnityEngine.Random.Range(-NoiseTile / 2f, NoiseTile / 2f), -20f);
     }
 
-    [HarmonyPrefix]
-    [HarmonyPatch(typeof(ArrowBehaviour), nameof(ArrowBehaviour.Update))]
-    internal static void ArrowBehaviour_Update_Prefix(ArrowBehaviour __instance)
+    // Nach dem Funkchaos zeigen die Aufgabenpfeile wieder auf die echten Ziele (dieselbe Methode, die das Spiel beim
+    // Aufgabenschritt aufruft).
+    private static void RestoreArrows()
     {
-        if (FakeTargets.Count == 0 || Current == null || Current.Fx != "comms" || __instance == null) return;
-        if (FakeTargets.TryGetValue(__instance.Pointer, out var t)) __instance.target = t;
+        var lp = PlayerControl.LocalPlayer;
+        if (lp == null || lp.myTasks == null) return;
+        foreach (var t in lp.myTasks)
+        {
+            var nt = t != null ? t.TryCast<NormalPlayerTask>() : null;
+            if (nt == null || nt.Arrow == null || !FakeTargets.ContainsKey(nt.Arrow.Pointer)) continue;
+            try { nt.UpdateArrowAndLocation(); } catch { }
+        }
     }
 
     private static readonly Sprite[] Snow = new Sprite[2];

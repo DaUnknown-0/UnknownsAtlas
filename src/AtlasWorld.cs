@@ -299,7 +299,7 @@ internal static class AtlasWorld
                 var c = Vector2.zero; foreach (var p in room.Area) c += p; c /= room.Area.Length;
                 c += Random.insideUnitCircle * 2f;
                 ApplyStrike(c);
-                Send(OpStrike, w => { w.Write((short)(c.x * 100f)); w.Write((short)(c.y * 100f)); });
+                Send(OpStrike, w => { w.Write(unchecked((ushort)(short)(c.x * 100f))); w.Write(unchecked((ushort)(short)(c.y * 100f))); });   // Hazel kennt kein Write(short): 2 Bytes als ushort fuer ReadInt16
                 // Der Blitz wirft hoechstens einen Baum (kein Waldbrand mehr, s. Dateikopf); nicht
                 // waehrend einer kritischen Sabotage, die Crew hat dann genug zu tun.
                 if (Random.value < 0.3f && !CriticalActive() && Trees.Count == 0 && TreeSpots.Count > 0)
