@@ -59,6 +59,9 @@ internal static class AtlasForeignTasks
         int added = 0;
         foreach (var (type, shipId, key, room) in defs)
         {
+            // Every entry reserves its index, loaded or not: a client whose source map failed to load
+            // skipped the entry and gave every later task another index than the host (audit 21.10.).
+            int myIndex = nextIndex++;
             try
             {
                 var source = SourceShip(shipId);
@@ -74,7 +77,7 @@ internal static class AtlasForeignTasks
                 var task = Object.Instantiate(found.gameObject, _holder.transform).GetComponent<NormalPlayerTask>();
                 task.name = $"Atlas_{type}";
                 task.StartAt = room;
-                task.Index = nextIndex++;
+                task.Index = myIndex;
                 switch (kind)
                 {
                     case 0: ship.CommonTasks = Append(ship.CommonTasks, task); break;

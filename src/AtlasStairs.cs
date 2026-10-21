@@ -99,7 +99,9 @@ internal static class AtlasStairs
     {
         _t0 = -1f;
         Veil(0f);
-        if (lp != null && lp.Data != null && !lp.Data.IsDead && MeetingHud.Instance == null) lp.moveable = true;
+        // also when he died on the stairs: the ghost has to walk too (audit 21.10.); meeting and exile
+        // hand movement back themselves
+        if (lp != null && lp.Data != null && MeetingHud.Instance == null && ExileController.Instance == null) lp.moveable = true;
         if (lp != null) AtlasPlugin.Logger.LogInfo($"{LogPrefix} {how} at ({lp.GetTruePosition().x:F1}|{lp.GetTruePosition().y:F1})");
     }
 

@@ -62,7 +62,17 @@ internal static class AtlasPreload
             try { AtlasForeignTasks.Preload(key != null ? AtlasSelection.Selected() : null); }
             catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} foreign maps: {e.Message}"); }
         }
-        if (key == null) return;
+        if (key == null)
+        {
+            // Back to a vanilla map: once the host has settled, the pack of the map last looked at goes
+            // too, it stayed for the whole vanilla evening before (50-80 MB, audit 21.10.).
+            if (!_queued && Time.time - _changedAt >= SettleSeconds)
+            {
+                _queued = true;
+                AtlasAssets.ReleaseOtherMaps(null);
+            }
+            return;
+        }
         if (!_queued)
         {
             if (Time.time - _changedAt < SettleSeconds) return;

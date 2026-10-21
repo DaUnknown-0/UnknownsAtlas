@@ -60,20 +60,29 @@ internal static class AtlasAssets
         {
             // A map pack is "<prefix>_floor_*", "_props_*", "_consoles_*" or "_minimap" (see above);
             // task art and buttons have other names and stay. Maps of other plugins carry their own
-            // namespace ("<Plugin>.Resources.<prefix>_floor_0.jpg"), hence the open namespace part.
-            string keepPrefix = Res(keep, $"{keep.ResourcePrefix}_");
+            // namespace ("<Plugin>.Resources.<prefix>_floor_0.jpg"), hence the open namespace part. Map files
+            // have yet other ones ("UnknownsAtlas.Maps.train.train_floor_0.png", "AtlasMaps.<folder>.<file>"):
+            // the old "\.Resources\." pattern missed them and the train's ~67 MB stayed (audit 21.10.), so
+            // the pack name is matched as the last dotted segment in ANY namespace.
+            // keep == null: back to a vanilla map, every pack goes (AtlasPreload, audit 21.10.)
+            string keepPrefix = keep != null ? Res(keep, $"{keep.ResourcePrefix}_") : "|none|";   // no resource name starts like this
             var pack = new System.Text.RegularExpressions.Regex(
-                @"^[A-Za-z0-9_.]*\.Resources\.[A-Za-z0-9]+_(floor_|props_|consoles_|minimap)");
+                @"(^|\.)[A-Za-z0-9]+_(floor_|props_|consoles_|minimap)");   // sprite keys carry "@ppu..." behind
             // Minispiel- und Weltgrafik (task_*) haengt an der Karte (AtlasMapDef.TaskArt) und lag nach einem
             // Kartenwechsel weiter unkomprimiert im Speicher (Review 09.10.). Beim Wechsel wird sie mit
             // freigegeben und bei Bedarf neu geladen; beim Bau derselben Karte bleibt sie. Kein lebendes Objekt
             // haelt sie hier noch: die alte Runde ist zerstoert, AtlasUse prueft seine Symbole auf null.
-            bool switching = _lastKey != null && _lastKey != keep.Key;
-            _lastKey = keep.Key;
-            const string taskPrefix = "UnknownsAtlas.Resources.task_";
+            bool switching = _lastKey != null && _lastKey != keep?.Key;
+            _lastKey = keep?.Key;
+            // everything of ANOTHER map file goes as well (its scroll layers, extra pictures)
+            string keepNs = keep != null ? Res(keep, "") : "|none|";   // no resource name starts like this
+            bool OtherMapFile(string key) =>
+                (key.StartsWith("UnknownsAtlas.Maps.", StringComparison.Ordinal) || key.StartsWith("AtlasMaps.", StringComparison.Ordinal))
+                && !key.StartsWith(keepNs, StringComparison.Ordinal);
             bool Other(string key) =>
                 (!key.StartsWith(keepPrefix, StringComparison.Ordinal) && pack.IsMatch(key)) ||
-                (switching && key.StartsWith(taskPrefix, StringComparison.Ordinal));
+                OtherMapFile(key) ||
+                (switching && (key.StartsWith("task_", StringComparison.Ordinal) || key.Contains(".task_")));
             int freed = 0;
             foreach (var key in new List<string>(Pending.Keys))
                 if (Other(key)) Pending.Remove(key);              // laufende Tasks enden von selbst, das Ergebnis verfaellt

@@ -39,6 +39,7 @@ internal sealed class AtlasTrainWorld : IAtlasMapWorld
     }
 
     private readonly List<Layer> _layers = new();
+    private readonly List<Sprite> _sprites = new();   // the scroll sprites of this round, destroyed with it
     private Transform _root;
     private readonly List<SpriteRenderer> _hatchClosed = new(), _hatchOpen = new();
     private readonly List<(SpriteRenderer R, float Life, Vector2 V, float Spin)> _fx = new();
@@ -73,6 +74,7 @@ internal sealed class AtlasTrainWorld : IAtlasMapWorld
             float width = s.WidthM > 0.5f ? s.WidthM : tex.width / ppm;
             var sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.zero, ppm, 0, SpriteMeshType.FullRect);
             sprite.hideFlags |= HideFlags.HideAndDontSave;
+            _sprites.Add(sprite);
             var layer = new Layer { Width = width, Parallax = s.Parallax > 0f ? s.Parallax : 1f };
             int n = Mathf.CeilToInt(mapW / width) + 2;
             for (int i = 0; i < n; i++)
@@ -292,6 +294,9 @@ internal sealed class AtlasTrainWorld : IAtlasMapWorld
     {
         foreach (var (r, _, _, _) in _fx) if (r != null) Object.Destroy(r.gameObject);
         _fx.Clear(); _layers.Clear(); _hatchClosed.Clear(); _hatchOpen.Clear();
+        // a new sprite per round, never freed before (audit 21.10.); the texture stays with the map pack
+        foreach (var sp in _sprites) if (sp != null) Object.Destroy(sp);
+        _sprites.Clear();
         _fire = null; _root = null;
         var cam = HudManager.InstanceExists ? HudManager.Instance.PlayerCam : null;
         if (cam != null) cam.shakeAmount = 0f;

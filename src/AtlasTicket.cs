@@ -237,6 +237,18 @@ internal static class AtlasTicket
                 AtlasPlugin.Logger.LogInfo($"{LogPrefix} freeplay: {info.PlayerName} would be thrown off the train now");
                 return false;
             }
+            // Exiled() holt niemanden aus dem Vent (im Spiel wird nie im Vent verbannt): wer beim Ablauf im Vent sitzt
+            // (Impostor, Engineer), haenge sonst als Geist fest. Erst raus, auf jedem Client gleich (Audit 21.10.).
+            if (pc.inVent)
+            {
+                try { pc.MyPhysics.ExitAllVents(); } catch { }
+                try { pc.inVent = false; } catch { }
+                if (pc.AmOwner)
+                {
+                    try { Vent.currentVent?.SetButtons(false); } catch { }
+                    try { pc.moveable = true; } catch { }
+                }
+            }
             pc.Exiled();
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} {info.PlayerName} thrown off the train");
             return true;

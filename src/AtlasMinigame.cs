@@ -352,12 +352,30 @@ internal sealed class DustMechanic : IAtlasMechanic
     public float Progress => _total == 0 ? 1f : 1f - (float)_dusty / _total;
     public bool Done { get; private set; }
 
+    // The dust image comes from the asset repo; until it is there (download running or failed) a plain
+    // grey layer stands in, so the task can still be done (audit 21.10.: a null texture threw and the
+    // minigame closed, the task stayed open for the whole round).
+    private static Texture2D FallbackDust()
+    {
+        var t = new Texture2D(W, H, TextureFormat.RGBA32, false);
+        var px = new Color32[W * H];
+        var rnd = new System.Random(7);
+        for (int i = 0; i < px.Length; i++)
+        {
+            byte g = (byte)(150 + rnd.Next(40));
+            px[i] = new Color32(g, (byte)(g - 12), (byte)(g - 28), 210);
+        }
+        t.SetPixels32(px);
+        t.Apply();
+        return t;
+    }
+
     public void Build(Transform root, AtlasTaskCtx ctx)
     {
         AtlasTaskKit.Sprite(root, "task_museum_panel.png", 100f, Vector2.zero, 0);
         _dino = AtlasTaskKit.Sprite(root, "task_museum_dino.png", 100f, Center, 1);
         _dino.color = new Color(0.86f, 0.86f, 0.86f);
-        _tex = AtlasAssets.TaskTextureCopy("task_museum_dust.png");
+        _tex = AtlasAssets.TaskTextureCopy("task_museum_dust.png") ?? FallbackDust();
         _tex.filterMode = FilterMode.Bilinear;
         _tex.wrapMode = TextureWrapMode.Clamp;
         _pix = _tex.GetPixels32();

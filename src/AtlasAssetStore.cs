@@ -274,7 +274,7 @@ internal static class AtlasAssetStore
         {
             var batch = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             while (Dirty.TryDequeue(out var n)) batch.Add(n);
-            batch.RemoveWhere(n => Queue.Contains(n));
+            lock (Queue) batch.RemoveWhere(n => Queue.Contains(n));   // the thread pool adds under this lock
             if (batch.Count > 0)
                 Task.Run(() => batch.Where(n => !Check(n)).ToList()).ContinueWith(t =>
                 {
