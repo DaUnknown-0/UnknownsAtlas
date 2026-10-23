@@ -66,10 +66,12 @@ internal static class AtlasUse
         {
             _act = null;
             if (_owned) { _owned = false; try { ub.SetTarget(null); } catch { } }
+            GivePetBack(ub);
             return;
         }
         try
         {
+            TakeFromPet(ub);
             if (_hooked != ub.Pointer)
             {
                 var pb = ub.GetComponent<PassiveButton>();
@@ -85,6 +87,42 @@ internal static class AtlasUse
             if (_enabled && Input.GetKeyDown(KeyCode.E) && KeyboardFree()) OnClick();  // Use-Taste auf der Tastatur
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} button: {e.Message}"); }
+    }
+
+    // Spieler mit Haustier (User 23.10.: "Train: mit Pet geht's nicht hoch"): ohne Vanilla-Ziel tauscht das Spiel
+    // den Use-Knopf gegen den Streichel-Knopf (HudManager.ToggleUseAndPetButton, jeder Physik-Schritt). Unser
+    // Angebot lag dann auf einem unsichtbaren Knopf. Solange wir anbieten, kommt der Use-Knopf zurueck und der
+    // Streichel-Knopf geht weg; Commit laeuft im HudManager.Update-Postfix, also nach dem Physik-Schritt desselben
+    // Frames. Nur wenn das Spiel gerade den Streichel-Knopf zeigt (beide aus = HUD versteckt, nicht anfassen).
+    private static bool _petSwapped;
+
+    private static void TakeFromPet(UseButton ub)
+    {
+        try
+        {
+            var pet = HudManager.InstanceExists ? HudManager.Instance.PetButton : null;
+            if (pet == null || !pet.gameObject.activeSelf) return;
+            pet.gameObject.SetActive(false);
+            if (!ub.gameObject.activeSelf) ub.gameObject.SetActive(true);
+            if (!_petSwapped) AtlasPlugin.Logger.LogInfo($"{LogPrefix} pet button swapped for the use button");
+            _petSwapped = true;
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} pet swap: {e.Message}"); }
+    }
+
+    // zurueck in den Zustand, den das Spiel ohne uns haette (falls es nur bei Aenderungen umschaltet)
+    private static void GivePetBack(UseButton ub)
+    {
+        if (!_petSwapped) return;
+        _petSwapped = false;
+        try
+        {
+            var pet = HudManager.InstanceExists ? HudManager.Instance.PetButton : null;
+            if (pet == null || ub.currentTarget != null) return;     // Vanilla hat inzwischen ein Ziel: Use-Knopf bleibt
+            ub.gameObject.SetActive(false);
+            pet.gameObject.SetActive(true);
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} pet give back: {e.Message}"); }
     }
 
     /// <summary>E gehoert dem Spiel nur, wenn kein Chat, keine Karte und kein Minispiel offen ist. Ein

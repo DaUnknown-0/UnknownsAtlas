@@ -37,7 +37,7 @@ internal static class AtlasVanillaCrisis
     internal const byte OpCrisis = 20;
     private const byte SubAllow = 0, SubStart = 1, SubState = 2, SubEnd = 3, SubInput = 4, SubRequest = 5;
     internal const byte EndFixed = 0, EndMeeting = 1, EndLost = 2;
-    public const float StartLevel = 30f, RiseNone = 1.5f, FallBoth = 6f, Reach = 1.4f;
+    public const float StartLevel = 30f, RiseNone = 1.5f, FallBoth = 6f, Reach = 1.4f, HintRise = 1.1f;
 
     public sealed class Def
     {
@@ -68,8 +68,10 @@ internal static class AtlasVanillaCrisis
         {
             Id = 1, Key = "SkeldEngineFailure", Title = "Engine Failure", TaskLine = "Engine Failure", MapName = "Skeld",
             MapId = 0, Replaces = SystemTypes.Reactor, ReplacesLabel = "Reactor", BarWord = "STALL", StartSfx = "rush",
-            // Upper und Lower Engine, oestlich der Triebwerke (Konsolen bei x -18,3 / -19,2)
-            Stations = new[] { new Vector2(-16.6f, -1.3f), new Vector2(-16.6f, -13.4f) },
+            // Stationen liegen AUF einem sichtbaren Objekt (Pfeil und Schrift zeigen darauf), erreichbar vom Boden davor
+            // (Pruefung gegen die Nightfall-Survey: Fusspunkt <= 0,9 vom Punkt, Reach 1,4).
+            // Upper und Lower Engine: Unterkante des Triebwerks an der Duese (Treibstoff-Konsole 1,7 links)
+            Stations = new[] { new Vector2(-16.6f, -0.3f), new Vector2(-16.6f, -12.5f) },
             Kinds = new[] { "brakelever", "handbrake" },
             Verbs = new[] { "THROTTLE", "PRIME" },
             Hints = new[] { "HOLD THE THROTTLE", "PRIME THE FUEL PUMP" },
@@ -82,8 +84,8 @@ internal static class AtlasVanillaCrisis
         {
             Id = 2, Key = "SkeldMeteorShower", Title = "Meteor Shower", TaskLine = "Meteor Shower", MapName = "Skeld",
             MapId = 0, Replaces = SystemTypes.Reactor, ReplacesLabel = "Reactor", BarWord = "HULL DAMAGE", StartSfx = "boom",
-            // Weapons (Kanone, Konsole 9,1|1,8) und Shields (Konsole 7,5|-14,0)
-            Stations = new[] { new Vector2(8.2f, 1.0f), new Vector2(8.6f, -12.9f) },
+            // Weapons: rechtes Geschuetzrohr (weap_pipeR); Shields: Leuchtroehren oben links hinter dem Gelaender
+            Stations = new[] { new Vector2(10.3f, 0.2f), new Vector2(7.7f, -11.3f) },
             Kinds = new[] { "brakelever", "handbrake" },
             Verbs = new[] { "AIM", "CHARGE" },
             Hints = new[] { "KEEP THE GUNS ON TARGET", "CHARGE THE SHIELDS" },
@@ -96,8 +98,8 @@ internal static class AtlasVanillaCrisis
         {
             Id = 3, Key = "PolusBlizzard", Title = "Blizzard", TaskLine = "Blizzard", MapName = "Polus",
             MapId = 2, Replaces = SystemTypes.Laboratory, ReplacesLabel = "Seismic", BarWord = "STORM", StartSfx = "rush",
-            // zwei Wetterstationen draussen: Ostseite (Temperaturfeld 30,9|-15,3) und Nordwest (Treibstofffeld 11,4|-6,2)
-            Stations = new[] { new Vector2(30.2f, -15.9f), new Vector2(12.3f, -6.8f) },
+            // draussen: Wetterknoten MLG im Osten (Wetterfahne) und Gasflasche am Kistenstapel im Nordwesten (Heizung)
+            Stations = new[] { new Vector2(30.85f, -12.2f), new Vector2(13.5f, -7.5f) },
             Kinds = new[] { "brakelever", "handbrake" },
             Verbs = new[] { "STABILIZE", "WIND UP" },
             Hints = new[] { "HOLD THE WEATHER VANE", "WIND UP THE HEATER" },
@@ -110,8 +112,9 @@ internal static class AtlasVanillaCrisis
         {
             Id = 4, Key = "PolusLavaFlood", Title = "Lava Flood", TaskLine = "Lava Flood", MapName = "Polus",
             MapId = 2, Replaces = SystemTypes.Laboratory, ReplacesLabel = "Seismic", BarWord = "LAVA", StartSfx = "boom",
-            // Kuehlventile: Labor (Kaeltefeld 31,3|-6,7) und Kesselraum (Wasserrad 1,2|-23,1)
-            Stations = new[] { new Vector2(30.6f, -7.4f), new Vector2(2.4f, -22.4f) },
+            // Kuehlrohr ueber der Lavagrube im Osten (divingboard) und Rohrwand im Kesselraum (von innen, nicht von der
+            // Wandkrone im Flur davor)
+            Stations = new[] { new Vector2(31.9f, -16.0f), new Vector2(2.4f, -23.0f) },
             Kinds = new[] { "brakelever", "handbrake" },
             Verbs = new[] { "COOL", "PUMP" },
             Hints = new[] { "OPEN THE COOLANT VALVE", "PUMP COLD WATER" },
@@ -124,8 +127,8 @@ internal static class AtlasVanillaCrisis
         {
             Id = 5, Key = "AirshipTurbulence", Title = "Turbulence", TaskLine = "Turbulence", MapName = "Airship",
             MapId = 4, Replaces = SystemTypes.HeliSabotage, ReplacesLabel = "Crash Course", BarWord = "TILT", StartSfx = "rush",
-            // Ballast: Cargo Bay (Gasfeld 39,0|1,5) und Gap Room links (Konsole 3,8|9,9)
-            Stations = new[] { new Vector2(37.6f, 1.0f), new Vector2(4.6f, 9.3f) },
+            // Ballast: Netzladung in der Cargo Bay; Gegengewicht: Zahnraeder unten am linken Gap-Room-Podest
+            Stations = new[] { new Vector2(36.9f, 0.2f), new Vector2(5.0f, 7.3f) },
             Kinds = new[] { "brakelever", "handbrake" },
             Verbs = new[] { "TRIM", "WINCH" },
             Hints = new[] { "TRIM THE BALLAST", "WINCH THE COUNTERWEIGHT" },
@@ -137,17 +140,18 @@ internal static class AtlasVanillaCrisis
         new Def
         {
             // Stromausfall mit Taschenlampen: alles dunkel, jeder Crewmate sieht nur einen Lichtkegel in Laufrichtung.
-            // Reparatur am Lichtschalter der Karte (Hebel halten). Fungle hat keine Licht-Sabotage: dort nur "Extra".
+            // Reparatur genau am Vanilla-Lichtschalter der Karte (Hebel halten); Vanilla beansprucht ihn nur waehrend der
+            // echten Licht-Sabotage. Fungle hat keine Licht-Sabotage: dort nur "Extra", Station am Lagerfeuer.
             Id = 6, Key = "FlashlightBlackout", Title = "Blackout", TaskLine = "Blackout", MapName = "all maps",
             MapId = 255, Replaces = SystemTypes.Electrical, ReplacesLabel = "Lights", BarWord = "POWER", StartSfx = "",
             Critical = false, Icon = "torch", Fx = "flashlight",
             StationsByMap = new Dictionary<byte, Vector2[]>
             {
-                [0] = new[] { new Vector2(-9.8f, -10.6f) },     // Skeld Electrical, Schalter (-9,8|-9,9)
-                [1] = new[] { new Vector2(14.8f, 20.7f) },      // Mira Office, Schalter (14,8|21,4)
-                [2] = new[] { new Vector2(9.7f, -11.8f) },      // Polus Electrical, Schalter (9,7|-11,1)
-                [4] = new[] { new Vector2(16.6f, -8.5f) },      // Airship Electrical, Hebelfeld
-                [5] = new[] { new Vector2(-3.4f, 4.0f) },       // Fungle: Lagerfeuer (keine Licht-Sabotage)
+                [0] = new[] { new Vector2(-9.8f, -9.9f) },      // Skeld Electrical, SwitchConsole
+                [1] = new[] { new Vector2(14.8f, 21.38f) },     // Mira Office, SwitchConsole
+                [2] = new[] { new Vector2(9.72f, -11.09f) },    // Polus Electrical, panel_switches
+                [4] = new[] { new Vector2(13.92f, 6.43f) },     // Airship, Lichtkonsole am Gap Room (Main Hall)
+                [5] = new[] { new Vector2(-8.7f, 1.4f) },       // Fungle: rechter Rand des Lagerfeuers (Marshmallow 1,1 links)
             },
             ButtonByMap = new Dictionary<byte, Vector2>
             {
@@ -161,17 +165,18 @@ internal static class AtlasVanillaCrisis
         },
         new Def
         {
-            // Funkchaos: Aufgabenpfeile zeigen in falsche Richtungen, die Minikarte rauscht. Reparatur an der Funkkonsole.
+            // Funkchaos: Aufgabenpfeile zeigen in falsche Richtungen, die Minikarte rauscht. Reparatur genau an der
+            // Vanilla-Funkkonsole (Vanilla beansprucht sie nur waehrend der echten Funk-Sabotage).
             Id = 7, Key = "CommsChaos", Title = "Comms Chaos", TaskLine = "Comms Chaos", MapName = "all maps",
             MapId = 255, Replaces = SystemTypes.Comms, ReplacesLabel = "Comms", BarWord = "SIGNAL NOISE", StartSfx = "",
             Critical = false, Icon = "signal", Fx = "comms",
             StationsByMap = new Dictionary<byte, Vector2[]>
             {
-                [0] = new[] { new Vector2(4.2f, -16.4f) },      // Skeld Comms (4,2|-17,1)
-                [1] = new[] { new Vector2(14.9f, 4.9f) },       // Mira Comms (14,9|5,7)
-                [2] = new[] { new Vector2(12.6f, -16.3f) },     // Polus Comms (13,7|-15,6)
-                [4] = new[] { new Vector2(-13.6f, 2.0f) },      // Airship Comms (-14,2|2,8)
-                [5] = new[] { new Vector2(22.6f, 13.6f) },      // Fungle Comms (23,4|14,8)
+                [0] = new[] { new Vector2(4.2f, -17.1f) },      // Skeld Comms, FixCommsConsole
+                [1] = new[] { new Vector2(14.93f, 5.65f) },     // Mira Comms, FixCommsConsole (nicht die im Office)
+                [2] = new[] { new Vector2(13.68f, -15.62f) },   // Polus Comms, panel_comms
+                [4] = new[] { new Vector2(-14.22f, 2.79f) },    // Airship Comms, task_comms
+                [5] = new[] { new Vector2(24.95f, 13.95f) },    // Fungle Comms, FixCommsConsole
             },
             ButtonByMap = new Dictionary<byte, Vector2>
             {
@@ -1024,7 +1029,8 @@ internal static class AtlasVanillaCrisis
         }
         _hint.gameObject.SetActive(true);
         _hint.text = Current.Hints[station];
-        _hint.transform.position = new Vector3(at.x, at.y + 1.4f, -2f);
+        // dicht ueber dem Objekt der Station (1,4 lag oft eine Wand weiter, ueber dem Nachbarraum)
+        _hint.transform.position = new Vector3(at.x, at.y + HintRise, -2f);
     }
 
     internal static void OpenStation(Def d, int station)
@@ -1312,6 +1318,7 @@ internal static class AtlasVanillaCrisis
 
     private static int _diagStep;
     private static float _diagAt = -1f;
+    private static readonly Vector2 DiagStand = new(0f, -0.7f);
 
     private static void DiagTick()
     {
@@ -1339,22 +1346,38 @@ internal static class AtlasVanillaCrisis
                 HostTryStart(d);
                 break;
             case 3: AtlasTasks.Shot("vcrisis", d.Key + "_start"); break;
-            case 4: lp.NetTransform.RpcSnapTo(St(d)[0] + new Vector2(0f, -0.5f)); break;
-            case 5: AtlasMinigame.DiagAuto = true; OpenStation(d, 0); break;
-            case 6: AtlasTasks.Shot("vcrisis", d.Key + "_station0"); break;
-            case 7:
+            // vor jedem Minispiel ein Bild der Station in der Welt (Objekt, Pfeil, Hinweistext), Spieler knapp davor
+            case 4: lp.NetTransform.RpcSnapTo(St(d)[0] + DiagStand); break;
+            case 5: AtlasTasks.Shot("vcrisis", d.Key + "_world0"); DiagButtons(); break;
+            case 6: AtlasMinigame.DiagAuto = true; OpenStation(d, 0); break;
+            case 7: AtlasTasks.Shot("vcrisis", d.Key + "_station0"); break;
+            case 8:
                 if (Minigame.Instance != null) { try { Minigame.Instance.ForceClose(); } catch { } }
-                if (St(d).Length > 1) lp.NetTransform.RpcSnapTo(St(d)[1] + new Vector2(0f, -0.5f));
+                if (St(d).Length > 1) lp.NetTransform.RpcSnapTo(St(d)[1] + DiagStand);
                 break;
-            case 8: if (St(d).Length > 1) { AtlasMinigame.DiagAuto = true; OpenStation(d, 1); } break;
-            case 9: AtlasTasks.Shot("vcrisis", d.Key + "_station1"); break;
-            case 10:
+            case 9: if (St(d).Length > 1) AtlasTasks.Shot("vcrisis", d.Key + "_world1"); break;
+            case 10: if (St(d).Length > 1) { AtlasMinigame.DiagAuto = true; OpenStation(d, 1); } break;
+            case 11: if (St(d).Length > 1) AtlasTasks.Shot("vcrisis", d.Key + "_station1"); break;
+            case 12:
                 if (Minigame.Instance != null) { try { Minigame.Instance.ForceClose(); } catch { } }
                 Users[0].Add(lp.PlayerId); Users[1].Add(lp.PlayerId);
                 break;
-            case 11: AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: {DiagState()}"); break;
-            case 12: AtlasPlugin.Logger.LogInfo($"{LogPrefix} vcrisis: all done"); break;
+            case 13: AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag: {DiagState()}"); break;
+            case 14: AtlasPlugin.Logger.LogInfo($"{LogPrefix} vcrisis: all done"); break;
         }
+    }
+
+    // Haustier-Pruefung (AtlasUse.TakeFromPet): an der Station muss der Use-Knopf mit unserem Text sichtbar sein
+    private static void DiagButtons()
+    {
+        try
+        {
+            var hud = HudManager.Instance;
+            var ub = hud.UseButton; var pb = hud.PetButton;
+            string pet = PlayerControl.LocalPlayer?.Data?.DefaultOutfit?.PetId ?? "?";
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag buttons: pet '{pet}', use active {ub.gameObject.activeInHierarchy} label '{ub.buttonLabelText?.text}', pet button active {pb?.gameObject.activeInHierarchy}");
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} diag buttons: {e.Message}"); }
     }
 
     private static Def Find(string idText) => byte.TryParse(idText, out byte id) ? Find(id) : null;
