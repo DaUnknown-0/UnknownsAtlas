@@ -966,7 +966,7 @@ def floor_room(ops, key, region):
                     ops.geom(q, fill=shade(rnd.choice(cols), 1 + rnd.uniform(-0.05, 0.05)), outline=alpha(lift("#22262a", 1.4), 255), width=0.025)
         for gx, gy in ((0, 15.5), (-4, 19.6), (0, 19.6), (4, 19.6), (-3, 12.8), (3, 12.8)):
             ops.glow(gx, gy - 0.6, 1.6, WARM, 0.3)
-        plaque(ops, -0.5, 13.1, 0.5, 13.5, "VAULT", brass=True, lines=1, size=0.08)
+        plaque(ops, -0.7, 13.1, 0.7, 13.5, "TREASURY", brass=True, lines=1, size=0.08)
     elif key == "telefon":
         cols = [lift("#a05630", 1.0), lift("#a8562a", 0.95)]
         wobbly_tiles(ops, region, x0, y0, x1, y1, 2.0, 1.0, cols, lift("#8e4823", 1.1), seed=21, bond=0.5, fuge_w=0.025,
@@ -1544,24 +1544,81 @@ def face_decor(ops, owner, x0, y0, x1, y1, fh, wall):
             xx += w + 0.12
             k += 1
     elif owner == "mineralien":
-        # beleuchtete Wandnischen mit Kristallstufen, dazwischen eine Lehrtafel
-        rnd = random.Random(int(a * 13))
-        xx = a + 0.35
-        k = 0
-        while xx + 0.5 < b - 0.2:
-            n0, n1 = y + 0.4, y + max(0.6, fh - 0.1)
-            if k == 2:
-                wall_poster(ops, xx, n0, 0.5, n1, "lehrtafel", rnd, label=False)
-            else:
-                ops.rect(xx, n0, xx + 0.5, n1, fill=hexc("#1e2a2e"), outline=OUTLINE, width=0.02)
-                ops.glow(xx + 0.25, (n0 + n1) / 2, 0.4, WARM, 0.35)
-                col = rnd.choice([hexc("#9d6cc7"), hexc("#e0b04a"), hexc("#d9e4ec"), hexc("#3f9e6e"), hexc("#5f9bd0")])
-                for dx, hh in ((0.15, 0.12), (0.25, 0.2), (0.33, 0.14)):
-                    ops.poly([(xx + dx - 0.04, n0 + 0.04), (xx + dx + 0.04, n0 + 0.04), (xx + dx + 0.01, n0 + 0.04 + hh), (xx + dx - 0.01, n0 + 0.04 + hh)],
-                             fill=col, outline=OUTLINE, width=0.012)
-                ops.rect(xx + 0.15, n0 - 0.12, xx + 0.35, n0 - 0.05, fill=hexc("#efe4c8"), outline=OUTLINE, width=0.008)
-            xx += 0.9
-            k += 1
+        # Schatzkammer (User 24.10.): die ganze Rueckwand ist ein Tresorgitter (Eisenstaebe mit Querband, dahinter
+        # dunkel mit Goldschimmer: Truhen, Muenzhaufen, Kelche), in der Mitte eine runde Panzertuer in voller
+        # Wandhoehe mit Bolzenkranz, Dreispeichenrad und Zahlenschloss, daneben zwei Wandleuchter.
+        steel = hexc("#4a5058")
+        brass = hexc("#c9a24a")
+        gold = hexc("#e2b84a")
+        mid = (a + b) / 2
+        n0, n1 = y + 0.06, y + fh - 0.04
+        hh = n1 - n0
+        cyy = (n0 + n1) / 2
+        rr = hh * 0.5 - 0.02
+        door_w = rr + 0.16
+        rs = random.Random(int(a * 13))
+        # Kaefig: dunkler Hintergrund, Goldschimmer, Staebe, Querband, Rahmen
+        ops.rect(a + 0.08, n0, b - 0.08, n1, fill=hexc("#17130f"), outline=OUTLINE, width=0.02)
+        for k in range(int((b - a) / 1.3)):
+            gx = a + 0.6 + k * 1.3
+            if abs(gx - mid) < door_w + 0.5:
+                continue
+            ops.glow(gx, cyy - 0.1, 0.5, hexc("#ffd060"), 0.35)
+            kind_ = rs.randrange(3)
+            if kind_ == 0:                                                      # Truhe mit offenem Deckel
+                ops.rect(gx - 0.22, n0 + 0.08, gx + 0.22, n0 + 0.32, fill=hexc("#6b4a2e"), outline=OUTLINE, width=0.012)
+                ops.rect(gx - 0.22, n0 + 0.3, gx + 0.22, n0 + 0.34, fill=brass)
+                ops.ellipse(gx, n0 + 0.36, 0.17, 0.06, fill=gold, outline=OUTLINE, width=0.01)
+            elif kind_ == 1:                                                    # Muenzhaufen
+                ops.ellipse(gx, n0 + 0.14, 0.3, 0.1, fill=gold, outline=OUTLINE, width=0.012)
+                ops.ellipse(gx - 0.05, n0 + 0.22, 0.17, 0.07, fill=shade(gold, 1.1), outline=OUTLINE, width=0.01)
+                for _ in range(5):
+                    ops.ellipse(gx + rs.uniform(-0.25, 0.25), n0 + rs.uniform(0.08, 0.2), 0.035, 0.018, fill=shade(gold, 0.8))
+            else:                                                               # Kelche und Barren
+                for dx in (-0.15, 0.12):
+                    ops.rect(gx + dx - 0.015, n0 + 0.12, gx + dx + 0.015, n0 + 0.28, fill=gold, outline=OUTLINE, width=0.01)
+                    ops.ellipse(gx + dx, n0 + 0.3, 0.06, 0.03, fill=shade(gold, 1.15), outline=OUTLINE, width=0.01)
+                    ops.ellipse(gx + dx, n0 + 0.1, 0.05, 0.02, fill=gold, outline=OUTLINE, width=0.01)
+                ops.rect(gx - 0.04, n0 + 0.08, gx + 0.06, n0 + 0.16, fill=gold, outline=OUTLINE, width=0.01)
+        for k in range(int((b - a - 0.4) / 0.22) + 1):
+            bx = a + 0.2 + k * 0.22
+            if abs(bx - mid) < door_w + 0.1:
+                continue
+            ops.line([(bx, n0), (bx, n1)], fill=OUTLINE, width=0.06)
+            ops.line([(bx, n0), (bx, n1)], fill=steel, width=0.034)
+            ops.line([(bx - 0.008, n0 + 0.02), (bx - 0.008, n1 - 0.02)], fill=shade(steel, 1.35), width=0.008)
+        for by in (cyy, n0 + 0.1, n1 - 0.1):
+            ops.rect(a + 0.08, by - 0.035, b - 0.08, by + 0.035, fill=shade(steel, 0.85), outline=OUTLINE, width=0.015)
+        # Panzertuer: Rahmen, Ring, Blatt, Bolzen, Rad, Schloss, Scharniere
+        ops.rect(mid - door_w, n0, mid + door_w, n1, fill=shade(steel, 0.75), outline=OUTLINE, width=0.025)
+        for k in range(6):
+            ops.ellipse(mid - door_w + 0.06, n0 + 0.08 + k * (hh - 0.16) / 5, 0.02, 0.02, fill=shade(steel, 1.4))
+            ops.ellipse(mid + door_w - 0.06, n0 + 0.08 + k * (hh - 0.16) / 5, 0.02, 0.02, fill=shade(steel, 1.4))
+        ops.ellipse(mid, cyy, rr, rr, fill=shade(steel, 0.6), outline=OUTLINE, width=0.03)
+        ops.ellipse(mid, cyy, rr - 0.06, rr - 0.06, fill=steel, outline=OUTLINE, width=0.02)
+        ops.ellipse(mid, cyy, rr - 0.13, rr - 0.13, fill=shade(steel, 1.12), outline=shade(steel, 0.6), width=0.012)
+        ops.ellipse(mid - rr * 0.35, cyy + rr * 0.35, rr * 0.2, rr * 0.1, fill=alpha((255, 255, 255, 255), 50))
+        for k in range(12):
+            ang = k / 12 * 2 * math.pi
+            ops.ellipse(mid + (rr - 0.095) * math.cos(ang), cyy + (rr - 0.095) * math.sin(ang), 0.025, 0.025, fill=shade(steel, 1.4), outline=OUTLINE, width=0.01)
+        for ang in (90, 210, 330):
+            q = (mid + rr * 0.5 * math.cos(math.radians(ang)), cyy + rr * 0.5 * math.sin(math.radians(ang)))
+            ops.line([(mid, cyy), q], fill=OUTLINE, width=0.065)
+            ops.line([(mid, cyy), q], fill=brass, width=0.038)
+            ops.ellipse(q[0], q[1], 0.035, 0.035, fill=brass, outline=OUTLINE, width=0.012)
+        ops.ellipse(mid, cyy, 0.06, 0.06, fill=shade(brass, 0.85), outline=OUTLINE, width=0.015)
+        dq = (mid - rr * 0.6, cyy - rr * 0.1)
+        ops.ellipse(dq[0], dq[1], 0.07, 0.07, fill=brass, outline=OUTLINE, width=0.015)
+        ops.ellipse(dq[0], dq[1], 0.045, 0.045, fill=hexc("#1e2226"))
+        ops.line([(dq[0], dq[1]), (dq[0] + 0.03, dq[1] + 0.025)], fill=brass, width=0.01)
+        for hy in (cyy + rr * 0.55, cyy - rr * 0.55):
+            ops.rect(mid + rr - 0.02, hy - 0.05, mid + rr + 0.14, hy + 0.05, fill=shade(steel, 1.2), outline=OUTLINE, width=0.015)
+        # Wandleuchter beidseits der Tuer
+        for lx in (mid - door_w - 0.3, mid + door_w + 0.3):
+            ops.line([(lx, cyy - 0.08), (lx, cyy + 0.12)], fill=OUTLINE, width=0.04)
+            ops.line([(lx, cyy - 0.08), (lx, cyy + 0.12)], fill=brass, width=0.022)
+            ops.ellipse(lx, cyy + 0.18, 0.055, 0.075, fill=hexc("#ffe6a8"), outline=OUTLINE, width=0.012)
+            ops.glow(lx, cyy + 0.18, 0.4, WARM, 0.5)
     elif owner is None and a > -22.1 and b < -8.4 and -17 < y < -16:
         # Suedgang West: Fensterband zum Lichthof (Rasen + Himmel im Glas)
         xx = max(a, -21.5) + 0.35
@@ -1917,13 +1974,50 @@ def exhibit(p, kind, cx, cy, z, rnd):
             c.ellipse(bx, y + 0.18, 0.045, 0.07, fill=hexc(col), outline=OUTLINE, width=0.015)
             c.ellipse(bx, y + 0.26, 0.025, 0.02, fill=OUTLINE)
             c.line([(bx, y + 0.12), (bx, y + 0.24)], fill=OUTLINE, width=0.01)
+    elif kind == "kristallstufe":
+        # grosse Amethyst-Druse auf grauer Matrix (Schatzkammer)
+        rock = hexc("#5a5c62")
+        c.poly([(x - 0.36, y + 0.02), (x + 0.34, y + 0.03), (x + 0.3, y + 0.16), (x + 0.1, y + 0.2), (x - 0.15, y + 0.19), (x - 0.34, y + 0.14)],
+               fill=rock, outline=OUTLINE, width=0.025)
+        c.poly([(x - 0.3, y + 0.05), (x + 0.28, y + 0.06), (x + 0.2, y + 0.12), (x - 0.2, y + 0.12)], fill=shade(rock, 0.75))
+        rs = random.Random(23)
+        for dx, hh, w_ in ((-0.26, 0.22, 0.07), (-0.14, 0.34, 0.09), (-0.02, 0.44, 0.1), (0.1, 0.36, 0.09), (0.21, 0.26, 0.08), (0.28, 0.16, 0.06), (-0.08, 0.18, 0.06), (0.04, 0.2, 0.05)):
+            col = shade(hexc("#9d6cc7"), rs.uniform(0.9, 1.1))
+            c.poly([(x + dx - w_, y + 0.12), (x + dx + w_, y + 0.12), (x + dx + w_ * 0.6, y + 0.12 + hh * 0.8), (x + dx, y + 0.12 + hh), (x + dx - w_ * 0.6, y + 0.12 + hh * 0.8)],
+                   fill=col, outline=OUTLINE, width=0.018)
+            c.poly([(x + dx - w_ * 0.3, y + 0.14), (x + dx + w_ * 0.1, y + 0.14), (x + dx - w_ * 0.05, y + 0.12 + hh * 0.85), (x + dx - w_ * 0.35, y + 0.12 + hh * 0.7)], fill=shade(col, 1.35))
+            c.line([(x + dx + w_ * 0.3, y + 0.16), (x + dx + w_ * 0.5, y + 0.12 + hh * 0.6)], fill=shade(col, 0.7), width=0.01)
+        c.rect(x - 0.1, y + 0.0, x + 0.1, y + 0.04, fill=hexc("#efe4c8"), outline=OUTLINE, width=0.008)
+    elif kind == "edelsteine":
+        # Tablett mit geschliffenen Steinen auf dunklem Samt (Schatzkammer)
+        c.rect(x - 0.42, y + 0.02, x + 0.42, y + 0.3, fill=hexc("#c9a24a"), outline=OUTLINE, width=0.02)
+        c.rect(x - 0.39, y + 0.045, x + 0.39, y + 0.275, fill=hexc("#2a1a30"))
+        gems = (("#d02e3a", 0.0), ("#2e8a4e", 0.0), ("#2f5fb0", 0.0), ("#e8f4ff", 0.0), ("#e0b04a", 0.0), ("#9d6cc7", 0.0))
+        for k_, (col, _o) in enumerate(gems):
+            gx = x - 0.32 + k_ * 0.128
+            gy = y + 0.16 + (0.03 if k_ % 2 else -0.02)
+            col = hexc(col)
+            if k_ % 3 == 0:       # Brillant (rund)
+                c.ellipse(gx, gy, 0.058, 0.052, fill=col, outline=OUTLINE, width=0.012)
+                c.poly([(gx - 0.035, gy), (gx, gy + 0.035), (gx + 0.035, gy), (gx, gy - 0.035)], fill=shade(col, 1.45))
+                c.ellipse(gx - 0.015, gy + 0.015, 0.01, 0.008, fill=(255, 255, 255, 230))
+            elif k_ % 3 == 1:     # Smaragdschliff (achteckig)
+                c.poly([(gx - 0.05, gy - 0.025), (gx - 0.035, gy - 0.04), (gx + 0.035, gy - 0.04), (gx + 0.05, gy - 0.025), (gx + 0.05, gy + 0.025),
+                        (gx + 0.035, gy + 0.04), (gx - 0.035, gy + 0.04), (gx - 0.05, gy + 0.025)], fill=col, outline=OUTLINE, width=0.012)
+                c.rect(gx - 0.025, gy - 0.018, gx + 0.025, gy + 0.018, fill=shade(col, 1.4))
+                c.line([(gx - 0.04, gy + 0.03), (gx + 0.02, gy + 0.03)], fill=(255, 255, 255, 160), width=0.006)
+            else:                 # Tropfen
+                c.poly([(gx - 0.04, gy), (gx - 0.02, gy + 0.045), (gx + 0.02, gy + 0.045), (gx + 0.04, gy), (gx, gy - 0.055)], fill=col, outline=OUTLINE, width=0.012)
+                c.poly([(gx - 0.015, gy + 0.01), (gx + 0.015, gy + 0.01), (gx, gy - 0.03)], fill=shade(col, 1.45))
+            c.glow(gx, gy, 0.09, col, 0.25)
+        c.rect(x - 0.1, y - 0.0, x + 0.1, y + 0.03, fill=hexc("#efe4c8"), outline=OUTLINE, width=0.008)
 
 
 EXHIBITS_TALL = ["mineral", "urne", "schaedel", "modell", "amphore", "statue"]
 EXHIBITS_FLAT = ["papyrus", "muenzen", "fossil", "kaefer"]
 
 
-def draw_vitrine(p, x0, y0, x1, y1, rnd, ex=None, low=False):
+def draw_vitrine(p, x0, y0, x1, y1, rnd, ex=None, low=False, treasury=False):
     """Vitrine: dunkler Sockel mit Lichtleiste, beleuchteter Innenboden, Exponat, Glaskoerper mit
     Alu-Rahmen. Glas bleibt durchsichtig (nur Alpha), damit Spieler dahinter sichtbar bleiben."""
     c = p.c
@@ -1938,7 +2032,8 @@ def draw_vitrine(p, x0, y0, x1, y1, rnd, ex=None, low=False):
     # LED-Kante + Lichtschein auf dem Innenboden
     c.line([(x0 + 0.05, y0 + sockel * K - 0.03), (x1 - 0.05, y0 + sockel * K - 0.03)], fill=WARM, width=0.03)
     zt0 = sockel * K
-    c.poly([(x0 + 0.03, y0 + zt0), (x1 - 0.03, y0 + zt0), (x1 - 0.03, y1 + zt0), (x0 + 0.03, y1 + zt0)], fill=lift("#d8cfb0", 1.05))
+    c.poly([(x0 + 0.03, y0 + zt0), (x1 - 0.03, y0 + zt0), (x1 - 0.03, y1 + zt0), (x0 + 0.03, y1 + zt0)],
+           fill=lift("#5a1a26", 1.55) if treasury else lift("#d8cfb0", 1.05))
     c.glow((x0 + x1) / 2, (y0 + y1) / 2 + zt0 + 0.05, max(0.5, (x1 - x0) * 0.6), WARM, 0.5)
     # Exponat
     ex = ex or rnd.choice(EXHIBITS_TALL)
@@ -1950,7 +2045,7 @@ def draw_vitrine(p, x0, y0, x1, y1, rnd, ex=None, low=False):
     glass_top = alpha(hexc("#dff3ff"), 88)
     p.box(x0 + 0.03, y0, x1 - 0.03, y1, sockel, glass_h, glass_top, glass, ol=alpha(hexc("#e9f7ff"), 235), w=0.03, glass=True)
     zt = sockel + glass_h
-    alu = hexc("#c0c8cc")
+    alu = hexc("#c9a24a") if treasury else hexc("#c0c8cc")
     for ex_ in (x0 + 0.03, x1 - 0.03):
         c.line([(ex_, y0 + sockel * K), (ex_, y0 + zt * K)], fill=alu, width=0.025)
     c.line([(x0 + 0.03, y1 + zt * K), (x1 - 0.03, y1 + zt * K)], fill=alu, width=0.025)
@@ -1966,7 +2061,7 @@ PROP_H = {
     "monitorwand": 2.0, "spind": 1.9, "schaltschrank": 2.0, "klima": 1.2, "kessel": 1.8,
     "sarkophag": 0.9, "stele": 1.7, "sphinx": 1.0, "stellwand": 2.2, "projektor": 1.9,
     "vermittlung": 2.0, "funkregal": 1.8, "stuetze": 3.0, "dampfmaschine": 3.6,
-    "schwungrad": 2.1, "oldtimer": 1.3, "turbine": 1.9, "werktisch": 0.9, "regal_werk": 1.8,
+    "schwungrad": 2.1, "oldtimer": 1.3, "turbine": 2.6, "werktisch": 0.9, "regal_werk": 1.8,
     "hochregal": 2.4, "kiste": 0.9, "co2": 1.6, "lieferwagen": 2.3, "fass": 0.9,
     "vitrine": 1.6, "tischvitrine": 1.0, "tresorvitrine": 2.1, "bank": 0.45, "cafetisch": 0.75,
     "trog": 0.6, "admintisch": 0.9, "vermittlungstisch": 0.8, "glaswand": 2.0, "resttisch": 0.9,
@@ -2013,6 +2108,8 @@ def draw_prop(kind, shape, idx, ppm):
     extra_w = 0.0
     if kind == "dino":
         extra_w = 0.6
+    if kind == "schwungrad":
+        extra_w = 0.9        # Pleuel nach Westen, Treibriemen nach Osten zum Dynamo
     if kind in ("dino_rex", "dino_rex_head", "dino_rex_jaw"):
         # Skelett als eigenes Objekt ueber dem Sockel (User 25.09.: "ragt wirklich in den Raum"): die
         # Leinwand reicht links bis zur Schnauze, rechts bis zur Schwanzspitze (REX_* unten)
@@ -2039,24 +2136,121 @@ def draw_prop(kind, shape, idx, ppm):
     if kind == "vitrine":
         draw_vitrine(p, x0, y0, x1, y1, rnd)
     elif kind == "tischvitrine":
-        draw_vitrine(p, x0, y0, x1, y1, rnd, ex=rnd.choice(EXHIBITS_FLAT), low=True)
+        if y0 > 10:
+            # Schatzkammer (Nordnische): feste Exponate statt Zufall (User 24.10.): links die grosse
+            # Amethyst-Kristallstufe, rechts das Tablett mit geschliffenen Edelsteinen
+            draw_vitrine(p, x0, y0, x1, y1, rnd, ex="kristallstufe" if cx < 0 else "edelsteine", low=True, treasury=True)
+        else:
+            draw_vitrine(p, x0, y0, x1, y1, rnd, ex=rnd.choice(EXHIBITS_FLAT), low=True)
     elif kind == "tresorvitrine":
-        steel = lift("#4b5259", 1.5)
-        p.box(x0, y0, x1, y1, 0, 0.6, shade(steel, 1.15), steel)
-        # Stahlsockel: Nietenreihe, Schloss, Innenboden mit Samt und Spot
-        for i in range(int((x1 - x0) / 0.25)):
-            c.ellipse(x0 + 0.15 + i * 0.25, y0 + 0.08, 0.02, 0.02, fill=shade(steel, 1.3))
-        c.ellipse(cx, y0 + 0.6 * K * 0.5, 0.06, 0.06, fill=hexc("#1e2226"), outline=OUTLINE, width=0.015)
-        zt0 = 0.6 * K
-        c.poly([(x0 + 0.04, y0 + zt0), (x1 - 0.04, y0 + zt0), (x1 - 0.04, y1 + zt0), (x0 + 0.04, y1 + zt0)], fill=lift("#5a2a2a", 1.5))
-        c.glow(cx, cy + zt0, 1.1, WARM, 0.55)
-        exhibit(p, "mineral", cx, cy - 0.1, 0.6, random.Random(5))
-        exhibit(p, "mineral", cx - 0.35, cy + 0.3, 0.6, random.Random(9))
-        exhibit(p, "muenzen", cx + 0.3, cy + 0.45, 0.6, random.Random(4))
-        p.box(x0 + 0.04, y0, x1 - 0.04, y1, 0.6, 1.5, alpha(hexc("#dff3ff"), 70), alpha(hexc("#bfe3f5"), 45),
-              ol=steel, w=0.07, glass=True)
-        c.line([(x0 + 0.2, y0 + 0.8 * K), (x0 + 0.5, y0 + 1.9 * K)], fill=alpha((255, 255, 255, 255), 140), width=0.04)
-        c.line([(x0 + 0.6, y0 + 0.8 * K), (x0 + 0.75, y0 + 1.3 * K)], fill=alpha((255, 255, 255, 255), 80), width=0.03)
+        # Tresorvitrine der Schatzkammer (User 24.10.: "eindeutig als Schatzkammer erkennbar"): Panzersockel mit
+        # Nietband, Zahlenschloss und Dreispeichengriff, darauf rotes Samttuch mit der Krone auf dem Kissen,
+        # Goldmuenzen, Barren, Kelch und Kette; Glashaube mit Messingkanten und Spot.
+        steel = lift("#3f454c", 1.55)
+        brass = hexc("#c9a24a")
+        gold = hexc("#e2b84a")
+        gold_d = shade(gold, 0.72)
+        gold_l = hexc("#fff0b0")
+        velvet = lift("#5a1a26", 1.55)
+        sock = 0.7
+        p.box(x0, y0, x1, y1, 0, sock, shade(steel, 1.15), steel)
+        fb = y0
+        c.rect(x0 + 0.03, fb + 0.02, x1 - 0.03, fb + 0.1, fill=shade(steel, 0.65))
+        c.rect(x0 + 0.08, fb + 0.1, x1 - 0.08, fb + sock * K - 0.05, fill=shade(steel, 0.92), outline=shade(steel, 0.6), width=0.015)
+        for i in range(int((x1 - x0) / 0.18)):
+            rx = x0 + 0.12 + i * 0.18
+            c.ellipse(rx, fb + sock * K - 0.025, 0.016, 0.016, fill=shade(steel, 1.4))
+            c.ellipse(rx, fb + 0.13, 0.016, 0.016, fill=shade(steel, 1.4))
+        dial = (cx - 0.68, fb + sock * K * 0.5)
+        c.ellipse(dial[0], dial[1], 0.11, 0.11, fill=brass, outline=OUTLINE, width=0.02)
+        c.ellipse(dial[0], dial[1], 0.08, 0.08, fill=hexc("#1e2226"), outline=OUTLINE, width=0.012)
+        for a in range(0, 360, 30):
+            c.line([(dial[0] + 0.055 * math.cos(math.radians(a)), dial[1] + 0.055 * math.sin(math.radians(a))),
+                    (dial[0] + 0.07 * math.cos(math.radians(a)), dial[1] + 0.07 * math.sin(math.radians(a)))], fill=brass, width=0.008)
+        c.line([(dial[0], dial[1]), (dial[0] + 0.05, dial[1] + 0.04)], fill=brass, width=0.012)
+        hub = (cx + 0.62, fb + sock * K * 0.5)
+        for a in (90, 210, 330):
+            c.line([hub, (hub[0] + 0.15 * math.cos(math.radians(a)), hub[1] + 0.15 * math.sin(math.radians(a)))], fill=OUTLINE, width=0.05)
+            c.line([hub, (hub[0] + 0.15 * math.cos(math.radians(a)), hub[1] + 0.15 * math.sin(math.radians(a)))], fill=brass, width=0.028)
+            c.ellipse(hub[0] + 0.15 * math.cos(math.radians(a)), hub[1] + 0.15 * math.sin(math.radians(a)), 0.03, 0.03, fill=brass, outline=OUTLINE, width=0.012)
+        c.ellipse(hub[0], hub[1], 0.045, 0.045, fill=shade(brass, 0.8), outline=OUTLINE, width=0.015)
+        c.rect(cx - 0.32, fb + sock * K * 0.5 - 0.07, cx + 0.32, fb + sock * K * 0.5 + 0.07, fill=brass, outline=OUTLINE, width=0.015)
+        c.rect(cx - 0.29, fb + sock * K * 0.5 - 0.05, cx + 0.29, fb + sock * K * 0.5 + 0.05, outline=shade(brass, 0.7), width=0.008)
+        c.text(cx, fb + sock * K * 0.5, "TREASURY", 0.075, hexc("#2a2422"))
+        # Samtflaeche mit Faltensaum und Spot
+        zt0 = sock * K
+        c.poly([(x0 + 0.04, y0 + zt0), (x1 - 0.04, y0 + zt0), (x1 - 0.04, y1 + zt0), (x0 + 0.04, y1 + zt0)], fill=velvet)
+        c.rect(x0 + 0.04, y0 + zt0, x1 - 0.04, y0 + zt0 + 0.07, fill=shade(velvet, 1.25))
+        for k_ in range(6):
+            c.line([(x0 + 0.2 + k_ * 0.3, y0 + zt0 + 0.02), (x0 + 0.24 + k_ * 0.3, y0 + zt0 + 0.07)], fill=shade(velvet, 0.75), width=0.012)
+        c.glow(cx, cy + zt0 + 0.1, 1.2, WARM, 0.55)
+        # Krone auf dem Kissen (Mitte, hinten)
+        kx, ky = cx, cy + zt0 + 0.25
+        c.ellipse(kx, ky - 0.05, 0.42, 0.2, fill=shade(velvet, 1.3), outline=OUTLINE, width=0.025)        # Kissen
+        c.ellipse(kx, ky - 0.03, 0.34, 0.14, fill=shade(velvet, 1.5))
+        for sx in (-1, 1):
+            c.ellipse(kx + sx * 0.42, ky - 0.05, 0.04, 0.03, fill=gold, outline=OUTLINE, width=0.012)        # Quasten
+        c.rect(kx - 0.3, ky - 0.02, kx + 0.3, ky + 0.2, fill=gold, outline=OUTLINE, width=0.028)            # Reif
+        c.rect(kx - 0.3, ky - 0.02, kx + 0.3, ky + 0.03, fill=gold_d)
+        c.line([(kx - 0.26, ky + 0.17), (kx + 0.26, ky + 0.17)], fill=gold_l, width=0.015)
+        for k_, col in enumerate((hexc("#d02e3a"), hexc("#2e8a4e"), hexc("#2f5fb0"), hexc("#d02e3a"), hexc("#2e8a4e"))):
+            gx = kx - 0.24 + k_ * 0.12
+            c.ellipse(gx, ky + 0.09, 0.035, 0.045, fill=col, outline=OUTLINE, width=0.012)
+            c.ellipse(gx - 0.012, ky + 0.1, 0.01, 0.012, fill=(255, 255, 255, 230))
+        for k_ in range(5):                                                                              # Zacken mit Perlen
+            zx = kx - 0.24 + k_ * 0.12
+            c.poly([(zx - 0.06, ky + 0.2), (zx + 0.06, ky + 0.2), (zx, ky + 0.38)], fill=gold, outline=OUTLINE, width=0.02)
+            c.ellipse(zx, ky + 0.39, 0.025, 0.025, fill=hexc("#f4f0e6"), outline=OUTLINE, width=0.01)
+        c.ellipse(kx, ky + 0.3, 0.2, 0.1, fill=shade(velvet, 1.35), outline=OUTLINE, width=0.015)          # Samtkappe
+        for sx in (-1, 1):                                                                               # Buegel
+            c.line([(kx + sx * 0.22, ky + 0.22), (kx + sx * 0.1, ky + 0.42), (kx, ky + 0.48)], fill=OUTLINE, width=0.05)
+            c.line([(kx + sx * 0.22, ky + 0.22), (kx + sx * 0.1, ky + 0.42), (kx, ky + 0.48)], fill=gold, width=0.028)
+        c.ellipse(kx, ky + 0.5, 0.04, 0.04, fill=gold, outline=OUTLINE, width=0.015)                      # Reichsapfel
+        c.line([(kx, ky + 0.53), (kx, ky + 0.62)], fill=OUTLINE, width=0.04)
+        c.line([(kx - 0.035, ky + 0.585), (kx + 0.035, ky + 0.585)], fill=OUTLINE, width=0.04)
+        c.line([(kx, ky + 0.53), (kx, ky + 0.62)], fill=gold, width=0.02)
+        c.line([(kx - 0.035, ky + 0.585), (kx + 0.035, ky + 0.585)], fill=gold, width=0.02)
+        # Muenzstapel und Streumuenzen (links vorn), Barren (rechts vorn), Kelch, Kette
+        def coin(x, y, r=0.06):
+            c.ellipse(x, y, r, r * 0.55, fill=gold, outline=OUTLINE, width=0.014)
+            c.ellipse(x, y, r * 0.65, r * 0.35, outline=gold_d, width=0.008)
+        def stack(x, y, n):
+            for k_ in range(n):
+                c.rect(x - 0.06, y + k_ * 0.03, x + 0.06, y + k_ * 0.03 + 0.03, fill=gold_d, outline=OUTLINE, width=0.012)
+            coin(x, y + n * 0.03 + 0.005)
+        mx, my = cx - 0.6, cy + zt0 - 0.3
+        stack(mx, my, 5); stack(mx + 0.15, my - 0.08, 3); stack(mx - 0.14, my - 0.1, 2)
+        for dx, dy in ((0.3, -0.12), (0.36, 0.02), (-0.28, 0.02), (0.1, -0.2), (-0.05, -0.22)):
+            coin(mx + dx, my + dy, 0.05)
+        bx, by = cx + 0.55, cy + zt0 - 0.32
+        for k_, (dx, dy) in enumerate(((0, 0), (0.17, 0.02), (0.085, 0.1))):
+            p.box(bx + dx - 0.09, by + dy, bx + dx + 0.09, by + dy + 0.1, 0, 0.12, gold, gold_d, w=0.014)
+        c.rect(bx + 0.085 - 0.06, by + 0.1 + 0.12 * K + 0.02, bx + 0.085 + 0.06, by + 0.1 + 0.12 * K + 0.06, outline=gold_d, width=0.008)
+        gx, gy = cx - 0.55, cy + zt0 + 0.3                                                                # Kelch
+        c.ellipse(gx, gy, 0.08, 0.035, fill=gold, outline=OUTLINE, width=0.014)
+        c.rect(gx - 0.015, gy, gx + 0.015, gy + 0.14, fill=gold, outline=OUTLINE, width=0.012)
+        c.poly([(gx - 0.09, gy + 0.14), (gx + 0.09, gy + 0.14), (gx + 0.07, gy + 0.3), (gx - 0.07, gy + 0.3)], fill=gold, outline=OUTLINE, width=0.014)
+        c.ellipse(gx, gy + 0.3, 0.07, 0.03, fill=gold_l, outline=OUTLINE, width=0.012)
+        c.ellipse(gx, gy + 0.21, 0.02, 0.025, fill=hexc("#d02e3a"), outline=OUTLINE, width=0.008)
+        nx, ny = cx + 0.55, cy + zt0 + 0.3                                                                # Kette mit Anhaenger
+        chain = [(nx - 0.25, ny + 0.25), (nx - 0.2, ny + 0.05), (nx, ny - 0.05), (nx + 0.2, ny + 0.05), (nx + 0.25, ny + 0.25)]
+        c.line(chain, fill=OUTLINE, width=0.035)
+        c.line(chain, fill=gold, width=0.018)
+        for q in chain[1:4]:
+            c.ellipse(q[0], q[1], 0.018, 0.018, fill=gold_l, outline=OUTLINE, width=0.006)
+        c.poly([(nx - 0.05, ny - 0.03), (nx + 0.05, ny - 0.03), (nx, ny - 0.14)], fill=hexc("#2f5fb0"), outline=OUTLINE, width=0.012)
+        c.poly([(nx - 0.02, ny - 0.04), (nx + 0.02, ny - 0.04), (nx, ny - 0.1)], fill=hexc("#9fc4ff"))
+        # Glashaube mit Messingkanten
+        glass_h = 1.3
+        p.box(x0 + 0.04, y0, x1 - 0.04, y1, sock, glass_h, alpha(hexc("#dff3ff"), 62), alpha(hexc("#bfe3f5"), 40),
+              ol=alpha(hexc("#e9f7ff"), 230), w=0.03, glass=True)
+        zt = sock + glass_h
+        for ex_ in (x0 + 0.04, x1 - 0.04):
+            c.line([(ex_, y0 + sock * K), (ex_, y0 + zt * K)], fill=brass, width=0.03)
+        c.line([(x0 + 0.04, y0 + zt * K), (x1 - 0.04, y0 + zt * K)], fill=brass, width=0.03)
+        c.line([(x0 + 0.04, y1 + zt * K), (x1 - 0.04, y1 + zt * K)], fill=brass, width=0.03)
+        c.line([(x0 + 0.2, y0 + (sock + 0.1) * K), (x0 + 0.5, y0 + (zt - 0.1) * K)], fill=alpha((255, 255, 255, 255), 140), width=0.04)
+        c.line([(x0 + 0.6, y0 + (sock + 0.1) * K), (x0 + 0.75, y0 + (sock + 0.5) * K)], fill=alpha((255, 255, 255, 255), 80), width=0.03)
     elif kind == "bank":
         seat = lift("#4a3222", 1.9)
         p.box(x0, y0, x1, y1, 0.25, 0.12, shade(seat, 1.15), seat)
@@ -2181,7 +2375,7 @@ def draw_prop(kind, shape, idx, ppm):
         # Plakette an der Sockelfront
         c.rect(cx - 0.55, cy + 0.14, cx + 0.55, cy + zt - 0.06, fill=hexc("#b08a3c"), outline=OUTLINE, width=0.025)
         c.rect(cx - 0.5, cy + 0.18, cx + 0.5, cy + zt - 0.1, outline=shade(hexc("#b08a3c"), 1.3), width=0.015)
-        c.text(cx, cy + (zt + 0.08) / 2, "T. REX", 0.11, hexc("#2a2422"))
+        c.text(cx, cy + (zt + 0.08) / 2, "TYRANNOSAURUS REX", 0.085, hexc("#2a2422"))
     elif kind in ("dino_rex", "dino_rex_head", "dino_rex_jaw"):
         # nur das Skelett (mit Stahlstuetzen), Standlinie wie der Sockel; Oberkante des Sockels = cy + 0,55 K.
         # Rumpf, Kopf und Unterkiefer sind getrennte Sprites, damit der Rex bei der Sabotage den Kopf
@@ -2457,53 +2651,161 @@ def draw_prop(kind, shape, idx, ppm):
         c.line([(cx + r - 0.05, cy + 0.4 * K), (cx + r + 0.25, cy + 0.4 * K), (cx + r + 0.25, cy - 0.05)], fill=OUTLINE, width=0.09)
         c.line([(cx + r - 0.05, cy + 0.4 * K), (cx + r + 0.25, cy + 0.4 * K), (cx + r + 0.25, cy - 0.05)], fill=hexc("#8b949a"), width=0.05)
     elif kind == "sarkophag":
-        gold = lift("#b8923e", 1.35)
-        blue, red, skin = hexc("#2f4f8a"), hexc("#a83636"), hexc("#d9b25c")
-        stone_t, stone_f = lift("#4c4a46", 1.8), lift("#4c4a46", 1.5)
-        p.box(x0 - 0.1, y0 - 0.1, x1 + 0.1, y1 + 0.1, 0, 0.35, stone_t, stone_f)
-        # Mumienfoermiger Deckel: Kasten + gerundetes Kopfende, Kopf im Norden
-        p.box(x0, y0, x1, y1 - 0.3, 0.35, 0.55, gold, shade(gold, 0.85))
-        zt = 0.9
-        top_y0, top_y1 = y0 + zt * K, y1 + zt * K
+        # Mumiensarkophag (User 24.10.: "neu, mehr Detail, realistischer"): Sandsteinsockel mit Stufe, mumienfoermiger
+        # Deckel (Schultern breit, Fussende schmal, Kopf im Norden), Nemes-Kopftuch in Lapis und Gold, Gesicht mit
+        # Kohl-Augen und Zeremonialbart, Uraeus, Usech-Kragen, gekreuzte Arme mit Krummstab und Geissel, Fluegel
+        # der Nut ueber der Brust, Hieroglyphenkolumne bis zu den Fuessen, Federmuster, Kartusche am Fussende.
+        gold = lift("#c89a3a", 1.3)
+        gold_d = shade(gold, 0.72)
+        gold_l = hexc("#ffe9a8")
+        lapis = hexc("#2f4f9a")
+        lapis_d = shade(lapis, 0.7)
+        turq = hexc("#3fa8a0")
+        carn = hexc("#b8402a")
+        skin = hexc("#d9a860")
+        stone_t, stone_f = lift("#8a7a5c", 1.45), lift("#8a7a5c", 1.2)
+        kohl = hexc("#1e1a18")
         hw = (x1 - x0) / 2
-        c.ellipse(cx, top_y1 - 0.3, hw, 0.3, fill=gold, outline=OUTLINE)
-        c.rect(x0, top_y1 - 0.5, x1, top_y1 - 0.3, fill=gold)
-        c.line([(x0, top_y1 - 0.5), (x0, top_y1 - 0.3)], fill=OUTLINE, width=OUT_W)
-        c.line([(x1, top_y1 - 0.5), (x1, top_y1 - 0.3)], fill=OUTLINE, width=OUT_W)
-        # Nemes-Kopftuch (blau-gold gestreift) mit Gesicht und Zeremonialbart
-        c.ellipse(cx, top_y1 - 0.34, hw - 0.06, 0.26, fill=blue, outline=OUTLINE, width=0.025)
-        for i in range(-2, 3):
-            c.line([(cx + i * 0.13, top_y1 - 0.62), (cx + i * 0.16, top_y1 - 0.14)], fill=gold, width=0.035)
-        c.ellipse(cx, top_y1 - 0.36, 0.17, 0.2, fill=skin, outline=OUTLINE, width=0.025)
-        for ex_ in (-0.07, 0.07):
-            c.ellipse(cx + ex_, top_y1 - 0.31, 0.045, 0.028, fill=(250, 246, 236, 255), outline=OUTLINE, width=0.012)
-            c.ellipse(cx + ex_, top_y1 - 0.31, 0.018, 0.018, fill=OUTLINE)
-        c.line([(cx - 0.05, top_y1 - 0.44), (cx + 0.05, top_y1 - 0.44)], fill=shade(skin, 0.6), width=0.02)
-        c.rect(cx - 0.03, top_y1 - 0.62, cx + 0.03, top_y1 - 0.53, fill=blue, outline=OUTLINE, width=0.015)
-        # Halskragen (Usech) in Ringen, gekreuzte Arme mit Krummstab und Geissel
-        for i, col in enumerate((blue, red, gold, blue)):
-            c.ellipse(cx, top_y1 - 0.72, 0.36 - i * 0.07, 0.16 - i * 0.03, fill=col, outline=OUTLINE if i == 0 else None, width=0.02)
-        c.line([(cx - 0.3, top_y1 - 1.0), (cx + 0.25, top_y1 - 1.25)], fill=OUTLINE, width=0.14)
-        c.line([(cx + 0.3, top_y1 - 1.0), (cx - 0.25, top_y1 - 1.25)], fill=OUTLINE, width=0.14)
-        c.line([(cx - 0.3, top_y1 - 1.0), (cx + 0.25, top_y1 - 1.25)], fill=shade(gold, 1.1), width=0.09)
-        c.line([(cx + 0.3, top_y1 - 1.0), (cx - 0.25, top_y1 - 1.25)], fill=shade(gold, 1.1), width=0.09)
-        c.line([(cx - 0.28, top_y1 - 1.28), (cx - 0.22, top_y1 - 0.92)], fill=blue, width=0.035)
-        c.line([(cx + 0.28, top_y1 - 1.28), (cx + 0.22, top_y1 - 0.92), (cx + 0.32, top_y1 - 0.86)], fill=blue, width=0.035)
-        # Koerperbaender bis zum Fussende
-        yy = top_y1 - 1.45
-        i = 0
-        while yy > top_y0 + 0.12:
-            c.rect(x0 + 0.06, yy - 0.07, x1 - 0.06, yy, fill=blue if i % 2 == 0 else red)
-            yy -= 0.16; i += 1
-        c.line([(cx, top_y1 - 1.4), (cx, top_y0 + 0.1)], fill=shade(gold, 0.75), width=0.02)
-        # Hieroglyphenband an der Front
-        fb = y0 + 0.35 * K
-        for i in range(int((x1 - x0) / 0.14)):
-            gx = x0 + 0.08 + i * 0.14
-            if i % 2:
-                c.ellipse(gx, fb + 0.16, 0.025, 0.035, fill=blue)
-            else:
-                c.rect(gx - 0.02, fb + 0.1, gx + 0.02, fb + 0.22, fill=blue)
+        # Sockel (zwei Stufen)
+        p.box(x0 - 0.12, y0 - 0.12, x1 + 0.12, y1 + 0.12, 0, 0.18, stone_t, stone_f)
+        p.box(x0 - 0.04, y0 - 0.04, x1 + 0.04, y1 + 0.04, 0.18, 0.17, shade(stone_t, 1.05), shade(stone_f, 0.95))
+        for i in range(3):
+            c.line([(x0 - 0.1 + i * 0.3, y0 - 0.1), (x0 - 0.1 + i * 0.3, y0 - 0.12 + 0.17 * K)], fill=shade(stone_f, 0.75), width=0.012)
+        zb = 0.35
+        H = 0.55
+        zt = zb + H
+        tb0, tb1 = y0 + zt * K, y1 + zt * K          # Deckflaeche: Bild-y von Fuss (Sued) bis Kopf (Nord)
+        L_ = tb1 - tb0
+        # Fussende (Stirnseite) in Gold mit Hieroglyphenband
+        fw = hw * 0.62
+        c.poly([(cx - fw, y0 + zb * K), (cx + fw, y0 + zb * K), (cx + fw, tb0), (cx - fw, tb0)], fill=gold_d, outline=OUTLINE)
+        c.rect(cx - fw + 0.04, y0 + zb * K + 0.06, cx + fw - 0.04, tb0 - 0.05, fill=lapis, outline=OUTLINE, width=0.012)
+        for i in range(4):
+            gx = cx - fw + 0.1 + i * (2 * fw - 0.2) / 3
+            c.ellipse(gx, (y0 + zb * K + tb0) / 2, 0.025, 0.035, fill=gold_l)
+        # Deckel-Umriss (Mumienform): Fuss schmal, Schultern breit, runder Kopf
+        sh_y = tb1 - L_ * 0.3                          # Schulterlinie
+        lid = [(cx - fw, tb0), (cx + fw, tb0), (cx + hw * 0.92, sh_y - 0.25), (cx + hw, sh_y), (cx + hw * 0.95, sh_y + 0.14),
+               (cx + hw * 0.62, tb1 - 0.3), (cx + hw * 0.55, tb1 - 0.08), (cx + hw * 0.3, tb1), (cx - hw * 0.3, tb1), (cx - hw * 0.55, tb1 - 0.08),
+               (cx - hw * 0.62, tb1 - 0.3), (cx - hw * 0.95, sh_y + 0.14), (cx - hw, sh_y), (cx - hw * 0.92, sh_y - 0.25)]
+        c.poly(lid, fill=gold, outline=OUTLINE)
+        c.poly([(q[0] * 0.92 + cx * 0.08, q[1]) for q in lid], outline=alpha(gold_d, 200), width=0.012)
+        c.line([(cx - fw + 0.04, tb0 + 0.02), (cx + fw - 0.04, tb0 + 0.02)], fill=gold_l, width=0.012)
+        # Federmuster (Rischi) auf dem Unterkoerper, Mittelkolumne mit Hieroglyphen
+        body_y0, body_y1 = tb0 + 0.3, sh_y - 0.55
+        col_w = 0.11
+        c.rect(cx - col_w, body_y0 - 0.1, cx + col_w, body_y1 + 0.05, fill=hexc("#efe4c8"), outline=OUTLINE, width=0.012)
+        c.line([(cx - col_w + 0.015, body_y0 - 0.08), (cx - col_w + 0.015, body_y1 + 0.03)], fill=lapis, width=0.012)
+        c.line([(cx + col_w - 0.015, body_y0 - 0.08), (cx + col_w - 0.015, body_y1 + 0.03)], fill=lapis, width=0.012)
+        yy = body_y0 - 0.04
+        k_ = 0
+        while yy < body_y1 - 0.02:
+            gsym = k_ % 5
+            if gsym == 0:                                     # Auge
+                c.ellipse(cx, yy + 0.03, 0.045, 0.022, fill=lapis, outline=OUTLINE, width=0.008)
+                c.ellipse(cx, yy + 0.03, 0.012, 0.012, fill=kohl)
+            elif gsym == 1:                                   # Anch
+                c.ellipse(cx, yy + 0.055, 0.02, 0.022, outline=kohl, width=0.01)
+                c.line([(cx, yy + 0.035), (cx, yy)], fill=kohl, width=0.012)
+                c.line([(cx - 0.03, yy + 0.028), (cx + 0.03, yy + 0.028)], fill=kohl, width=0.01)
+            elif gsym == 2:                                   # Wasser (Zickzack)
+                c.line([(cx - 0.04 + i * 0.02, yy + 0.03 + (0.015 if i % 2 else -0.015)) for i in range(5)], fill=lapis, width=0.01)
+            elif gsym == 3:                                   # Vogel
+                c.ellipse(cx + 0.01, yy + 0.025, 0.03, 0.018, fill=kohl)
+                c.ellipse(cx + 0.035, yy + 0.05, 0.012, 0.012, fill=kohl)
+                c.line([(cx - 0.02, yy + 0.005), (cx - 0.02, yy - 0.01)], fill=kohl, width=0.008)
+            else:                                             # Sonnenscheibe
+                c.ellipse(cx, yy + 0.03, 0.022, 0.022, fill=carn, outline=kohl, width=0.008)
+            yy += 0.1
+            k_ += 1
+        for side in (-1, 1):                                  # Federn
+            fx0 = cx + side * (col_w + 0.02)
+            fx1 = cx + side * (hw * 0.78)
+            fy = body_y0
+            row = 0
+            while fy < body_y1 - 0.05:
+                n = 3
+                for i in range(n):
+                    t0, t1 = i / n, (i + 1) / n
+                    ax, bx = fx0 + (fx1 - fx0) * t0, fx0 + (fx1 - fx0) * t1
+                    off = 0.5 * (row % 2) * (fx1 - fx0) / n
+                    ax, bx = ax + off * (1 if side > 0 else -1) * 0, bx
+                    mx = (ax + bx) / 2
+                    colr = lapis if (i + row) % 2 else turq
+                    c.poly([(ax, fy), (bx, fy), (mx, fy + 0.11)], fill=colr, outline=alpha(OUTLINE, 220), width=0.008)
+                fy += 0.085
+                row += 1
+        # Fluegel der Nut ueber der Brust (gespreizt, in Lapis und Gold)
+        wy = sh_y - 0.5
+        for side in (-1, 1):
+            wing = [(cx + side * 0.08, wy - 0.02), (cx + side * hw * 0.9, wy + 0.08), (cx + side * hw * 0.88, wy + 0.16), (cx + side * 0.1, wy + 0.1)]
+            c.poly(wing, fill=lapis, outline=OUTLINE, width=0.012)
+            for i in range(5):
+                t = (i + 0.5) / 5
+                c.line([(cx + side * (0.1 + (hw * 0.78) * t), wy + 0.1 - 0.02 * t), (cx + side * (0.1 + (hw * 0.78) * t) + side * 0.03, wy - 0.005 + 0.08 * t)],
+                       fill=gold_l, width=0.008)
+        c.ellipse(cx, wy + 0.08, 0.05, 0.035, fill=carn, outline=OUTLINE, width=0.01)                     # Skarabaeus-Sonne
+        # gekreuzte Arme mit Krummstab (Heka) und Geissel (Nechech)
+        ay = sh_y - 0.18
+        for s_ in (-1, 1):
+            arm = [(cx + s_ * hw * 0.72, ay + 0.12), (cx - s_ * 0.16, ay - 0.1), (cx - s_ * 0.22, ay - 0.02), (cx + s_ * hw * 0.72, ay + 0.22)]
+            c.poly(arm, fill=shade(gold, 1.08), outline=OUTLINE, width=0.022)
+            c.line([(cx + s_ * hw * 0.6, ay + 0.17), (cx - s_ * 0.1, ay - 0.02)], fill=gold_l, width=0.01)
+            c.ellipse(cx - s_ * 0.19, ay - 0.06, 0.05, 0.035, fill=skin, outline=OUTLINE, width=0.014)   # Faust
+            for i in range(3):
+                c.line([(cx - s_ * (0.16 + i * 0.015), ay - 0.08), (cx - s_ * (0.16 + i * 0.015), ay - 0.045)], fill=shade(skin, 0.7), width=0.006)
+        crook = [(cx - 0.19, ay - 0.1), (cx - 0.24, ay + 0.18), (cx - 0.3, ay + 0.26), (cx - 0.36, ay + 0.2)]
+        c.line(crook, fill=OUTLINE, width=0.045)
+        c.line(crook, fill=gold, width=0.025)
+        for i in range(4):
+            c.line([(cx - 0.2 - i * 0.012, ay - 0.04 + i * 0.06), (cx - 0.2 - i * 0.012 - 0.02, ay - 0.04 + i * 0.06 + 0.01)], fill=lapis, width=0.012)
+        c.line([(cx + 0.19, ay - 0.1), (cx + 0.26, ay + 0.1)], fill=OUTLINE, width=0.045)
+        c.line([(cx + 0.19, ay - 0.1), (cx + 0.26, ay + 0.1)], fill=gold, width=0.025)
+        for i in range(3):
+            fl = [(cx + 0.26, ay + 0.1), (cx + 0.3 + i * 0.03, ay + 0.26 + i * 0.02)]
+            c.line(fl, fill=OUTLINE, width=0.03)
+            c.line(fl, fill=(lapis, gold, carn)[i], width=0.015)
+        # Usech-Kragen (Ringe) unter dem Kopftuch
+        ky = tb1 - 0.5
+        for i, colr in enumerate((gold_d, lapis, turq, carn, gold)):
+            c.ellipse(cx, ky - 0.05, hw * 0.78 - i * 0.07, 0.2 - i * 0.03, fill=colr, outline=OUTLINE if i == 0 else None, width=0.02)
+        for i in range(10):
+            ang = math.pi + i * math.pi / 9
+            c.ellipse(cx + (hw * 0.6) * math.cos(ang), ky - 0.05 + 0.15 * math.sin(ang), 0.015, 0.012, fill=gold_l)
+        # Nemes-Kopftuch: Lappen bis auf die Brust, Querstreifen Lapis/Gold, Gesicht, Uraeus, Bart
+        hx, hy = cx, tb1 - 0.3
+        nemes = [(hx - hw * 0.55, hy - 0.4), (hx - hw * 0.35, hy - 0.42), (hx - hw * 0.4, hy - 0.05), (hx - hw * 0.72, hy + 0.08),
+                 (hx - hw * 0.62, hy + 0.2), (hx - hw * 0.3, hy + 0.28), (hx, hy + 0.3), (hx + hw * 0.3, hy + 0.28), (hx + hw * 0.62, hy + 0.2),
+                 (hx + hw * 0.72, hy + 0.08), (hx + hw * 0.4, hy - 0.05), (hx + hw * 0.35, hy - 0.42), (hx + hw * 0.55, hy - 0.4)]
+        c.poly(nemes, fill=lapis, outline=OUTLINE, width=0.025)
+        for i in range(-3, 4):                                                                         # Goldstreifen
+            c.line([(hx + i * hw * 0.18, hy + 0.26 - abs(i) * 0.02), (hx + i * hw * 0.2 - (0.02 if i else 0), hy - 0.4)], fill=gold, width=0.03)
+        c.rect(hx - hw * 0.55, hy - 0.42, hx - hw * 0.35, hy - 0.12, fill=gold, outline=OUTLINE, width=0.012)   # Lappen
+        c.rect(hx + hw * 0.35, hy - 0.42, hx + hw * 0.55, hy - 0.12, fill=gold, outline=OUTLINE, width=0.012)
+        for sx in (-1, 1):
+            for i in range(4):
+                c.line([(hx + sx * hw * 0.37, hy - 0.4 + i * 0.07), (hx + sx * hw * 0.53, hy - 0.4 + i * 0.07)], fill=lapis_d, width=0.012)
+        c.poly([(hx - 0.17, hy + 0.12), (hx - 0.14, hy - 0.08), (hx - 0.08, hy - 0.16), (hx + 0.08, hy - 0.16), (hx + 0.14, hy - 0.08), (hx + 0.17, hy + 0.12),
+                (hx + 0.1, hy + 0.17), (hx - 0.1, hy + 0.17)], fill=skin, outline=OUTLINE, width=0.022)     # Gesicht
+        c.rect(hx - 0.17, hy + 0.12, hx + 0.17, hy + 0.18, fill=gold, outline=OUTLINE, width=0.015)          # Stirnband
+        c.poly([(hx - 0.02, hy + 0.18), (hx + 0.02, hy + 0.18), (hx + 0.03, hy + 0.26), (hx, hy + 0.3), (hx - 0.03, hy + 0.26)], fill=gold, outline=OUTLINE, width=0.012)   # Uraeus
+        c.ellipse(hx, hy + 0.27, 0.012, 0.012, fill=carn)
+        for ex_ in (-0.075, 0.075):                                                                    # Kohl-Augen
+            c.ellipse(hx + ex_, hy + 0.04, 0.05, 0.028, fill=(250, 246, 236, 255), outline=kohl, width=0.012)
+            c.ellipse(hx + ex_, hy + 0.04, 0.02, 0.02, fill=kohl)
+            c.line([(hx + ex_ + (0.05 if ex_ > 0 else -0.05), hy + 0.04), (hx + ex_ + (0.09 if ex_ > 0 else -0.09), hy + 0.055)], fill=kohl, width=0.012)
+            c.line([(hx + ex_ - 0.05, hy + 0.085), (hx + ex_ + 0.05, hy + 0.095)], fill=kohl, width=0.012)     # Braue
+        c.line([(hx, hy + 0.02), (hx - 0.015, hy - 0.04), (hx + 0.015, hy - 0.04)], fill=shade(skin, 0.7), width=0.01)   # Nase
+        c.line([(hx - 0.04, hy - 0.08), (hx + 0.04, hy - 0.08)], fill=shade(skin, 0.6), width=0.014)                      # Mund
+        c.rect(hx - 0.03, hy - 0.3, hx + 0.03, hy - 0.15, fill=lapis, outline=OUTLINE, width=0.012)                        # Zeremonialbart
+        for i in range(3):
+            c.line([(hx - 0.025, hy - 0.18 - i * 0.04), (hx + 0.025, hy - 0.18 - i * 0.04)], fill=gold, width=0.008)
+        c.poly([(hx - 0.03, hy - 0.3), (hx + 0.03, hy - 0.3), (hx + 0.045, hy - 0.34), (hx - 0.01, hy - 0.34)], fill=lapis, outline=OUTLINE, width=0.01)
+        # Kartusche am Fussende, Glanzkante links
+        c.ellipse(cx, tb0 + 0.14, 0.13, 0.055, fill=hexc("#efe4c8"), outline=OUTLINE, width=0.012)
+        for i in range(3):
+            c.ellipse(cx - 0.07 + i * 0.07, tb0 + 0.14, 0.015, 0.02, fill=(lapis, carn, kohl)[i])
+        c.line([(cx - hw * 0.88, sh_y - 0.2), (cx - hw * 0.56, tb1 - 0.3)], fill=alpha(gold_l, 150), width=0.02)
     elif kind == "stele":
         sand = lift("#8a6f47", 1.55)
         p.box(x0, y0, x1, y1, 0, 0.3, lift("#4c4a46", 1.7), lift("#4c4a46", 1.5))
@@ -2649,50 +2951,213 @@ def draw_prop(kind, shape, idx, ppm):
             c.line([(x0 + 0.05, yy), (x1 - 0.05, yy + 0.08)], fill=shade(steel, 0.7), width=0.02)
         c.rect(x0 - 0.05, y0, x1 + 0.05, y0 + 0.08, fill=hexc("#7a4a2c"))
     elif kind == "dampfmaschine":
-        green = lift("#2f4a3a", 1.9)
+        # Stationaere Dampfmaschine (User 24.10.: "Tanks/Maschinen neu, besser erkennbar"): Ziegelsattel mit
+        # Feuertuer, liegender Nietkessel mit Messingbaendern, Dampfdom, Schornstein, Manometer, Dampfrohr mit
+        # rotem Ventilrad, polierter Zylinder mit Kolbenstange nach Osten zum Schwungrad, Fliehkraftregler,
+        # Typenschild. Flache Farben, eine Schattenstufe, kraeftige Umrisse.
         steel = lift("#3b4046", 1.8)
+        brick = lift("#7a3f30", 1.75)
+        iron = lift("#2a2d33", 1.9)
+        green = lift("#2f4a3a", 1.9)
+        brass = hexc("#c9a24a")
+        chrome = hexc("#c8d0d4")
+        red = hexc("#c0392b")
         p.box(x0, y0, x1, y1, 0, 0.3, shade(steel, 1.2), steel)
-        # liegender Kessel
-        kr = 0.65
-        ky0, ky1 = y0 + 0.3, y1 - 0.3
-        c.rect(x0 + 0.2, ky0 + 0.3 * K, x1 - 1.2, ky0 + (0.3 + 2 * kr) * K, fill=green, outline=OUTLINE)
-        c.rect(x0 + 0.2, ky0 + (0.3 + 2 * kr) * K, x1 - 1.2, ky1 + (0.3 + 2 * kr) * K - 0.2, fill=shade(green, 1.2), outline=OUTLINE)
-        for bx in (x0 + 0.8, x0 + 1.8):
-            c.rect(bx, ky0 + 0.3 * K, bx + 0.12, ky1 + (0.3 + 2 * kr) * K - 0.2, fill=hexc("#b08a3c"), outline=OUTLINE, width=0.02)
-        # Zylinder + Kolben
-        p.box(x1 - 1.2, y0 + 0.5, x1 - 0.3, y1 - 0.5, 0.3, 1.0, hexc("#c0c8cc"), lift("#3b4046", 1.9))
-        c.line([(x1 - 0.3, y0 + 0.6 + 0.8 * K), (x1 + 0.3, y0 + 0.6 + 0.8 * K)], fill=hexc("#c0c8cc"), width=0.06)
-        # Kamin
-        p.cyl(x0 + 0.7, cy + 0.2, 0.18, 1.6, 2.0, OUTLINE, steel)
-        c.ellipse(x0 + 0.7, cy + 0.2 + 3.6 * K, 0.18, 0.18, fill=(30, 30, 30, 255), outline=OUTLINE, width=0.03)
-        c.text(cx - 0.4, ky0 + (0.3 + kr) * K, "1887", 0.25, hexc("#d9b25c"))
+        for i in range(int((x1 - x0) / 0.3)):
+            c.ellipse(x0 + 0.15 + i * 0.3, y0 + 0.08, 0.02, 0.02, fill=shade(steel, 1.35))
+        # Ziegelsattel unter dem Kessel (West) mit Feuertuer und Glut
+        sx0, sx1 = x0 + 0.2, x0 + 2.75
+        p.box(sx0, y0 + 0.25, sx1, y1 - 0.25, 0.3, 0.75, shade(brick, 1.12), brick)
+        fb0 = y0 + 0.25 + 0.3 * K
+        for row in range(4):
+            yy = fb0 + 0.04 + row * 0.095
+            c.line([(sx0 + 0.02, yy), (sx1 - 0.02, yy)], fill=shade(brick, 0.7), width=0.012)
+            for i in range(9):
+                bx = sx0 + 0.12 + i * 0.3 + (0.15 if row % 2 else 0)
+                if bx < sx1 - 0.05:
+                    c.line([(bx, yy), (bx, yy + 0.09)], fill=shade(brick, 0.7), width=0.012)
+        dx0, dx1 = sx0 + 0.3, sx0 + 0.9
+        c.rect(dx0, fb0 + 0.07, dx1, fb0 + 0.36, fill=iron, outline=OUTLINE, width=0.025)
+        c.rect(dx0 + 0.04, fb0 + 0.11, dx1 - 0.04, fb0 + 0.32, outline=shade(iron, 1.4), width=0.01)
+        c.glow((dx0 + dx1) / 2, fb0 + 0.17, 0.3, hexc("#ff8a3c"), 0.55)
+        c.rect(dx0 + 0.1, fb0 + 0.13, dx1 - 0.1, fb0 + 0.2, fill=hexc("#ff8a3c"), outline=OUTLINE, width=0.012)
+        c.ellipse(dx1 - 0.1, fb0 + 0.28, 0.022, 0.022, fill=brass, outline=OUTLINE, width=0.01)
+        c.line([(dx1 - 0.1, fb0 + 0.28), (dx1 + 0.02, fb0 + 0.34)], fill=brass, width=0.02)
+        # Typenschild am Sattel
+        c.rect(sx1 - 1.3, fb0 + 0.1, sx1 - 0.25, fb0 + 0.34, fill=brass, outline=OUTLINE, width=0.02)
+        c.rect(sx1 - 1.26, fb0 + 0.13, sx1 - 0.29, fb0 + 0.31, outline=shade(brass, 0.7), width=0.01)
+        c.text(sx1 - 0.775, fb0 + 0.225, "VESPER 1887", 0.085, hexc("#2a2422"))
+        # liegender Kessel (Achse Ost-West): Band der Hoehe 2 R sqrt(1 + K^2) um die Bildmitte cy + zc K
+        R = 0.6
+        zc = 0.3 + 0.75 + R
+        kx0, kx1 = sx0 + 0.05, sx1 - 0.05
+        mid = cy + zc * K
+        half = R * math.sqrt(1 + K * K)
+        lo, hi = mid - half, mid + half
+        c.rect(kx0, lo, kx1, hi, fill=green, outline=OUTLINE)
+        c.rect(kx0 + 0.03, lo + 0.03, kx1 - 0.03, lo + (hi - lo) * 0.3, fill=shade(green, 0.72))
+        c.rect(kx0 + 0.03, lo + (hi - lo) * 0.66, kx1 - 0.03, hi - 0.03, fill=shade(green, 1.2))
+        c.line([(kx0 + 0.06, lo + (hi - lo) * 0.82), (kx1 - 0.06, lo + (hi - lo) * 0.82)], fill=shade(green, 1.45), width=0.035)
+        for i in range(int((kx1 - kx0) / 0.2)):                                        # Nietreihen
+            rx = kx0 + 0.12 + i * 0.2
+            c.ellipse(rx, lo + 0.08, 0.016, 0.016, fill=shade(green, 1.4))
+            c.ellipse(rx, hi - 0.1, 0.016, 0.016, fill=shade(green, 0.6))
+        for bx in (kx0 + 0.55, kx0 + 1.3, kx0 + 2.05):                                  # Messingbaender
+            c.rect(bx - 0.06, lo - 0.02, bx + 0.06, hi + 0.02, fill=brass, outline=OUTLINE, width=0.02)
+            c.line([(bx - 0.03, lo + 0.05), (bx - 0.03, hi - 0.05)], fill=shade(brass, 1.35), width=0.012)
+        # Kesselboden West (Nietflansch) und Stirnwand Ost
+        c.ellipse(kx0, mid, 0.12, half, fill=shade(green, 0.85), outline=OUTLINE, width=0.035)
+        c.ellipse(kx0, mid, 0.07, half - 0.1, fill=shade(green, 1.05), outline=shade(green, 0.6), width=0.015)
+        for a in range(0, 360, 30):
+            c.ellipse(kx0 + 0.09 * math.cos(math.radians(a)), mid + (half - 0.05) * math.sin(math.radians(a)), 0.014, 0.014, fill=shade(green, 1.4))
+        c.rect(kx1 - 0.08, lo - 0.02, kx1 + 0.06, hi + 0.02, fill=shade(steel, 0.9), outline=OUTLINE, width=0.03)
+        # Manometer an der Kesselfront
+        gx, gy = kx0 + 1.68, mid + 0.02
+        c.ellipse(gx, gy, 0.2, 0.2, fill=brass, outline=OUTLINE, width=0.025)
+        c.ellipse(gx, gy, 0.15, 0.15, fill=hexc("#f2ecd8"), outline=OUTLINE, width=0.015)
+        for a in range(-200, 30, 23):
+            c.line([(gx + 0.12 * math.cos(math.radians(a)), gy + 0.12 * math.sin(math.radians(a))),
+                    (gx + 0.14 * math.cos(math.radians(a)), gy + 0.14 * math.sin(math.radians(a)))], fill=hexc("#2a2422"), width=0.01)
+        c.line([(gx + 0.1 * math.cos(math.radians(-40)), gy + 0.1 * math.sin(math.radians(-40))),
+                (gx + 0.14 * math.cos(math.radians(-40)), gy + 0.14 * math.sin(math.radians(-40)))], fill=red, width=0.025)
+        c.line([(gx, gy), (gx + 0.11 * math.cos(math.radians(-115)), gy + 0.11 * math.sin(math.radians(-115)))], fill=hexc("#2a2422"), width=0.015)
+        c.ellipse(gx, gy, 0.02, 0.02, fill=brass, outline=OUTLINE, width=0.008)
+        # Dampfdom mit Sicherheitsventil, Schornstein mit Krone (sitzen auf dem Kesselruecken)
+        dome_x = kx0 + 1.3
+        dz = zc + R - 0.12
+        p.cyl(dome_x, cy, 0.26, dz, 0.4, shade(brass, 1.15), brass, ry=0.13)
+        c.ellipse(dome_x, cy + (dz + 0.4) * K, 0.1, 0.05, fill=shade(brass, 0.8), outline=OUTLINE, width=0.015)
+        c.line([(dome_x - 0.3, cy + (dz + 0.62) * K), (dome_x + 0.22, cy + (dz + 0.52) * K)], fill=OUTLINE, width=0.05)
+        c.line([(dome_x - 0.3, cy + (dz + 0.62) * K), (dome_x + 0.22, cy + (dz + 0.52) * K)], fill=brass, width=0.025)
+        c.ellipse(dome_x + 0.22, cy + (dz + 0.52) * K, 0.045, 0.045, fill=brass, outline=OUTLINE, width=0.015)
+        ch_x = kx0 + 0.45
+        p.cyl(ch_x, cy + 0.1, 0.2, dz, 1.55, iron, iron, ry=0.1)
+        c.rect(ch_x - 0.24, cy + 0.1 + (dz + 1.4) * K, ch_x + 0.24, cy + 0.1 + (dz + 1.52) * K, fill=brass, outline=OUTLINE, width=0.025)
+        c.ellipse(ch_x, cy + 0.1 + (dz + 1.55) * K, 0.2, 0.1, fill=hexc("#1e1e1e"), outline=OUTLINE, width=0.03)
+        c.ellipse(ch_x, cy + 0.1 + (dz + 1.55) * K, 0.13, 0.06, fill=hexc("#0e0e10"))
+        c.line([(ch_x - 0.12, cy + 0.1 + (dz + 0.1) * K), (ch_x - 0.12, cy + 0.1 + (dz + 1.35) * K)], fill=shade(iron, 1.5), width=0.02)
+        # Dampfrohr vom Dom nach Osten zum Zylinder, mit rotem Ventilrad
+        py_ = cy + (zc + R + 0.1) * K
+        pipe = [(dome_x + 0.26, py_), (kx1 + 0.5, py_), (kx1 + 0.5, cy + 1.35 * K)]
+        c.line(pipe, fill=OUTLINE, width=0.1)
+        c.line(pipe, fill=shade(steel, 1.1), width=0.06)
+        c.line([(dome_x + 0.3, py_ + 0.012), (kx1 + 0.46, py_ + 0.012)], fill=shade(steel, 1.5), width=0.012)
+        vx_ = kx1 - 0.2
+        c.ellipse(vx_, py_ + 0.15, 0.11, 0.11, fill=None, outline=OUTLINE, width=0.06)
+        c.ellipse(vx_, py_ + 0.15, 0.11, 0.11, fill=None, outline=red, width=0.03)
+        for a in range(0, 180, 60):
+            c.line([(vx_ - 0.1 * math.cos(math.radians(a)), py_ + 0.15 - 0.1 * math.sin(math.radians(a))),
+                    (vx_ + 0.1 * math.cos(math.radians(a)), py_ + 0.15 + 0.1 * math.sin(math.radians(a)))], fill=red, width=0.02)
+        c.line([(vx_, py_), (vx_, py_ + 0.15)], fill=shade(steel, 0.8), width=0.03)
+        c.ellipse(vx_, py_ + 0.15, 0.025, 0.025, fill=brass, outline=OUTLINE, width=0.01)
+        # Zylinder auf Sockel (Ost), Kolbenstange und Kreuzkopffuehrung nach Osten
+        zx0, zx1 = x1 - 1.35, x1 - 0.35
+        p.box(zx0 - 0.1, y0 + 0.5, zx1 + 0.1, y1 - 0.5, 0.3, 0.3, shade(steel, 1.15), steel)
+        Rz = 0.34
+        zcz = 0.6 + Rz
+        zmid = cy + zcz * K
+        zh = Rz * math.sqrt(1 + K * K)
+        c.rect(zx0, zmid - zh, zx1, zmid + zh, fill=chrome, outline=OUTLINE)
+        c.rect(zx0 + 0.03, zmid - zh + 0.03, zx1 - 0.03, zmid - zh * 0.4, fill=shade(chrome, 0.72))
+        c.line([(zx0 + 0.05, zmid + zh * 0.55), (zx1 - 0.05, zmid + zh * 0.55)], fill=(255, 255, 255, 255), width=0.03)
+        for hx in (zx0, zx1):                                                               # Zylinderdeckel mit Schrauben
+            c.rect(hx - 0.07, zmid - zh - 0.03, hx + 0.07, zmid + zh + 0.03, fill=shade(steel, 0.95), outline=OUTLINE, width=0.03)
+            for k_ in range(5):
+                c.ellipse(hx, zmid - zh + 0.05 + k_ * (2 * zh - 0.1) / 4, 0.018, 0.018, fill=shade(steel, 1.5))
+        rod_y = zmid
+        c.line([(zx1 + 0.07, rod_y), (x1 + 0.05, rod_y)], fill=OUTLINE, width=0.09)
+        c.line([(zx1 + 0.07, rod_y), (x1 + 0.05, rod_y)], fill=chrome, width=0.05)
+        c.rect(x1 - 0.3, rod_y - 0.1, x1 - 0.05, rod_y + 0.1, fill=shade(steel, 1.0), outline=OUTLINE, width=0.025)    # Kreuzkopf
+        c.line([(x1 - 0.32, rod_y - 0.13), (x1 + 0.02, rod_y - 0.13)], fill=OUTLINE, width=0.035)             # Gleitbahn
+        c.line([(x1 - 0.32, rod_y + 0.13), (x1 + 0.02, rod_y + 0.13)], fill=OUTLINE, width=0.035)
+        # Fliehkraftregler auf dem Zylinder
+        rgx = zx0 + 0.35
+        rbase = zmid + zh
+        c.line([(rgx, rbase), (rgx, rbase + 0.42)], fill=OUTLINE, width=0.045)
+        c.line([(rgx, rbase), (rgx, rbase + 0.42)], fill=brass, width=0.022)
+        for s in (-1, 1):
+            c.line([(rgx, rbase + 0.4), (rgx + s * 0.16, rbase + 0.2)], fill=OUTLINE, width=0.035)
+            c.line([(rgx, rbase + 0.4), (rgx + s * 0.16, rbase + 0.2)], fill=brass, width=0.015)
+            c.ellipse(rgx + s * 0.16, rbase + 0.19, 0.055, 0.055, fill=brass, outline=OUTLINE, width=0.015)
+            c.ellipse(rgx + s * 0.16 - 0.015, rbase + 0.21, 0.015, 0.012, fill=(255, 245, 210, 255))
+        c.ellipse(rgx, rbase + 0.42, 0.03, 0.03, fill=brass, outline=OUTLINE, width=0.012)
+        # Abdampfrohr hinten rechts
+        c.line([(zx1 - 0.2, cy + 0.6 + zcz * K), (zx1 - 0.2, y1 + 1.5 * K), (zx1 + 0.3, y1 + 1.5 * K)], fill=OUTLINE, width=0.09)
+        c.line([(zx1 - 0.2, cy + 0.6 + zcz * K), (zx1 - 0.2, y1 + 1.5 * K), (zx1 + 0.3, y1 + 1.5 * K)], fill=shade(steel, 1.0), width=0.05)
     elif kind == "schwungrad":
-        # Rad steht in der Ost-West-Ebene (Kurbelwelle N-S, Kolben der Dampfmaschine laeuft E-W):
-        # in der schraegen Aufsicht eine Ellipse rx = r, ry = r * K. Lagerboecke vor und hinter dem Rad.
+        # Grosses Schwungrad (User 24.10.: "Rad neu") zwischen zwei gusseisernen Lagerboecken, Achse Nord-Sued.
+        # Die Scheibe steht in der Ost-West-Ebene; sie wird als Ellipse mit ry = 0,78 r gezeichnet (steiler
+        # als die reine Projektion 0,55 r, damit das Rad als Rad lesbar bleibt). Kurbelzapfen mit Pleuel zum
+        # Kreuzkopf der Dampfmaschine (Westen), Treibriemen zur Riemenscheibe des Dynamos (Osten).
         green = lift("#2f4a3a", 1.9)
         steel = lift("#3b4046", 1.8)
-        brass = hexc("#b08a3c")
-        r = x1 - cx - 0.08
+        iron = lift("#2a2d33", 1.9)
+        brass = hexc("#c9a24a")
+        chrome = hexc("#c8d0d4")
+        leather = lift("#5a3a22", 1.7)
+        r = x1 - cx - 0.06
         z0 = 1.05
         wy = cy + z0 * K
-        p.box(cx - 0.22, cy + 0.2, cx + 0.22, cy + 0.5, 0, z0, shade(steel, 1.15), steel, w=0.035)
-        # Felge (dick, mit Lichtkante), Speichen, Nabe
-        c.ellipse(cx, wy, r, r * K, fill=alpha((0, 0, 0, 255), 40), outline=OUTLINE, width=0.24)
-        c.ellipse(cx, wy, r, r * K, fill=None, outline=green, width=0.15)
-        c.ellipse(cx, wy + 0.02, r - 0.03, r * K - 0.02, fill=None, outline=shade(green, 1.18), width=0.03)
+        ry = r * 0.78
+
+        def pedestal(py0, py1, front=True):
+            p.box(cx - 0.26, py0, cx + 0.26, py1, 0, z0 - 0.12, shade(iron, 1.2), iron, w=0.035)
+            fb = py0
+            c.poly([(cx - 0.3, fb + 0.02), (cx + 0.3, fb + 0.02), (cx + 0.3, fb + 0.1), (cx - 0.3, fb + 0.1)], fill=shade(iron, 0.75), outline=OUTLINE, width=0.02)
+            c.poly([(cx - 0.2, fb + 0.1), (cx + 0.2, fb + 0.1), (cx + 0.12, fb + (z0 - 0.2) * K), (cx - 0.12, fb + (z0 - 0.2) * K)], fill=shade(iron, 0.85))
+            c.ellipse(cx, fb + (z0 - 0.08) * K, 0.14, 0.11, fill=shade(iron, 1.15), outline=OUTLINE, width=0.03)   # Lagerschale
+            if front:
+                c.ellipse(cx, fb + (z0 - 0.08) * K, 0.07, 0.06, fill=brass, outline=OUTLINE, width=0.02)
+                c.ellipse(cx - 0.02, fb + (z0 - 0.08) * K + 0.015, 0.02, 0.015, fill=(255, 245, 210, 255))
+                c.ellipse(cx, fb + (z0 + 0.1) * K, 0.03, 0.03, fill=brass, outline=OUTLINE, width=0.012)           # Oeler
+
+        pedestal(cy + 0.28, cy + 0.56, front=False)
+        # Riemenscheibe des Dynamos (Osten) und Treibriemen, hinter dem Rad
+        px_, pz = x1 + 0.72, 1.1
+        pyy = cy + 0.75 + pz * K            # Dynamoachse: 1,25 m noerdlich der Turbosatz-Standlinie (y0 + 0,5 = cy - 0,5)
+        pr = 0.3
+        belt = alpha(leather, 255)
+        c.poly([(cx, wy + ry - 0.02), (px_, pyy + pr * 0.78 - 0.015), (px_, pyy + pr * 0.78 + 0.05), (cx + 0.2, wy + ry + 0.06)], fill=belt, outline=OUTLINE, width=0.02)
+        c.poly([(cx, wy - ry + 0.02), (px_, pyy - pr * 0.78 + 0.015), (px_, pyy - pr * 0.78 - 0.05), (cx + 0.2, wy - ry - 0.06)], fill=belt, outline=OUTLINE, width=0.02)
+        c.ellipse(px_, pyy, pr, pr * 0.78, fill=steel, outline=OUTLINE, width=0.035)
+        c.ellipse(px_, pyy, pr - 0.07, (pr - 0.07) * 0.78, fill=shade(steel, 0.8), outline=OUTLINE, width=0.015)
+        c.ellipse(px_, pyy, 0.05, 0.04, fill=brass, outline=OUTLINE, width=0.012)
+        # Rad: Felge, Speichen, Nabe
+        c.ellipse(cx, wy, r, ry, fill=None, outline=OUTLINE, width=0.3)
+        c.ellipse(cx, wy, r, ry, fill=None, outline=shade(green, 0.92), width=0.2)
+        c.ellipse(cx, wy + 0.025, r - 0.02, ry - 0.02, fill=None, outline=shade(green, 1.22), width=0.03)
+        c.ellipse(cx, wy - 0.025, r - 0.03, ry - 0.03, fill=None, outline=shade(green, 0.7), width=0.03)
+        for a in range(0, 360, 45):
+            ca, sa = math.cos(math.radians(a + 22)), math.sin(math.radians(a + 22))
+            ex, ey = cx + (r - 0.12) * ca, wy + (ry - 0.1) * sa
+            nx, ny = -sa * 0.045, ca * 0.045
+            c.poly([(cx + nx * 0.6, wy + ny * 0.6), (ex + nx * 0.5, ey + ny * 0.5), (ex - nx * 0.5, ey - ny * 0.5), (cx - nx * 0.6, wy - ny * 0.6)],
+                   fill=green, outline=OUTLINE, width=0.022)
+            c.line([(cx + nx * 0.3, wy + ny * 0.3), (ex + nx * 0.25, ey + ny * 0.25)], fill=shade(green, 1.25), width=0.012)
+        # Gegengewicht an der Felge (dem Kurbelzapfen gegenueber)
+        ca_, sa_ = math.cos(math.radians(250)), math.sin(math.radians(250))
+        c.poly([(cx + (r - 0.3) * math.cos(math.radians(235)), wy + (ry - 0.25) * math.sin(math.radians(235))),
+                (cx + (r - 0.08) * math.cos(math.radians(235)), wy + (ry - 0.06) * math.sin(math.radians(235))),
+                (cx + (r - 0.08) * math.cos(math.radians(265)), wy + (ry - 0.06) * math.sin(math.radians(265))),
+                (cx + (r - 0.3) * math.cos(math.radians(265)), wy + (ry - 0.25) * math.sin(math.radians(265)))], fill=shade(green, 0.85), outline=OUTLINE, width=0.022)
+        c.ellipse(cx, wy, 0.24, 0.2, fill=steel, outline=OUTLINE, width=0.035)
+        c.ellipse(cx, wy, 0.17, 0.14, fill=shade(steel, 1.15), outline=shade(steel, 0.7), width=0.012)
         for a in range(0, 360, 60):
-            ex, ey = cx + (r - 0.08) * math.cos(math.radians(a)), wy + (r * K - 0.06) * math.sin(math.radians(a))
-            c.line([(cx, wy), (ex, ey)], fill=OUTLINE, width=0.1)
-            c.line([(cx, wy), (ex, ey)], fill=green, width=0.05)
-        c.ellipse(cx, wy, 0.18, 0.13, fill=steel, outline=OUTLINE, width=0.03)
-        c.ellipse(cx, wy, 0.08, 0.06, fill=brass, outline=OUTLINE, width=0.02)
-        # Kurbelzapfen + Pleuel nach Westen zum Zylinder
-        px_, py_ = cx - 0.55, wy - 0.28
-        c.line([(px_, py_), (cx - 1.25, wy - 0.12)], fill=OUTLINE, width=0.1)
-        c.line([(px_, py_), (cx - 1.25, wy - 0.12)], fill=hexc("#c0c8cc"), width=0.05)
-        c.ellipse(px_, py_, 0.06, 0.05, fill=brass, outline=OUTLINE, width=0.02)
-        p.box(cx - 0.22, cy - 0.5, cx + 0.22, cy - 0.2, 0, z0 - 0.15, shade(steel, 1.15), steel, w=0.035)
-        c.rect(cx - 0.3, cy - 0.52, cx + 0.3, cy - 0.44, fill=shade(steel, 0.8), outline=OUTLINE, width=0.025)
+            c.ellipse(cx + 0.2 * math.cos(math.radians(a + 30)), wy + 0.17 * math.sin(math.radians(a + 30)), 0.018, 0.018, fill=shade(steel, 0.6))
+        c.ellipse(cx, wy, 0.07, 0.06, fill=brass, outline=OUTLINE, width=0.02)
+        c.ellipse(cx - 0.02, wy + 0.015, 0.02, 0.015, fill=(255, 245, 210, 255))
+        # Kurbelzapfen und Pleuel nach Westen zum Kreuzkopf (x1 der Dampfmaschine = cx - 0,6)
+        kx, ky = cx + (r - 0.22) * math.cos(math.radians(70)), wy + (ry - 0.18) * math.sin(math.radians(70))
+        rod_end = (x0 - 0.05, cy + 0.94 * K)
+        c.line([(kx, ky), rod_end], fill=OUTLINE, width=0.12)
+        c.line([(kx, ky), rod_end], fill=chrome, width=0.07)
+        c.line([(kx - 0.05, ky + 0.02), (rod_end[0] + 0.1, rod_end[1] + 0.02)], fill=(255, 255, 255, 255), width=0.015)
+        c.ellipse(kx, ky, 0.08, 0.07, fill=steel, outline=OUTLINE, width=0.025)
+        c.ellipse(kx, ky, 0.035, 0.03, fill=brass, outline=OUTLINE, width=0.012)
+        pedestal(cy - 0.56, cy - 0.28, front=True)
+        # Achsende vorn mit Mutter, Oelkanne am Fuss
+        c.rect(cx - 0.34, cy - 0.6, cx + 0.34, cy - 0.5, fill=shade(iron, 0.8), outline=OUTLINE, width=0.025)
+        tool_oilcan(c, cx + 0.5, cy - 0.5)
     elif kind == "oldtimer":
         # offener Tourenwagen, Kuehler nach Osten: Kabine mit Sitzbaenken, lange Motorhaube,
         # Windschutzscheibe, Speichenraeder mit Kotfluegeln auf der Suedseite
@@ -2736,37 +3201,136 @@ def draw_prop(kind, shape, idx, ppm):
                 c.line([(wx - ca, y0 + 0.22 - sa), (wx + ca, y0 + 0.22 + sa)], fill=hexc("#8a2a2a"), width=0.018)
             c.ellipse(wx, y0 + 0.22, 0.06, 0.06, fill=chrome, outline=OUTLINE, width=0.015)
     elif kind == "turbine":
-        # liegendes Turbinengehaeuse (Zylinder in Ost-West-Richtung) auf Sockel + Generator im Osten
+        # Turbosatz (User 24.10.: "besser erkennbar"): auf dem Nietsockel steht westlich der Dynamo (dunkelgruener
+        # Zylinder mit Kuehlrippen, Messingstirn, Riemenscheibe fuer den Treibriemen vom Schwungrad, Klemmbrett
+        # mit Kabeln), gekuppelt an das Turbinengehaeuse (Stahlzylinder mit Schraubflansch, Schneckeneinlass
+        # mit grossem Ventilrad, Abdampfkruemmer), davor Manometertafel, Steuerhebel und Typenschild.
         steel = lift("#7b8288", 1.35)
-        base_c = lift("#3b4046", 1.7)
-        p.box(x0, y0, x1, y1, 0, 0.35, shade(base_c, 1.12), base_c)
-        R = (y1 - y0 - 0.7) / 2
-        zc = 0.35 + R
-        mid = cy + zc * K
-        half = R * math.sqrt(1 + K * K)
-        gx0 = x1 - 1.0
-        tx0, tx1 = x0 + 0.35, gx0
-        lo, hi = mid - half, mid + half
-        c.rect(tx0, lo, tx1, hi, fill=steel, outline=OUTLINE)
-        c.rect(tx0 + 0.03, lo + 0.03, tx1 - 0.03, lo + (hi - lo) * 0.3, fill=shade(steel, 0.8))
-        c.rect(tx0 + 0.03, lo + (hi - lo) * 0.62, tx1 - 0.03, hi - 0.03, fill=shade(steel, 1.18))
-        c.line([(tx0 + 0.05, lo + (hi - lo) * 0.8), (tx1 - 0.05, lo + (hi - lo) * 0.8)], fill=shade(steel, 1.35), width=0.04)
-        # Flanschringe
-        n = 4
-        for i in range(n + 1):
-            fx = tx0 + 0.1 + i * (tx1 - tx0 - 0.2) / n
-            c.rect(fx - 0.06, lo - 0.04, fx + 0.06, hi + 0.04, fill=shade(steel, 0.7), outline=OUTLINE, width=0.025)
-            for by in (lo + 0.1, hi - 0.1):
-                c.ellipse(fx, by, 0.025, 0.025, fill=hexc("#c0c8cc"))
-        # Einlass (Westende) mit Schaufelrad
-        c.ellipse(tx0, mid, 0.22, half, fill=shade(steel, 0.6), outline=OUTLINE, width=0.04)
-        for a in range(0, 360, 45):
-            c.line([(tx0, mid), (tx0 + 0.18 * math.cos(math.radians(a)), mid + half * 0.85 * math.sin(math.radians(a)))], fill=shade(steel, 1.1), width=0.025)
-        # Generatorblock mit Warnschild
-        gen = lift("#2f4a3a", 1.9)
-        p.box(gx0, y0 + 0.4, x1 - 0.1, y1 - 0.5, 0.35, 1.5, shade(gen, 1.15), gen)
-        c.rect(gx0 + 0.2, y0 + 0.4 + 0.7 * K, x1 - 0.3, y0 + 0.4 + 1.2 * K, fill=hexc("#d4b13c"), outline=OUTLINE, width=0.02)
-        c.poly([(gx0 + 0.35, y0 + 0.4 + 0.8 * K), (gx0 + 0.45, y0 + 0.4 + 1.1 * K), (gx0 + 0.55, y0 + 0.4 + 0.8 * K)], fill=hexc("#1e1e1e"))
+        dark = lift("#3b4046", 1.75)
+        green = lift("#2f4a3a", 1.9)
+        brass = hexc("#c9a24a")
+        chrome = hexc("#c8d0d4")
+        red = hexc("#c0392b")
+        p.box(x0, y0, x1, y1, 0, 0.35, shade(dark, 1.12), dark)
+        for i in range(int((x1 - x0) / 0.3)):
+            c.ellipse(x0 + 0.15 + i * 0.3, y0 + 0.08, 0.02, 0.02, fill=shade(dark, 1.4))
+        c.rect(x0 + 0.02, y0 + 0.02, x1 - 0.02, y0 + 0.11, fill=shade(dark, 0.7))
+        hazard_y = y0 + 0.35 * K - 0.08
+        for i in range(int((x1 - x0) / 0.24)):                                             # Warnstreifen am Sockelrand
+            hx = x0 + 0.05 + i * 0.24
+            c.poly([(hx, hazard_y), (hx + 0.12, hazard_y), (hx + 0.18, hazard_y + 0.06), (hx + 0.06, hazard_y + 0.06)], fill=hexc("#d4b13c"))
+        # Dynamo (West); die Maschinenachse liegt 1,25 m noerdlich der Standlinie (nah am Schwungrad, der Treibriemen
+        # aus dem Schwungrad-Sprite zielt auf die Riemenscheibe bei x0 + 0,72)
+        cy = y0 + 1.25
+        gx0, gx1 = x0 + 0.35, x0 + 2.0
+        Rg = 0.55
+        zg = 0.35 + 0.2 + Rg
+        gmid = cy + zg * K
+        gh = Rg * math.sqrt(1 + K * K)
+        p.box(gx0 - 0.05, cy - 0.5, gx1 + 0.05, cy + 0.5, 0.35, 0.2, shade(dark, 1.15), dark, w=0.03)
+        c.rect(gx0, gmid - gh, gx1, gmid + gh, fill=green, outline=OUTLINE)
+        c.rect(gx0 + 0.03, gmid - gh + 0.03, gx1 - 0.03, gmid - gh * 0.42, fill=shade(green, 0.72))
+        c.rect(gx0 + 0.03, gmid + gh * 0.35, gx1 - 0.03, gmid + gh - 0.03, fill=shade(green, 1.2))
+        for i in range(int((gx1 - gx0 - 0.4) / 0.11)):                                     # Kuehlrippen
+            fx = gx0 + 0.25 + i * 0.11
+            c.line([(fx, gmid - gh + 0.06), (fx, gmid + gh - 0.06)], fill=shade(green, 0.6), width=0.018)
+        c.line([(gx0 + 0.06, gmid + gh * 0.72), (gx1 - 0.06, gmid + gh * 0.72)], fill=shade(green, 1.45), width=0.03)
+        for hx in (gx0, gx1):                                                               # Lagerschilde aus Messing
+            c.rect(hx - 0.08, gmid - gh - 0.03, hx + 0.08, gmid + gh + 0.03, fill=brass, outline=OUTLINE, width=0.03)
+            for k_ in range(4):
+                c.ellipse(hx, gmid - gh + 0.08 + k_ * (2 * gh - 0.16) / 3, 0.02, 0.02, fill=shade(brass, 0.6))
+        c.ellipse(gx0 - 0.08, gmid, 0.1, gh * 0.75, fill=shade(brass, 0.9), outline=OUTLINE, width=0.03)          # Stirnseite West
+        c.ellipse(gx0 - 0.08, gmid, 0.05, gh * 0.4, fill=shade(green, 0.8), outline=OUTLINE, width=0.015)
+        # Welle und Riemenscheibe (x0 + 0,72 = Riemenziel aus dem Schwungrad-Sprite)
+        c.line([(gx0 - 0.15, gmid), (x0 + 0.6, gmid)], fill=OUTLINE, width=0.09)
+        c.line([(gx0 - 0.15, gmid), (x0 + 0.6, gmid)], fill=chrome, width=0.05)
+        # Klemmbrett oben mit zwei Messingklemmen und Kabeln zur Schalttafel vorn
+        bz = zg + Rg - 0.1
+        p.box(gx0 + 0.5, cy - 0.18, gx0 + 1.1, cy + 0.18, bz, 0.22, hexc("#1e1e22"), hexc("#2a2a30"), w=0.025)
+        for tx in (gx0 + 0.66, gx0 + 0.94):
+            c.ellipse(tx, cy - 0.18 + (bz + 0.22) * K + 0.05, 0.045, 0.03, fill=brass, outline=OUTLINE, width=0.015)
+        cab0 = (gx0 + 0.66, cy - 0.18 + (bz + 0.22) * K + 0.05)
+        cab1 = (gx0 + 0.94, cy - 0.18 + (bz + 0.22) * K + 0.05)
+        panel_x0, panel_x1 = x0 + 0.5, x0 + 1.4
+        panel_fb = y0 + 0.35 * K
+        for cab, col, tx in ((cab0, hexc("#b03a2a"), panel_x0 + 0.2), (cab1, hexc("#2a2a30"), panel_x0 + 0.45)):
+            pts = bezier(cab, (cab[0] - 0.35, cab[1] - 0.55), (tx, panel_fb + 0.62), 10)
+            c.line(pts, fill=OUTLINE, width=0.045)
+            c.line(pts, fill=col, width=0.025)
+        # Marmor-Schalttafel vorn am Sockel: Messerschalter, zwei Messinstrumente
+        c.rect(panel_x0, panel_fb + 0.02, panel_x1, panel_fb + 0.62, fill=hexc("#e4e0d6"), outline=OUTLINE, width=0.025)
+        c.line([(panel_x0 + 0.1, panel_fb + 0.5), (panel_x1 - 0.2, panel_fb + 0.15)], fill=alpha(hexc("#9a9690"), 140), width=0.012)
+        for mx in (panel_x0 + 0.24, panel_x0 + 0.66):
+            c.ellipse(mx, panel_fb + 0.42, 0.11, 0.11, fill=brass, outline=OUTLINE, width=0.02)
+            c.ellipse(mx, panel_fb + 0.42, 0.08, 0.08, fill=hexc("#f2ecd8"), outline=OUTLINE, width=0.012)
+            c.line([(mx, panel_fb + 0.42), (mx + 0.055, panel_fb + 0.47)], fill=hexc("#2a2422"), width=0.012)
+        c.rect(panel_x0 + 0.38, panel_fb + 0.12, panel_x0 + 0.52, panel_fb + 0.3, fill=hexc("#1e1e22"), outline=OUTLINE, width=0.015)
+        c.line([(panel_x0 + 0.45, panel_fb + 0.14), (panel_x0 + 0.58, panel_fb + 0.3)], fill=OUTLINE, width=0.04)
+        c.line([(panel_x0 + 0.45, panel_fb + 0.14), (panel_x0 + 0.58, panel_fb + 0.3)], fill=brass, width=0.02)
+        c.ellipse(panel_x0 + 0.58, panel_fb + 0.3, 0.03, 0.03, fill=hexc("#1e1e22"), outline=OUTLINE, width=0.01)
+        # Kupplung
+        cx0 = gx1 + 0.1
+        c.rect(cx0, gmid - 0.22, cx0 + 0.3, gmid + 0.22, fill=steel, outline=OUTLINE, width=0.03)
+        for k_ in range(3):
+            c.line([(cx0 + 0.05 + k_ * 0.1, gmid - 0.18), (cx0 + 0.05 + k_ * 0.1, gmid + 0.18)], fill=shade(steel, 0.65), width=0.015)
+        # Turbinengehaeuse (Ost)
+        tx0, tx1 = cx0 + 0.3, x1 - 0.25
+        Rt = 0.72
+        zt_ = 0.35 + Rt
+        tmid = cy + zt_ * K
+        th = Rt * math.sqrt(1 + K * K)
+        c.rect(tx0, tmid - th, tx1, tmid + th, fill=steel, outline=OUTLINE)
+        c.rect(tx0 + 0.03, tmid - th + 0.03, tx1 - 0.03, tmid - th * 0.45, fill=shade(steel, 0.75))
+        c.rect(tx0 + 0.03, tmid + th * 0.4, tx1 - 0.03, tmid + th - 0.03, fill=shade(steel, 1.18))
+        c.line([(tx0 + 0.06, tmid + th * 0.75), (tx1 - 0.06, tmid + th * 0.75)], fill=shade(steel, 1.4), width=0.035)
+        c.rect(tx0 + 0.02, tmid - 0.06, tx1 - 0.02, tmid + 0.06, fill=shade(steel, 0.9), outline=OUTLINE, width=0.02)   # Teilfugenflansch
+        for i in range(int((tx1 - tx0) / 0.17)):
+            bx = tx0 + 0.1 + i * 0.17
+            c.ellipse(bx, tmid, 0.025, 0.025, fill=shade(steel, 1.3), outline=OUTLINE, width=0.01)
+        for fx in (tx0 + 0.1, (tx0 + tx1) / 2, tx1 - 0.1):                                    # Flanschringe
+            c.rect(fx - 0.07, tmid - th - 0.04, fx + 0.07, tmid + th + 0.04, fill=shade(steel, 0.7), outline=OUTLINE, width=0.025)
+            for k_ in range(5):
+                c.ellipse(fx, tmid - th + 0.05 + k_ * (2 * th - 0.1) / 4, 0.02, 0.02, fill=chrome)
+        c.ellipse(tx1, tmid, 0.14, th * 0.9, fill=shade(steel, 0.8), outline=OUTLINE, width=0.035)              # Stirnwand Ost
+        c.ellipse(tx1, tmid, 0.07, th * 0.45, fill=shade(steel, 0.55), outline=OUTLINE, width=0.015)
+        # Schneckeneinlass oben mit Ventilrad, Abdampfkruemmer nach hinten
+        ix = (tx0 + tx1) / 2 - 0.15
+        p.cyl(ix, cy, 0.3, zt_ + Rt - 0.15, 0.3, shade(steel, 1.1), shade(steel, 0.9), ry=0.15)
+        pz = cy + (zt_ + Rt + 0.15) * K
+        pipe = [(ix, pz), (ix, pz + 0.55), (ix + 0.9, pz + 0.55), (ix + 0.9, pz + 0.95)]
+        c.line(pipe, fill=OUTLINE, width=0.16)
+        c.line(pipe, fill=shade(steel, 1.0), width=0.11)
+        c.line([(ix - 0.03, pz + 0.05), (ix - 0.03, pz + 0.5), (ix + 0.86, pz + 0.5)], fill=shade(steel, 1.4), width=0.018)
+        c.rect(ix + 0.78, pz + 0.9, ix + 1.02, pz + 1.0, fill=shade(steel, 0.75), outline=OUTLINE, width=0.025)
+        vx_, vy_ = ix + 0.45, pz + 0.55
+        c.line([(vx_, vy_), (vx_, vy_ + 0.2)], fill=shade(steel, 0.8), width=0.04)
+        c.ellipse(vx_, vy_ + 0.24, 0.16, 0.16, fill=None, outline=OUTLINE, width=0.07)
+        c.ellipse(vx_, vy_ + 0.24, 0.16, 0.16, fill=None, outline=red, width=0.04)
+        for a in range(0, 180, 45):
+            c.line([(vx_ - 0.15 * math.cos(math.radians(a)), vy_ + 0.24 - 0.15 * math.sin(math.radians(a))),
+                    (vx_ + 0.15 * math.cos(math.radians(a)), vy_ + 0.24 + 0.15 * math.sin(math.radians(a)))], fill=red, width=0.025)
+        c.ellipse(vx_, vy_ + 0.24, 0.035, 0.035, fill=brass, outline=OUTLINE, width=0.012)
+        ex_ = tx1 - 0.35
+        c.line([(ex_, tmid + th), (ex_, y1 + 1.3 * K), (ex_ + 0.45, y1 + 1.3 * K)], fill=OUTLINE, width=0.12)
+        c.line([(ex_, tmid + th), (ex_, y1 + 1.3 * K), (ex_ + 0.45, y1 + 1.3 * K)], fill=shade(steel, 0.9), width=0.08)
+        # Manometertafel an der Turbinenfront, Typenschild, Steuerhebel
+        mx = tx0 + 0.55
+        c.rect(mx - 0.32, tmid - 0.5, mx + 0.32, tmid - 0.12, fill=hexc("#2a2a30"), outline=OUTLINE, width=0.02)
+        for k_, gxx in enumerate((mx - 0.16, mx + 0.16)):
+            c.ellipse(gxx, tmid - 0.31, 0.13, 0.13, fill=brass, outline=OUTLINE, width=0.02)
+            c.ellipse(gxx, tmid - 0.31, 0.1, 0.1, fill=hexc("#f2ecd8"), outline=OUTLINE, width=0.012)
+            for a in range(-200, 30, 30):
+                c.line([(gxx + 0.08 * math.cos(math.radians(a)), tmid - 0.31 + 0.08 * math.sin(math.radians(a))),
+                        (gxx + 0.095 * math.cos(math.radians(a)), tmid - 0.31 + 0.095 * math.sin(math.radians(a)))], fill=hexc("#2a2422"), width=0.008)
+            ang = -60 if k_ == 0 else -130
+            c.line([(gxx, tmid - 0.31), (gxx + 0.075 * math.cos(math.radians(ang)), tmid - 0.31 + 0.075 * math.sin(math.radians(ang)))], fill=red, width=0.014)
+        c.rect(tx1 - 0.95, tmid - 0.42, tx1 - 0.3, tmid - 0.2, fill=brass, outline=OUTLINE, width=0.02)
+        c.text(tx1 - 0.625, tmid - 0.31, "TURBINE No 2", 0.07, hexc("#2a2422"))
+        lx_ = x1 - 0.18
+        c.line([(lx_, y0 + 0.35 * K), (lx_ - 0.12, y0 + 0.35 * K + 0.5)], fill=OUTLINE, width=0.05)
+        c.line([(lx_, y0 + 0.35 * K), (lx_ - 0.12, y0 + 0.35 * K + 0.5)], fill=steel, width=0.025)
+        c.ellipse(lx_ - 0.12, y0 + 0.35 * K + 0.5, 0.045, 0.045, fill=hexc("#1e1e22"), outline=OUTLINE, width=0.012)
+        c.ellipse(lx_, y0 + 0.35 * K, 0.08, 0.05, fill=shade(dark, 1.2), outline=OUTLINE, width=0.02)
     elif kind == "hochregal":
         steel = lift("#3f4a56", 1.7)
         p.box(x0, y0, x1, y1, 0, 2.4, alpha(shade(steel, 1.2), 255), steel)
@@ -2972,6 +3536,11 @@ def draw_skeleton(p, cx, base, S=1.0, ox=0.0, part="all"):
         c.poly(low + lin[::-1], fill=lo)
         hl = [(a[0] * 0.6 + b[0] * 0.4, a[1] * 0.6 + b[1] * 0.4) for a, b in zip(up, uin)]
         c.line(hl, fill=hi, width=max(0.01, min(w0, w1) * 0.16))
+        if max(w0, w1) > 0.11:                                   # Patina: ein paar dunkle Flecken auf grossen Knochen
+            for _ in range(3):
+                i = rnd.randrange(1, n - 1)
+                c.ellipse(Q[i][0] + rnd.uniform(-0.02, 0.02), Q[i][1] + rnd.uniform(-0.015, 0.015),
+                          rnd.uniform(0.012, 0.03), rnd.uniform(0.008, 0.018), fill=alpha(tone(col, 0.8), 160))
         c.poly(poly, outline=OL, width=ow)
         return Q
 
@@ -2997,6 +3566,10 @@ def draw_skeleton(p, cx, base, S=1.0, ox=0.0, part="all"):
         if len(lower) > 2:
             c.poly([(x, y) for x, y in lower] + [(lower[-1][0], cyq - (cyq - lower[-1][1]) * 0.3),
                                                   (lower[0][0], cyq - (cyq - lower[0][1]) * 0.3)], fill=lo)
+        for _ in range(4):                                       # Patina
+            i = rnd.randrange(len(Q))
+            qx, qy = Q[i][0] * 0.7 + (sum(x for x, _ in Q) / len(Q)) * 0.3, Q[i][1] * 0.7 + cyq * 0.3
+            c.ellipse(qx, qy, rnd.uniform(0.012, 0.03), rnd.uniform(0.008, 0.02), fill=alpha(tone(col, 0.8), 150))
         c.poly(Q, outline=OL, width=ow)
         return Q
 
@@ -3089,8 +3662,8 @@ def draw_skeleton(p, cx, base, S=1.0, ox=0.0, part="all"):
         sx, sz = spine_at(x)
         zb = min(belly(x), sz - 0.55)
         d = 0.06 if far else 0.0
-        return [(x + d, sz - 0.03 + d * 0.4), (x - 0.03 + d, sz - 0.28), (x + 0.02 + d, sz - 0.62),
-                (x + 0.12 + d, (sz + zb) / 2 - 0.25), (x + 0.22 + d, zb + 0.12), (x + 0.27 + d, zb)]
+        return [(x + d, sz - 0.03 + d * 0.4), (x - 0.05 + d, sz - 0.26), (x - 0.03 + d, sz - 0.58),
+                (x + 0.07 + d, (sz + zb) / 2 - 0.22), (x + 0.18 + d, zb + 0.14), (x + 0.26 + d, zb)]
 
     # ================================================================ hinten: fernes Bein, ferner Arm
     fl = far_set()
@@ -3149,7 +3722,7 @@ def draw_skeleton(p, cx, base, S=1.0, ox=0.0, part="all"):
         elif kind_ == "s":
             vertebra(x, 0.16, 0.24, 0.2, spine_w=1.0)
         else:
-            vertebra(x, 0.16, 0.28 + 0.06 * math.sin((x + 1.4) / 2.2 * math.pi), 0.32, rib=1, spine_w=0.95)
+            vertebra(x, 0.16, 0.3 + 0.1 * math.sin((x + 1.5) / 2.3 * math.pi), 0.32, rib=1, spine_w=0.95)
     # Halswirbel: S-Bogen vom Ruecken zum Schaedel, kurze Fortsaetze, Halsrippen nach hinten
     neck_xs = [-1.55 - i * 0.1 for i in range(8)]
     for i, x in enumerate(neck_xs):
@@ -3178,7 +3751,7 @@ def draw_skeleton(p, cx, base, S=1.0, ox=0.0, part="all"):
 
     # ================================================================ nahe Rippen + Bauchrippen
     for x in rib_xs:
-        bone(rib_pts(x), 0.06, 0.026, near_set(), smooth=2, ow=0.02)
+        bone(rib_pts(x), 0.075, 0.03, near_set(), smooth=2, ow=0.02)
     gcol = near_set()
     gx = -1.0
     while gx < 0.8:
@@ -3226,75 +3799,134 @@ def draw_skeleton(p, cx, base, S=1.0, ox=0.0, part="all"):
     # ================================================================ Schaedel
     # In der Schraegsicht (z * K) wird der Kopf so flach, dass er wie ein Krokodil liest: der Schaedel
     # wird deshalb um die Zahnlinie senkrecht gestreckt (hoher Hinterkopf, tiefer Kiefer).
+    # Neu 24.10. (User: "schoener und realistischer"): tiefer, kastiger Tyrannosaurus-Schaedel statt der
+    # langen Schnauze, grosse Schluesselloch-Augenhoehle, Traenenbeinhoecker, dreieckiges Voraugenfenster,
+    # Oberkieferfenster, Nasenloch, Schlaefenfenster, rugoser Nasenruecken, Zahnreihe mit Alveolen,
+    # tiefer Unterkiefer mit Kronenfortsatz und Unterkieferfenster. Drehpunkte (Halsgelenk, Kiefergelenk,
+    # Augenhoehle) bleiben an denselben Modellkoordinaten wie bisher.
     P0 = P
 
     def P(x, z):
-        return P0(x, 3.12 + (z - 3.12) * 1.45)
+        return P0(x, 3.12 + (z - 3.12) * 1.3)
 
     sk = near_set()
+    sk_dark = tone(sk[0], 0.86)
     c = real if part in ("all", "jaw") else scrap
     if part == "head":
         REX_RIG["neck"] = P(-2.22, 3.5)
         REX_RIG["jaw"] = P(-2.38, 3.08)
         REX_RIG["eye"] = P(-2.88, 3.9)
-    # Unterkiefer zuerst (liegt hinter dem Oberkiefer), Maul leicht geoeffnet
-    jaw = blob([(-2.33, 3.14), (-2.4, 2.9), (-2.9, 2.8), (-3.5, 2.74), (-3.97, 2.72), (-4.03, 2.8),
-                (-3.55, 2.93), (-3.0, 3.02), (-2.55, 3.1)], (tone(sk[0], 0.94), sk[1], sk[2]), ow=0.03)
-    q = P(-2.8, 2.92)
-    c.ellipse(q[0], q[1], 0.12, 0.035, fill=HOLE, outline=OL, width=0.016)                 # Unterkieferfenster
-    for i in range(12):                                                                     # untere Zaehne
-        tx = -3.92 + i * 0.085
-        zz = 2.8 + (tx + 3.92) * 0.17
-        ln = 0.07 + 0.05 * math.sin(i / 11 * math.pi)
-        a, b, t_ = P(tx - 0.025, zz), P(tx + 0.025, zz), P(tx + 0.012, zz + ln)
-        c.poly([a, t_, b], fill=TOOTH, outline=OL, width=0.012)
-    # Oberschaedel
-    c = real if part in ("all", "head") else scrap
-    skull = [(-2.28, 3.92), (-2.4, 4.1), (-2.56, 4.17), (-2.74, 4.12), (-2.92, 4.08), (-3.06, 4.14),
-             (-3.2, 4.04), (-3.46, 3.92), (-3.74, 3.74), (-3.98, 3.54), (-4.14, 3.34), (-4.16, 3.2),
-             (-3.95, 3.13), (-3.45, 3.1), (-2.95, 3.07), (-2.55, 3.04), (-2.34, 3.1), (-2.22, 3.38), (-2.2, 3.66)]
-    blob(skull, sk, ow=0.036, smooth=1)
-    # Wangenknochen (Jochbein) als dunkleres Band, Nasenkante hell
-    c.poly([P(-2.36, 3.13), P(-2.95, 3.12), P(-3.5, 3.15), P(-3.5, 3.24), P(-2.95, 3.25), P(-2.42, 3.3)], fill=sk[1])
-    c.line([P(-2.6, 4.12), P(-3.06, 4.1), P(-3.5, 3.9), P(-3.92, 3.58)], fill=sk[2], width=0.03)
-    # Schaedelfenster
-    def hole(pts_model, smooth=1):
+
+    def hole(pts_model, smooth=1, rim=True):
         Q = [P(x, z) for x, z in pts_model]
         Q = chaikin(Q + [Q[0]], smooth)[:-1]
-        c.poly(Q, fill=HOLE_RIM)
         cxq = sum(x for x, _ in Q) / len(Q)
         cyq = sum(y for _, y in Q) / len(Q)
-        c.poly([(cxq + (x - cxq) * 0.82, cyq + (y - cyq) * 0.8 + 0.008) for x, y in Q], fill=HOLE)
+        if rim:
+            c.poly(Q, fill=HOLE_RIM)
+            c.poly([(cxq + (x - cxq) * 0.8, cyq + (y - cyq) * 0.78 + 0.01) for x, y in Q], fill=HOLE)
+        else:
+            c.poly(Q, fill=HOLE)
         c.poly(Q, outline=OL, width=0.018)
-    hole([(-3.06, 3.74), (-3.28, 3.84), (-3.64, 3.6), (-3.56, 3.4), (-3.14, 3.38)])          # Voraugenfenster
-    hole([(-3.72, 3.54), (-3.8, 3.5), (-3.76, 3.43), (-3.68, 3.46)])                         # Oberkieferfenster
-    hole([(-2.44, 3.94), (-2.68, 3.9), (-2.72, 3.56), (-2.52, 3.46), (-2.4, 3.66)])          # Schlaefenfenster
-    hole([(-3.95, 3.6), (-4.09, 3.45), (-4.03, 3.41), (-3.9, 3.54)])                          # Nasenloch
-    # Augenhoehle (Schluesselloch) mit Knochenring und kleinem Glanz
-    q = P(-2.88, 3.9)
-    c.ellipse(q[0], q[1], 0.1, 0.095, fill=HOLE_RIM, outline=OL, width=0.018)
-    c.poly([P(-2.95, 3.84), P(-2.82, 3.84), P(-2.88, 3.6)], fill=HOLE_RIM, outline=OL, width=0.016)
-    c.ellipse(q[0], q[1], 0.075, 0.07, fill=HOLE)
-    c.poly([P(-2.92, 3.82), P(-2.84, 3.82), P(-2.88, 3.66)], fill=HOLE)
-    c.ellipse(q[0] - 0.025, q[1] + 0.025, 0.018, 0.015, fill=(250, 244, 226, 255))
-    # Knochenhoecker ueber dem Auge (Postorbitale, Lacrimale)
-    for bx, bz, r in ((-2.58, 4.15, 0.06), (-3.06, 4.13, 0.05)):
-        q = P(bx, bz)
-        c.ellipse(q[0], q[1], r, r * 0.8, fill=sk[2], outline=OL, width=0.018)
-    # kleine Gefaessloecher am Oberkiefer
-    for i in range(6):
-        q = P(-3.9 + i * 0.16, 3.2 + 0.01 * (i % 2))
-        c.ellipse(q[0], q[1], 0.013, 0.01, fill=HOLE)
-    # obere Zaehne: bananenfoermig, nach hinten gekruemmt, vorn die grossen
-    for i in range(14):
-        tx = -4.08 + i * 0.095
-        zz = 3.14 + (tx + 4.08) * 0.02
-        ln = 0.1 + 0.09 * math.sin(min(1.0, (i + 1) / 9) * math.pi) + (0.02 if i % 3 == 1 else 0)
-        a, b = P(tx - 0.03, zz + 0.01), P(tx + 0.03, zz + 0.01)
-        m = P(tx + 0.012, zz - ln * 0.55)
-        t_ = P(tx + 0.03, zz - ln)
+
+    def patina(pts_model, n, seed):
+        rs = random.Random(seed)
+        for _ in range(n):
+            i = rs.randrange(len(pts_model) - 1)
+            t = rs.random()
+            x = pts_model[i][0] * (1 - t) + pts_model[i + 1][0] * t
+            z = pts_model[i][1] * (1 - t) + pts_model[i + 1][1] * t
+            q = P(x, z)
+            c.ellipse(q[0], q[1], rs.uniform(0.012, 0.03), rs.uniform(0.008, 0.02), fill=alpha(tone(sk[0], 0.78), 170))
+
+    # ---- Unterkiefer (zuerst, liegt hinter dem Oberkiefer): in geschlossener Lage beschrieben und um das
+    # Kiefergelenk (-2,38 / 3,08) um 0,2 rad nach unten gedreht (Maul offen), wie es AtlasRex spaeter weiter tut
+    JP = (-2.38, 3.08)
+    JA = 0.3
+
+    def J(x, z):
+        dx, dz = x - JP[0], z - JP[1]
+        return (JP[0] + dx * math.cos(JA) - dz * math.sin(JA), JP[1] + dx * math.sin(JA) + dz * math.cos(JA))
+
+    jaw_closed = [(-2.3, 3.14), (-2.34, 2.98), (-2.42, 2.8), (-2.55, 2.68), (-2.75, 2.62), (-3.0, 2.62), (-3.3, 2.68),
+                  (-3.6, 2.78), (-3.8, 2.88), (-3.9, 2.98), (-3.88, 3.04), (-3.7, 3.02), (-3.3, 2.98), (-3.0, 2.98),
+                  (-2.75, 3.0), (-2.6, 3.06), (-2.5, 3.14)]
+    jaw_pts = [J(x, z) for x, z in jaw_closed]
+    blob(jaw_pts, (tone(sk[0], 0.95), sk[1], sk[2]), ow=0.03, smooth=0)
+    c.poly([P(*J(x, z)) for x, z in ((-2.4, 2.82), (-2.6, 2.7), (-3.0, 2.66), (-3.5, 2.78), (-3.72, 2.9), (-3.74, 2.98),
+                                     (-3.5, 2.9), (-3.0, 2.78), (-2.6, 2.8), (-2.42, 2.92))], fill=alpha(sk[1], 200))   # dunkle Unterkante
+    hole([J(x, z) for x, z in ((-2.56, 2.9), (-2.76, 2.93), (-2.9, 2.85), (-2.76, 2.74), (-2.56, 2.76))], smooth=2)     # Unterkieferfenster
+    c.line([P(*J(-2.95, 2.92)), P(*J(-3.4, 2.88)), P(*J(-3.7, 2.94))], fill=alpha(sk[1], 230), width=0.014)         # Naht Dentale/Angulare
+    for i in range(6):                                                                               # Gefaessloecher am Dentale
+        q = P(*J(-3.7 + i * 0.18, 2.9 + 0.01 * (i % 2)))
+        c.ellipse(q[0], q[1], 0.012, 0.009, fill=HOLE)
+    patina(jaw_pts[2:10], 7, 31)
+    for i in range(12):                                                                              # untere Zaehne
+        tx = -3.8 + i * 0.1
+        zz = 3.0 + (tx + 3.7) * 0.0
+        ln = 0.07 + 0.08 * math.sin(min(1.0, (i + 1) / 8) * math.pi)
+        a, b = P(*J(tx - 0.028, zz)), P(*J(tx + 0.028, zz))
+        m = P(*J(tx - 0.01, zz + ln * 0.55))
+        t_ = P(*J(tx - 0.02, zz + ln))
         c.poly([a, m, t_, b], fill=TOOTH, outline=OL, width=0.012)
-        c.line([P(tx - 0.012, zz - 0.01), P(tx + 0.005, zz - ln * 0.5)], fill=(255, 255, 255, 255), width=0.008)
+        c.line([P(*J(tx + 0.012, zz + 0.01)), P(*J(tx + 0.0, zz + ln * 0.5))], fill=(255, 255, 255, 255), width=0.007)
+    # ---- Oberschaedel
+    c = real if part in ("all", "head") else scrap
+    skull = [(-2.3, 3.2), (-2.22, 3.45), (-2.2, 3.8), (-2.25, 4.05), (-2.34, 4.24), (-2.5, 4.34), (-2.65, 4.38), (-2.8, 4.4),
+             (-2.98, 4.4), (-3.05, 4.46), (-3.12, 4.4), (-3.32, 4.24), (-3.55, 4.04), (-3.76, 3.82), (-3.9, 3.6), (-3.98, 3.42),
+             (-4.0, 3.28), (-3.96, 3.16), (-3.88, 3.08), (-3.76, 3.04), (-3.4, 3.0), (-3.0, 3.0), (-2.7, 3.04), (-2.5, 3.1), (-2.38, 3.14)]
+    blob(skull, sk, ow=0.036, smooth=0)
+    # Jochbein (dunkles Band ueber der Zahnreihe), Nasenruecken hell, Schaedeldach hell
+    c.poly([P(-2.34, 3.14), P(-2.95, 3.08), P(-3.5, 3.07), P(-3.9, 3.12), P(-3.94, 3.3), P(-3.5, 3.28), P(-2.95, 3.32), P(-2.4, 3.36)], fill=sk_dark)
+    c.poly([P(-2.42, 3.34), P(-2.7, 3.36), P(-2.7, 3.46), P(-2.42, 3.5)], fill=alpha(sk[1], 180))      # Quadratojugale, Schatten
+    c.line([P(-2.5, 4.3), P(-2.75, 4.35), P(-2.95, 4.35), P(-3.3, 4.2), P(-3.55, 4.0), P(-3.76, 3.78), P(-3.9, 3.56)], fill=sk[2], width=0.03)
+    for i in range(6):                                                                               # rugoser Nasenruecken
+        q = P(-3.3 - i * 0.11, 4.2 - i * 0.1)
+        c.ellipse(q[0], q[1] - 0.025, 0.028, 0.016, fill=alpha(sk[1], 200))
+        c.ellipse(q[0] - 0.008, q[1] - 0.012, 0.018, 0.01, fill=sk[2])
+    # Schaedelfenster
+    hole([(-3.12, 3.42), (-3.1, 3.68), (-3.2, 3.9), (-3.42, 3.84), (-3.6, 3.62), (-3.62, 3.42), (-3.38, 3.34)])          # Voraugenfenster
+    hole([(-3.7, 3.5), (-3.8, 3.54), (-3.84, 3.4), (-3.72, 3.34)], smooth=2)                                          # Oberkieferfenster
+    hole([(-3.8, 3.72), (-3.9, 3.68), (-3.94, 3.56), (-3.86, 3.52), (-3.78, 3.6)], smooth=2)                          # Nasenloch
+    hole([(-2.36, 4.06), (-2.52, 4.1), (-2.58, 3.8), (-2.54, 3.48), (-2.4, 3.4), (-2.3, 3.62)])                        # Schlaefenfenster
+    c.line([P(-2.45, 4.0), P(-2.47, 3.52)], fill=alpha(OL, 120), width=0.012)                                         # Kante im Fenster
+    # Augenhoehle (Schluesselloch): runder oberer Teil, schmaler Schlitz nach unten, Knochenring, kleiner Glanz
+    eye = []
+    for i in range(13):
+        ang = math.pi * (1.0 - i / 12)                       # oben herum von links nach rechts
+        eye.append((-2.87 + 0.1 * math.cos(ang), 3.95 + 0.1 * math.sin(ang)))
+    eye += [(-2.78, 3.86), (-2.81, 3.68), (-2.84, 3.56), (-2.9, 3.56), (-2.93, 3.68), (-2.96, 3.86)]
+    hole(eye, smooth=1)
+    q = P(-2.87, 3.93)
+    c.ellipse(q[0], q[1], 0.06, 0.055, fill=HOLE)
+    c.ellipse(q[0] - 0.028, q[1] + 0.028, 0.02, 0.016, fill=(250, 244, 226, 255))
+    # Traenenbeinhoecker und Postorbitale (Knochenwuelste), Augenbrauenkante
+    for bx, bz, r in ((-3.05, 4.44, 0.055), (-2.62, 4.36, 0.045)):
+        qq = P(bx, bz)
+        c.ellipse(qq[0], qq[1], r, r * 0.75, fill=sk[2], outline=OL, width=0.02)
+        c.ellipse(qq[0] + r * 0.2, qq[1] - r * 0.25, r * 0.6, r * 0.4, fill=alpha(sk[1], 160))
+    c.line([P(-2.72, 4.14), P(-2.88, 4.2), P(-3.02, 4.16)], fill=OL, width=0.022)                      # Brauenkante
+    c.line([P(-2.72, 4.15), P(-2.88, 4.21), P(-3.02, 4.17)], fill=sk[2], width=0.012)
+    # Alveolenreihe und Gefaessloecher am Oberkiefer, Risse, Patina
+    for i in range(13):
+        q = P(-3.88 + i * 0.11, 3.09)
+        c.ellipse(q[0], q[1], 0.012, 0.009, fill=HOLE)
+    for i in range(5):
+        q = P(-3.7 + i * 0.22, 3.3 + 0.03 * (i % 2))
+        c.ellipse(q[0], q[1], 0.011, 0.009, fill=HOLE)
+    c.line([P(-3.3, 4.08), P(-3.36, 3.96), P(-3.3, 3.86)], fill=tone(sk[0], 0.7), width=0.012)
+    c.line([P(-2.33, 4.1), P(-2.4, 4.22)], fill=tone(sk[0], 0.7), width=0.012)
+    patina(skull[1:16], 12, 47)
+    # obere Zaehne: bananenfoermig, nach hinten gekruemmt, die groessten in der Kiefermitte
+    for i in range(14):
+        tx = -3.92 + i * 0.1
+        zz = 3.05 - (tx + 3.92) * 0.012
+        ln = 0.1 + 0.11 * math.sin(min(1.0, (i + 1) / 9) * math.pi) + (0.025 if i % 3 == 1 else 0)
+        a, b = P(tx - 0.032, zz + 0.01), P(tx + 0.032, zz + 0.01)
+        m = P(tx + 0.014, zz - ln * 0.55)
+        t_ = P(tx + 0.034, zz - ln)
+        c.poly([a, m, t_, b], fill=TOOTH, outline=OL, width=0.012)
+        c.line([P(tx - 0.014, zz - 0.01), P(tx + 0.004, zz - ln * 0.5)], fill=(255, 255, 255, 255), width=0.008)
 
 
 def draw_spieluhr(p, cx, cy):

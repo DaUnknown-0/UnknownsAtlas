@@ -9,7 +9,7 @@ namespace UnknownsAtlas;
 
 internal static class AtlasAssetCatalog
 {
-    public const string Tag = "v4";
+    public const string Tag = "v5";
 
     public static readonly (string Name, string Res, long Size, string Sha256)[] Files =
     {
@@ -20,7 +20,7 @@ internal static class AtlasAssetCatalog
         ("fx_vc_snow_near.png", "UnknownsAtlas.Resources.fx_vc_snow_near.png", 17731L, "45a15fa7af40699020229cf9b2d132cf85e19ca7feea4404e2e1248acf9e2d9e"),
         ("museum_consoles_0.atx", "UnknownsAtlas.Resources.museum_consoles_0.atx", 410692L, "69de3f97169987880bed43fee24829a5c61e7bbf5f50615b28abca9df901ba17"),
         ("museum_floor_0.atx", "UnknownsAtlas.Resources.museum_floor_0.atx", 114350L, "374adeadfd1508da946566f6592228a595cf81ccf56974ae5fbeea87283d0fec"),
-        ("museum_floor_1.atx", "UnknownsAtlas.Resources.museum_floor_1.atx", 212294L, "7af8eec9c1f167f2e1b664400c1d6cc994ee24a470537048ceb4ecb4a7786e2c"),
+        ("museum_floor_1.atx", "UnknownsAtlas.Resources.museum_floor_1.atx", 215218L, "6232c9acabf031d862b802c26f01f647a37f5f57b1bc66a1a486c3779e05cb44"),
         ("museum_floor_10.atx", "UnknownsAtlas.Resources.museum_floor_10.atx", 266299L, "234e8030f30b362366add1298a39245490718662aa75bf193d196d52e62f2657"),
         ("museum_floor_11.atx", "UnknownsAtlas.Resources.museum_floor_11.atx", 298073L, "fd61a4af3b61f057d056a6c792692d819d44e388ff539a7e3bb8c8e3866372a6"),
         ("museum_floor_12.atx", "UnknownsAtlas.Resources.museum_floor_12.atx", 275041L, "610691b4c2cef77192d6047a4097c2d1706013bbc35c0c8b0f65936ef0da7de6"),
@@ -31,7 +31,7 @@ internal static class AtlasAssetCatalog
         ("museum_floor_17.atx", "UnknownsAtlas.Resources.museum_floor_17.atx", 98937L, "f643d9455a8fc242831d9cc7ef9a2cda13aa0ea4e6415e58f2fc4ec1f4bb6dc9"),
         ("museum_floor_18.atx", "UnknownsAtlas.Resources.museum_floor_18.atx", 21377L, "df1b0d5fb7dbd82703dd9851351b08cbfdc39d25175622844e9a54c39be7ed8a"),
         ("museum_floor_19.atx", "UnknownsAtlas.Resources.museum_floor_19.atx", 41557L, "be8479050f4919802c9008a0fbab0040aca8ae7bc381af4ac04c5fc7d253f5bb"),
-        ("museum_floor_2.atx", "UnknownsAtlas.Resources.museum_floor_2.atx", 240812L, "ea638fa510e0ad018bf20fd2fae4193a96cbbe1732b0cfe4865f705b81846610"),
+        ("museum_floor_2.atx", "UnknownsAtlas.Resources.museum_floor_2.atx", 267238L, "8f89a358f5a24e0038907d9cc70ef59d185bf83a1dd2829b48023925f52d7d8e"),
         ("museum_floor_3.atx", "UnknownsAtlas.Resources.museum_floor_3.atx", 226385L, "2f3fecb6615cd5fc9d4bd806062aa580fe58c01e19a1c60496a728ed5c2ba2a3"),
         ("museum_floor_4.atx", "UnknownsAtlas.Resources.museum_floor_4.atx", 18772L, "fd4766a5d74a3d678749aabfe40826d9285568069bceec74e1cc8ec70851672c"),
         ("museum_floor_5.atx", "UnknownsAtlas.Resources.museum_floor_5.atx", 296634L, "a5ee64b4fb8321b645efdc93455b03b9487c872feaa0bd6e284315d7fbc6112c"),
@@ -39,7 +39,7 @@ internal static class AtlasAssetCatalog
         ("museum_floor_7.atx", "UnknownsAtlas.Resources.museum_floor_7.atx", 327793L, "eba01100c6995394d1f8983dbf75a92de5b69d3093ec27682c12f3862ec4d8f2"),
         ("museum_floor_8.atx", "UnknownsAtlas.Resources.museum_floor_8.atx", 330516L, "f141f72bfdf8d230bf4cc838f1b178f878868c7dd3fb783ec4c9ac9334792e83"),
         ("museum_floor_9.atx", "UnknownsAtlas.Resources.museum_floor_9.atx", 191794L, "536603b951f39edcd79b4dde1cb2f9fc001cbf753e5ef16f8576702bbc220cae"),
-        ("museum_props_0.atx", "UnknownsAtlas.Resources.museum_props_0.atx", 1116759L, "12d289156288aad0f245451a43c5fc3ce3093759d51626903e6f57e7ba0a8a3d"),
+        ("museum_props_0.atx", "UnknownsAtlas.Resources.museum_props_0.atx", 1223165L, "c1bc9a611d8c573b992009ad94d1ed4893db0f7dfeb0139a4d987a794008f247"),
         ("park_consoles_0.atx", "UnknownsAtlas.Resources.park_consoles_0.atx", 429336L, "9162faa39a627fd4ff5c1e92c6d19f74e2ab1188adbef26b9a1f02e143b8ee8a"),
         ("park_floor_0.atx", "UnknownsAtlas.Resources.park_floor_0.atx", 1249932L, "a8a8bef47d03ed5295590c5581fcc83f5f2ce75963834ceae8828ceae82cfb7b"),
         ("park_floor_1.atx", "UnknownsAtlas.Resources.park_floor_1.atx", 1381572L, "033dba424b0f17b0ea78b492c02833c11f8df96ba8b9a0073a3ad6fde885ede0"),
