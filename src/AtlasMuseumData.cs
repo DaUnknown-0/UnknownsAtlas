@@ -45,8 +45,6 @@ public static class AtlasMuseumData
         new Vector2[] { new(-15.400f, -4.200f), new(-15.000f, -4.200f), new(-15.000f, -1.200f), new(-15.400f, -1.200f) },
         new Vector2[] { new(-23.300f, -10.600f), new(-22.500f, -10.600f), new(-22.500f, -7.600f), new(-23.300f, -7.600f) },
         new Vector2[] { new(-20.950f, -7.500f), new(-20.984f, -7.328f), new(-21.082f, -7.182f), new(-21.228f, -7.084f), new(-21.400f, -7.050f), new(-21.572f, -7.084f), new(-21.718f, -7.182f), new(-21.816f, -7.328f), new(-21.850f, -7.500f), new(-21.816f, -7.672f), new(-21.718f, -7.818f), new(-21.572f, -7.916f), new(-21.400f, -7.950f), new(-21.228f, -7.916f), new(-21.082f, -7.818f), new(-20.984f, -7.672f) },
-        new Vector2[] { new(-22.500f, 3.400f), new(-21.600f, 3.400f), new(-21.600f, 5.600f), new(-22.500f, 5.600f) },
-        new Vector2[] { new(-22.500f, -2.600f), new(-21.600f, -2.600f), new(-21.600f, -0.400f), new(-22.500f, -0.400f) },
         new Vector2[] { new(-12.900f, 5.300f), new(-12.700f, 5.300f), new(-12.700f, 7.500f), new(-12.900f, 7.500f) },
         new Vector2[] { new(-12.900f, 0.500f), new(-12.700f, 0.500f), new(-12.700f, 2.700f), new(-12.900f, 2.700f) },
         new Vector2[] { new(-14.000f, 13.200f), new(-14.034f, 13.372f), new(-14.132f, 13.518f), new(-14.278f, 13.616f), new(-14.450f, 13.650f), new(-14.622f, 13.616f), new(-14.768f, 13.518f), new(-14.866f, 13.372f), new(-14.900f, 13.200f), new(-14.866f, 13.028f), new(-14.768f, 12.882f), new(-14.622f, 12.784f), new(-14.450f, 12.750f), new(-14.278f, 12.784f), new(-14.132f, 12.882f), new(-14.034f, 13.028f) },
@@ -62,7 +60,7 @@ public static class AtlasMuseumData
     };
 
     /// <summary>Wirft Hindernis j einen Schatten? (false = steht an einer Wand)</summary>
-    public static readonly bool[] OpaqueCastsShadow = { false, false, false, false, false, true, true, true, true, true, true, false, false, true, true, true, true, false, true, true };
+    public static readonly bool[] OpaqueCastsShadow = { false, false, false, false, false, true, true, true, true, false, false, true, true, true, true, false, true, true };
 
     /// <summary>Hindernisse, die nur den Weg sperren (ShortObjects, kein Schatten).</summary>
     public static readonly Vector2[][] Glass =
@@ -84,6 +82,8 @@ public static class AtlasMuseumData
         new Vector2[] { new(-6.400f, -12.700f), new(-3.000f, -12.700f), new(-3.000f, -11.700f), new(-6.400f, -11.700f) },
         new Vector2[] { new(-13.800f, -7.900f), new(-11.200f, -7.900f), new(-11.200f, -6.800f), new(-13.800f, -6.800f) },
         new Vector2[] { new(-19.900f, -6.400f), new(-18.100f, -6.400f), new(-18.100f, -5.000f), new(-19.900f, -5.000f) },
+        new Vector2[] { new(-22.500f, 3.400f), new(-21.600f, 3.400f), new(-21.600f, 5.600f), new(-22.500f, 5.600f) },
+        new Vector2[] { new(-22.500f, -2.600f), new(-21.600f, -2.600f), new(-21.600f, -0.400f), new(-22.500f, -0.400f) },
         new Vector2[] { new(-19.400f, 6.500f), new(-17.800f, 6.500f), new(-17.800f, 7.300f), new(-19.400f, 7.300f) },
         new Vector2[] { new(-19.400f, 2.500f), new(-17.800f, 2.500f), new(-17.800f, 3.300f), new(-19.400f, 3.300f) },
         new Vector2[] { new(-19.400f, -1.500f), new(-17.800f, -1.500f), new(-17.800f, -0.700f), new(-19.400f, -0.700f) },
@@ -131,8 +131,6 @@ public static class AtlasMuseumData
         ("monitorwand", 0, 3624, 3344, 160, 752, -15.700f, -4.500f, -4.200f, -15.400f, -15.000f),
         ("schaltschrank", 0, 3786, 3344, 224, 752, -23.600f, -10.900f, -10.600f, -23.300f, -22.500f),
         ("kessel", 0, 1210, 1235, 240, 398, -22.150f, -8.250f, -7.950f, -21.850f, -20.950f),
-        ("sarkophag", 0, 0, 1635, 240, 527, -22.800f, 3.100f, 3.400f, -22.500f, -21.600f),
-        ("sarkophag", 0, 242, 1635, 240, 527, -22.800f, -2.900f, -2.600f, -22.500f, -21.600f),
         ("stellwand", 0, 1864, 2275, 128, 641, -13.200f, 5.000f, 5.300f, -12.900f, -12.700f),
         ("stellwand", 0, 1994, 2275, 128, 641, -13.200f, 0.200f, 0.500f, -12.900f, -12.700f),
         ("projektor", 0, 710, 1226, 240, 407, -15.200f, 12.450f, 12.750f, -14.900f, -14.000f),
@@ -162,6 +160,8 @@ public static class AtlasMuseumData
         ("tresen_kasse", 0, 3416, 1289, 640, 344, -6.700f, -13.000f, -12.700f, -6.400f, -3.000f),
         ("admintisch", 0, 2902, 1282, 512, 351, -14.100f, -8.200f, -7.900f, -13.800f, -11.200f),
         ("klima", 0, 0, 1208, 384, 425, -20.200f, -6.700f, -6.400f, -19.900f, -18.100f),
+        ("sarkophag", 0, 0, 1635, 240, 527, -22.800f, 3.100f, 3.400f, -22.500f, -21.600f),
+        ("sarkophag", 0, 242, 1635, 240, 527, -22.800f, -2.900f, -2.600f, -22.500f, -21.600f),
         ("tischvitrine", 0, 2010, 894, 352, 312, -19.700f, 6.200f, 6.500f, -19.400f, -17.800f),
         ("tischvitrine", 0, 2364, 894, 352, 312, -19.700f, 2.200f, 2.500f, -19.400f, -17.800f),
         ("tischvitrine", 0, 2718, 894, 352, 312, -19.700f, -1.800f, -1.500f, -19.400f, -17.800f),

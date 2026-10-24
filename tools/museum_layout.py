@@ -162,8 +162,7 @@ _OPAQUE = [
     ("haustechnik", ("rect", -29.4, -11.6, -28.6, -8.6), "#5a5f55", "schaltschrank"),
     ("haustechnik", ("circle", -27.5, -8.5, 0.45), "#80868b", "kessel"),
     # Aegypten
-    ("aegypten", ("rect", -28.6, 3.4, -27.7, 5.6), "#b48a3c", "sarkophag"),
-    ("aegypten", ("rect", -28.6, -2.6, -27.7, -0.4), "#b48a3c", "sarkophag"),
+    # Sarkophage seit 24.10. GLASS (unten): liegende Saerge werfen keinen Sichtschatten (User)
     # Galerie: die zwei oestlichen Stellwaende
     ("galerie", ("rect", -12.9, 5.3, -12.7, 7.5), "#e8e0d0", "stellwand"),
     ("galerie", ("rect", -12.9, 0.5, -12.7, 2.7), "#e8e0d0", "stellwand"),
@@ -212,6 +211,7 @@ _GLASS = [
     # Haustechnik
     ("haustechnik", ("rect", -26.0, -7.4, -24.2, -6.0), "klima"),
     # Aegypten
+    ("aegypten", ("rect", -28.6, 3.4, -27.7, 5.6), "sarkophag"), ("aegypten", ("rect", -28.6, -2.6, -27.7, -0.4), "sarkophag"),
     ("aegypten", ("rect", -25.5, 6.5, -23.9, 7.3), "tischvitrine"), ("aegypten", ("rect", -25.5, 2.5, -23.9, 3.3), "tischvitrine"),
     ("aegypten", ("rect", -25.5, -1.5, -23.9, -0.7), "tischvitrine"),
     ("aegypten", ("rect", -23.2, 0.4, -22.2, 1.4), "stele"),
