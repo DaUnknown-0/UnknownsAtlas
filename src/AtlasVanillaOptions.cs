@@ -8,7 +8,8 @@
 // deshalb per Reflection als TOR-CustomOptions angemeldet, wenn TOR da ist; TOR teilt die Auswahl des Hosts dann von
 // selbst. Ohne TOR gilt der lokale Config-Wert (Freeplay, Tests).
 //
-// IDs aus dem Atlas-Block 1720-1739 (ID-Registry): 1720 Ueberschrift, 1721-1727 je Krise. Die Optionen wandern ans
+// IDs aus dem Atlas-Block 1720-1739 (ID-Registry): 1720 Ueberschrift, 1721-1727 je Krise, 1728 Vorspann der Karten
+// (AtlasCinematic, eigene Ueberschrift). Die Optionen wandern ans
 // Ende von TORs Liste (siehe NightfallOptions.MoveToEndOfOptionList: ein Client ohne Atlas bricht sonst beim Empfang
 // der Host-Auswahl an der ersten unbekannten ID ab und verliert alle folgenden Optionen).
 // Auswahl je Krise: "Extra" (zusaetzlich zur Vanilla-Sabotage), "Replaces <x>" (die Vanilla-Sabotage verschwindet von
@@ -30,7 +31,7 @@ internal static class AtlasVanillaOptions
 
     private static ConfigEntry<bool> _localOn;
     private static readonly Dictionary<byte, ConfigEntry<Mode>> Local = new();
-    private static object _header;
+    private static object _header, _intro;
     private static readonly Dictionary<byte, object> Opts = new();
     private static FieldInfo _fSel;
     private static bool _tried;
@@ -112,12 +113,15 @@ internal static class AtlasVanillaOptions
             _header = Make(HeaderId, "Atlas: Extra Sabotages On Vanilla Maps", new[] { "Off", "On" }, null, true);
             foreach (var d in AtlasVanillaCrisis.Defs)
                 Opts[d.Id] = Make(HeaderId + d.Id, $"{d.Title} ({d.MapName})", new[] { "Extra", "Replaces " + d.ReplacesLabel, "Off" }, _header, false);
+            // Vorspann der Karten (AtlasCinematic), eigene Ueberschrift
+            _intro = Make(AtlasCinematic.OptionId, "Atlas: Map Intro", new[] { "Once Per Evening", "Every Round", "Off" }, null, true);
+            AtlasCinematic.SetOption(_intro);
             MoveToEnd(co);
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} registered as TOR options {HeaderId}-{HeaderId + Opts.Count} (host-synchronised)");
         }
         catch (Exception e)
         {
-            _header = null; Opts.Clear();
+            _header = null; _intro = null; Opts.Clear(); AtlasCinematic.SetOption(null);
             AtlasPlugin.Logger.LogWarning($"{LogPrefix} could not register with The Other Roles ({e.Message}); using the local config, NOT shared with the lobby");
         }
     }
@@ -129,6 +133,7 @@ internal static class AtlasVanillaOptions
             if (co.GetField("options", BindingFlags.Public | BindingFlags.Static)?.GetValue(null) is not System.Collections.IList list) return;
             var mine = new List<object> { _header };
             foreach (var d in AtlasVanillaCrisis.Defs) if (Opts.TryGetValue(d.Id, out var o)) mine.Add(o);
+            if (_intro != null) mine.Add(_intro);
             foreach (var o in mine) { int i = list.IndexOf(o); if (i >= 0) list.RemoveAt(i); }
             foreach (var o in mine) list.Add(o);
         }

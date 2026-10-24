@@ -26,7 +26,7 @@ public class AtlasPlugin : BasePlugin
 {
     public const string Id = "com.daunknown0.atlas";
     public const string PluginName = "Unknown's Atlas";
-    public const string VersionString = "1.0.3";
+    public const string VersionString = "1.0.3.1";
     public static readonly System.Version Version = System.Version.Parse(VersionString);
 
     public static BepInEx.Logging.ManualLogSource Logger = null!;
@@ -82,6 +82,8 @@ public class AtlasPlugin : BasePlugin
             "Diagnostics only: export the built-in maps as map.json to <game>/AtlasShots/maps, check the round trip " +
             "and register the museum a second time from its file as 'museum_file'.");
         AtlasVanillaOptions.Bind(Config);
+        AtlasCinematic.Bind(Config);
+        AtlasCinematic.RegisterBuiltIn();
         CfgAssetSource = Config.Bind("Assets", "Download source", "",
             "Where the map images are downloaded from. Empty = the UnknownsAtlas-Assets repository at the tag of " +
             "this build. Only that repository or a local test server (http://127.0.0.1:...) is accepted.");

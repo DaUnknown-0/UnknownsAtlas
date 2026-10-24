@@ -48,8 +48,19 @@ GROUPS = [
 ]
 
 
+# Gerenderte Vorspanne (AtlasCinematic), gebaut ausserhalb des Repos von Assets/Cinematics/_common/make_pack.py:
+# Dateiname -> (Quelldatei, Ressourcenname)
+CINEMATICS = {
+    "train_intro.cine": (ROOT.parent / "Assets" / "Cinematics" / "train" / "train_intro.cine", "UnknownsAtlas.Maps.train.train_intro.cine"),
+}
+
+
 def collect():
     out = {}
+    for name, (p, res) in CINEMATICS.items():
+        if not p.exists():
+            sys.exit(f"Vorspann fehlt: {p}")
+        out[name] = (p, res)
     for sub, prefix, pats, excl in GROUPS:
         base = ASSETS / sub if sub else ASSETS
         for pat in pats:
@@ -75,7 +86,7 @@ def main():
     tag = sys.argv[1] if len(sys.argv) > 1 else "v1"
     files = collect()
     globs = embedded_globs()
-    double = [p for p, _ in files if any(fnmatch.fnmatch(p.relative_to(ROOT).as_posix(), g) for g in globs)]
+    double = [p for p, _ in files if p.is_relative_to(ROOT) and any(fnmatch.fnmatch(p.relative_to(ROOT).as_posix(), g) for g in globs)]
     if double:
         sys.exit("ausgelagert UND im csproj eingebettet:\n  " + "\n  ".join(str(p.relative_to(ROOT)) for p in double))
     out = REPO / "files"

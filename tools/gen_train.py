@@ -160,7 +160,7 @@ FIXED = {
     "Reactor/LowerHandConsole/1": (23.4, 1.4),
     "LifeSupp/NoOxyConsole/0": (-5.5, -6.6),            # Smoke in the Cars: Kueche + Postraum
     "Admin/NoOxyConsole/1": (14.4, 4.0),
-    "Electrical/SwitchConsole/0": (6.3, 1.4),           # Blown Dynamo (Hauptebene)
+    "Electrical/SwitchConsole/0": (6.45, 1.4),          # Blown Dynamo (Hauptebene)
     "Comms/FixCommsConsole/0": (-0.7, 1.4),             # Telegraph Down (Hauptebene)
     "MedBay/MedScanner/0": (-18.4, -3.5),               # Fahrkartenkontrolle im ersten Abteil (Oberdeck)
     # 20.10.: seit die Engstellen (VPARTS) offen sind, fand place_consoles in Generator und Postraum keinen Wandplatz
@@ -168,6 +168,58 @@ FIXED = {
     # zwischen Maschinensatz und Trennwand (noerdlich der Tuer), Klemmenkasten in der Nordost-Ecke ueber der Rauchklappe.
     "UpperEngine/DivertPowerConsole/1": (11.03, 4.95),
     "Admin/FixWiringConsole/2": (14.47, 4.9),
+    # 24.10. (User: "Durchgang versperrt, neu anordnen"): place_consoles stellte drei Dynamo-Konsolen frei in den Raum,
+    # ihre Grundflaechen bildeten eine Sperre zwischen Telegraf-Tuer und Faltenbalg. Jetzt alle an die Waende: Nordwand
+    # westlich der Treppe (mit Vent 9 in der Ecke), Suedwand oestlich des Dynamos; frei bleibt ein Gang y ~2,4..4,3.
+    "Electrical/DivertPowerConsole/0": (3.9, 4.95),
+    "Electrical/CalibrateConsole/0": (4.6, 4.95),
+    "Electrical/UploadDataConsole/0": (5.05, 1.45),
+    "Electrical/FixWiringConsole/0": (5.75, 1.45),
+}
+# 24.10.: alle uebrigen Konsolen bleiben auf dem Stand vom 20.10. (place_consoles verschiebt sonst ganze Raeume, sobald
+# sich eine feste Position oder ein Vent aendert). Neue Konsolen oder bewusste Umstellungen gehoeren in FIXED.
+PINNED = {
+    "Admin/FixWiringConsole/2": (14.47, 4.9),
+    "Admin/NoOxyConsole/1": (14.4, 4.0),
+    "Admin/SwipeCardConsole/0": (13.3, 1.9),
+    "Admin/UploadDataConsole/0": (12.5, 4.1),
+    "Cafeteria/DataConsole/2": (-8.9, 2.5),
+    "Cafeteria/FixWiringConsole/4": (-5.7, 4.1),
+    "Cafeteria/GarbageConsole/2": (-9.1, 4.1),
+    "Comms/DivertPowerConsole/1": (1.1, 3.7),
+    "Comms/FixCommsConsole/0": (-0.7, 1.4),
+    "Comms/UploadDataConsole/1": (2.1, 4.9),
+    "LifeSupp/CleanFilterConsole/0": (-9.5, -3.9),
+    "LifeSupp/DivertPowerConsole/1": (-6.1, -3.9),
+    "LifeSupp/GarbageConsole/0": (-11.1, -6.5),
+    "LifeSupp/NoOxyConsole/0": (-5.5, -6.6),
+    "LowerEngine/AlignEngineConsole/1": (18.0, 1.5),
+    "LowerEngine/DivertPowerConsole/1": (18.8, 1.7),
+    "LowerEngine/FuelEngineConsole/0": (19.6, 4.1),
+    "MedBay/MedBayConsole/0": (-13.9, -5.5),
+    "MedBay/MedScanner/0": (-18.4, -3.5),
+    "Nav/ChartCourseConsole/0": (2.7, -3.7),
+    "Nav/DivertPowerConsole/1": (3.9, -5.7),
+    "Nav/FixWiringConsole/3": (4.5, -3.7),
+    "Nav/StabilizeSteeringConsole/0": (-0.7, -6.5),
+    "Nav/UploadDataConsole/0": (1.5, -5.7),
+    "Reactor/LowerHandConsole/1": (23.4, 1.4),
+    "Reactor/StartReactorConsole/2": (24.2, 3.3),
+    "Reactor/UnlockManifoldsConsole/2": (22.2, 3.1),
+    "Reactor/UpperHandConsole/0": (23.4, 5.1),
+    "Security/DivertPowerConsole/1": (-26.1, 4.7),
+    "Security/FixWiringConsole/5": (-23.5, 4.5),
+    "Shields/DivertPowerConsole/1": (-27.1, 2.1),
+    "Shields/ShieldConsole/0": (-28.5, 3.3),
+    "Storage/AirlockConsole/0": (-16.1, 4.9),
+    "Storage/FixWiringConsole/1": (-20.5, 1.5),
+    "Storage/gasCanConsole/0": (-18.7, 4.9),
+    "UpperEngine/AlignEngineConsole/0": (9.7, 3.5),
+    "UpperEngine/DivertPowerConsole/1": (11.03, 4.95),
+    "UpperEngine/FuelEngineConsole/0": (10.5, 1.5),
+    "Weapons/DivertPowerConsole/1": (25.6, 1.5),
+    "Weapons/UploadDataConsole/1": (26.0, 4.9),
+    "Weapons/WeaponConsole/0": (27.8, 1.3),
 }
 # Sabotage "Conductor's Round" (AtlasTicket): Sekunden, Kartenknopf (Gleisbett zwischen den Baendern) und die
 # Fahrkarten-Lochzangen: Zugfuehrerabteil (Suedwand, Ostteil) und Postraum (Nordwand, westlich des Sortiertischs).
@@ -182,7 +234,7 @@ SMOKE = {"seconds": 60, "button": (18.3, -1.45), "source": (18.2, 4.6),
 VENTS = {
     0: (-25.8, 1.5), 1: (-17.4, 1.5), 2: (-7.0, -6.5), 3: (-11.3, 1.5),         # West
     5: (-28.4, 1.5), 6: (-17.4, -6.5), 7: (0.8, 1.5), 8: (6.2, -6.5),           # Mitte
-    9: (4.8, 1.5), 10: (9.0, 1.5), 11: (12.1, 1.5), 12: (19.6, 5.0), 13: (28.3, 5.0),    # Ost
+    9: (3.15, 4.95), 10: (9.0, 1.5), 11: (12.1, 1.5), 12: (16.95, 4.95), 13: (28.3, 5.0),    # Ost
 }
 VENT_NETS = [
     [0, 1, 2, 3],               # Zugfuehrerabteil, Gepaeckraum, Kueche, Speisewagen (Speiseaufzug)
@@ -389,12 +441,12 @@ def place_consoles(walk, rms, door_pts, obstacles):
     obst = unary_union(obstacles)
     free = walk.difference(obst.buffer(0.4)).buffer(0)
     edge = unary_union([walk.boundary, obst.boundary])
-    taken = [Point(p) for p in list(FIXED.values()) + [EMERGENCY, SURVEILLANCE, ADMIN_TABLE, FREEPLAY] + TICKET["stations"]
+    taken = [Point(p) for p in list(FIXED.values()) + list(PINNED.values()) + [EMERGENCY, SURVEILLANCE, ADMIN_TABLE, FREEPLAY] + TICKET["stations"]
              + [RUNAWAY["brake"], RUNAWAY["handbrake"]] + SMOKE["hatches"]]
     taken += [Point(p) for p in VENTS.values()]
     spawn_zone = Point(SPAWN).buffer(SPAWN_RADIUS + 0.6)
     for key, (name, sysname, g) in rms.items():
-        keys = [k for k in SKELD_CONSOLES.get(sysname, []) if k not in FIXED]
+        keys = [k for k in SKELD_CONSOLES.get(sysname, []) if k not in FIXED and k not in PINNED]
         area = g.intersection(walk)
         x0, y0, x1, y1 = area.bounds
         cands = []
@@ -427,6 +479,7 @@ def place_consoles(walk, rms, door_pts, obstacles):
             chosen.append(best)
             placed[k] = (round(best.x, 2), round(best.y, 2))
         taken.extend(chosen)
+    placed.update(PINNED)
     placed.update(FIXED)
     return placed
 

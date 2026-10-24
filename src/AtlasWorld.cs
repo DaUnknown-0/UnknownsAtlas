@@ -186,6 +186,8 @@ internal static class AtlasWorld
             if (op == AtlasHandshake.OpHello || op == AtlasHandshake.OpBuildFailed) { AtlasHandshake.Receive(op, __instance, reader); return; }
             // Krisen der Vanilla-Karten laufen ohne gebaute Atlas-Karte
             if (op == AtlasVanillaCrisis.OpCrisis) { AtlasVanillaCrisis.Receive(__instance, fromHost, reader); return; }
+            // Vorspann einer Karte: Ansage und Ueberspringen kommen vor dem Kartenbau
+            if (op == AtlasCinematic.OpCine) { AtlasCinematic.Receive(fromHost, reader); return; }
             if (!AtlasMuseumBuilder.Active) return;
             switch (op)
             {

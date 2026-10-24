@@ -4940,24 +4940,24 @@
    4.9
   ],
   "Electrical/CalibrateConsole/0": [
-   4.5,
-   4.1
+   4.6,
+   4.95
   ],
   "Electrical/DivertPowerConsole/0": [
-   3.5,
-   4.9
+   3.9,
+   4.95
   ],
   "Electrical/FixWiringConsole/0": [
-   4.1,
-   3.3
+   5.75,
+   1.45
   ],
   "Electrical/SwitchConsole/0": [
-   6.3,
+   6.45,
    1.4
   ],
   "Electrical/UploadDataConsole/0": [
-   5.1,
-   2.7
+   5.05,
+   1.45
   ],
   "LifeSupp/CleanFilterConsole/0": [
    -9.5,
@@ -5662,8 +5662,8 @@
    -6.5
   ],
   "9": [
-   4.8,
-   1.5
+   3.15,
+   4.95
   ],
   "10": [
    9.0,
@@ -5674,8 +5674,8 @@
    1.5
   ],
   "12": [
-   19.6,
-   5.0
+   16.95,
+   4.95
   ],
   "13": [
    28.3,

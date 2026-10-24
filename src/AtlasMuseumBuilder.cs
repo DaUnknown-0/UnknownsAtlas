@@ -386,6 +386,7 @@ internal static class AtlasMuseumBuilder
         // 5. Umsetzen.
         int placed = 0, unplaced = 0;
         FootprintCount = 0;
+        Extended.Clear();
         foreach (var c in consoles)
         {
             if (c == null) continue;
@@ -504,8 +505,22 @@ internal static class AtlasMuseumBuilder
     // Trigger, und die Grundflaechen der eigenen Bloecke (AddFootprint) bleiben.
     private static void DisableOwnColliders(GameObject owner)
     {
+        bool trigger = false;
         foreach (var col in owner.GetComponents<Collider2D>())
-            if (col != null && !col.isTrigger && col.enabled) col.enabled = false;
+        {
+            if (col == null) continue;
+            if (!col.isTrigger && col.enabled) col.enabled = false;
+            else if (col.isTrigger && col.enabled) trigger = true;
+        }
+        // Die Benutzen-Taste sucht Ziele ueber Kollider (OverlapCircle auf der Usables-Maske), nicht nur ueber den
+        // Abstand. Der Notfallknopf der Skeld hat nur einen festen Kollider; abgeschaltet blieb USE grau, obwohl
+        // CanUse stimmte (User 24.10., Speisewagen der Zugkarte). Ohne Trigger bekommt die Konsole einen kleinen.
+        if (!trigger)
+        {
+            var c = owner.AddComponent<CircleCollider2D>();
+            c.isTrigger = true;
+            c.radius = 0.3f / Mathf.Max(0.0001f, owner.transform.lossyScale.x);
+        }
     }
 
     private static bool OwnsImage(SpriteRenderer image, Transform owner) =>
@@ -617,6 +632,37 @@ internal static class AtlasMuseumBuilder
         col.size = new Vector2(w, depth);
         col.offset = new Vector2(0f, gap + depth / 2f);
         FootprintCount++;
+        // Von hinten oder schraeg kam man wegen dieser Grundflaeche nie in die Benutzen-Reichweite (1 m) der Konsole
+        // (User 24.10., Zugkarte: "manche Tasks nur aus bestimmten Winkeln"). Reichweite um die Tiefe verlaengern;
+        // der Teil jenseits von 1 m gilt nur ohne Wand dazwischen (ReachPatch).
+        try
+        {
+            var con = block.transform.parent != null ? block.transform.parent.GetComponent<Console>() : null;
+            float need = Mathf.Min(1.6f, gap + depth + 0.65f);
+            if (con != null && con.usableDistance < need)
+            {
+                con.usableDistance = need;
+                Extended.Add(con.Pointer);
+            }
+        }
+        catch { }
+    }
+
+    private static readonly HashSet<IntPtr> Extended = new();
+
+    [HarmonyPatch(typeof(Console), nameof(Console.CanUse))]
+    internal static class ReachPatch
+    {
+        public static void Postfix(Console __instance, NetworkedPlayerInfo pc, ref bool canUse, float __result)
+        {
+            if (!canUse || __result <= 1f || Extended.Count == 0 || __instance == null || !Extended.Contains(__instance.Pointer)) return;
+            try
+            {
+                var from = pc.Object.GetTruePosition();
+                if (PhysicsHelpers.AnythingBetween(from, (Vector2)__instance.transform.position, 1 << LayerShip, false)) canUse = false;
+            }
+            catch { }
+        }
     }
 
     internal static int FootprintCount;
