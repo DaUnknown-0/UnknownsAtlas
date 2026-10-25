@@ -9,7 +9,7 @@ namespace UnknownsAtlas;
 
 internal static class AtlasAssetCatalog
 {
-    public const string Tag = "v6";
+    public const string Tag = "v7";
 
     public static readonly (string Name, string Res, long Size, string Sha256)[] Files =
     {
@@ -423,7 +423,7 @@ internal static class AtlasAssetCatalog
         ("train_fx_fire.png", "UnknownsAtlas.Maps.train.train_fx_fire.png", 39234L, "9ec7599a9d9467a85c42e46dd3c387783135b0dd4e2f1d1e7c730cf92d6f75e7"),
         ("train_fx_smoke.png", "UnknownsAtlas.Maps.train.train_fx_smoke.png", 101066L, "33f56e828d08fb4e6a57e241263caabdae58d5d04f7945cf8dc80fb24ee82179"),
         ("train_fx_spark.png", "UnknownsAtlas.Maps.train.train_fx_spark.png", 100486L, "97a71a77e5b227443af3a0ee1a539822f6f208ad56da6feca2ddb92dc92803ae"),
-        ("train_intro.cine", "UnknownsAtlas.Maps.train.train_intro.cine", 87381782L, "0dd68f0e34176d5a4e3bb1c4708eef0d4adeb8daf5e1476e5ca9dc3953277874"),
+        ("train_intro.cine", "UnknownsAtlas.Maps.train.train_intro.cine", 87381780L, "2a490dc5a63f53b8b345d234f049aebee99ac7b851bc6d9fe3961efd53179167"),
         ("train_props_0.png", "UnknownsAtlas.Maps.train.train_props_0.png", 391464L, "53a1f808fda2227ec7b751f3e711a2a1cb676a20d2faf24215468a29e9dc2651"),
         ("train_props_1.png", "UnknownsAtlas.Maps.train.train_props_1.png", 349325L, "f606a9002f76151a107c67d0c2c223349cdcc5331764c756574b5b67b7aba62e"),
         ("train_scroll_0.png", "UnknownsAtlas.Maps.train.train_scroll_0.png", 1522791L, "4d2b11a20e6e2a905fbe58267285e2160d81b72f61500b3a6bdc14ede68aeff5"),
