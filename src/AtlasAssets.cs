@@ -89,7 +89,7 @@ internal static class AtlasAssets
             foreach (var key in new List<string>(MapSprites.Keys))
                 if (Other(key)) { var s = MapSprites[key]; if (s != null) UnityEngine.Object.Destroy(s); MapSprites.Remove(key); }
             foreach (var key in new List<string>(MapTextures.Keys))
-                if (Other(key)) { var t = MapTextures[key]; if (t != null) { UnityEngine.Object.Destroy(t); freed++; } MapTextures.Remove(key); }
+                if (Other(key)) { var t = MapTextures[key]; if (t != null) { Masks.Remove(t); UnityEngine.Object.Destroy(t); freed++; } MapTextures.Remove(key); }
             if (freed > 0) AtlasPlugin.Logger.LogInfo($"[Atlas] released {freed} texture(s) of other maps.");
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"[Atlas] releasing other maps failed: {e.Message}"); }
@@ -197,10 +197,12 @@ internal static class AtlasAssets
             }
             tex = LoadTexture(res, mips: true, asm: asm);
             if (tex == null) { AtlasPlugin.Logger.LogError($"[Atlas] embedded resource missing: {res}"); return null; }
+            if (res.Contains("_consoles_")) Masks[tex] = AlphaMask.FromPixels(tex);   // vor Shrink: danach nicht mehr lesbar
             Shrink(tex);
         }
         tex.wrapMode = TextureWrapMode.Clamp;
         tex.filterMode = FilterMode.Trilinear;
+        if (res.Contains("_consoles_") && pt != null) Masks[tex] = AlphaMask.FromPacked(pt);
         MapTextures[res] = tex;
         TexturesLoaded++;
         if (packed) TexturesPacked++;
@@ -213,6 +215,68 @@ internal static class AtlasAssets
 
     /// <summary>Atlas k der eigenen Task-Bloecke.</summary>
     public static Texture2D MapConsolesTexture(AtlasMapDef m, int k) => MapTexture(ConsolesRes(m, k), m.ResourceAssembly);
+
+    // Deckungsmaske der Konsolen-Atlanten (Kollisionspruefung 26.10.: die Grundflaeche einer Konsole war immer 0,7 x
+    // Leinwandbreite mittig am Pivot, die GPT-Konsolen fuellen ihre Leinwand aber oft nur halb oder stehen zur Wand
+    // versetzt). Je 4x4-Block die Zahl der deckenden Pixel (Alpha >= 170), Zeilen von unten wie die Textur. Die
+    // Texturen selbst sind nach dem Laden nicht mehr lesbar, deshalb beim Laden aus den Rohdaten.
+    private static readonly Dictionary<Texture2D, AlphaMask> Masks = new();
+
+    internal static AlphaMask MaskOf(Texture2D t) => t != null && Masks.TryGetValue(t, out var m) ? m : null;
+
+    internal sealed class AlphaMask
+    {
+        public int BW, BH;
+        public byte[] N;                                              // deckende Pixel je Block (0..16)
+
+        public int At(int bx, int by) => bx < 0 || by < 0 || bx >= BW || by >= BH ? 0 : N[by * BW + bx];
+
+        public static AlphaMask FromPacked(PackedTexture p)
+        {
+            if (p == null || (p.Format != TextureFormat.DXT5 && p.Format != TextureFormat.DXT1)) return null;
+            int bw = (p.Width + 3) / 4, bh = (p.Height + 3) / 4, size = p.Format == TextureFormat.DXT5 ? 16 : 8;
+            if (p.Data == null || p.Data.Length < bw * bh * size) return null;
+            var m = new AlphaMask { BW = bw, BH = bh, N = new byte[bw * bh] };
+            var a = new int[8];
+            for (int i = 0; i < bw * bh; i++)
+            {
+                int o = i * size, n = 0;
+                if (size == 16)
+                {
+                    int a0 = p.Data[o], a1 = p.Data[o + 1];
+                    a[0] = a0; a[1] = a1;
+                    if (a0 > a1) for (int k = 2; k < 8; k++) a[k] = ((8 - k) * a0 + (k - 1) * a1) / 7;
+                    else { for (int k = 2; k < 6; k++) a[k] = ((6 - k) * a0 + (k - 1) * a1) / 5; a[6] = 0; a[7] = 255; }
+                    ulong bits = 0;
+                    for (int k = 0; k < 6; k++) bits |= (ulong)p.Data[o + 2 + k] << (8 * k);
+                    for (int k = 0; k < 16; k++) if (a[(int)(bits >> (3 * k)) & 7] >= 170) n++;
+                }
+                else
+                {
+                    int c0 = p.Data[o] | p.Data[o + 1] << 8, c1 = p.Data[o + 2] | p.Data[o + 3] << 8;
+                    uint idx = (uint)(p.Data[o + 4] | p.Data[o + 5] << 8 | p.Data[o + 6] << 16 | p.Data[o + 7] << 24);
+                    for (int k = 0; k < 16; k++) if (!(c0 <= c1 && ((idx >> (2 * k)) & 3) == 3)) n++;
+                }
+                m.N[i] = (byte)n;
+            }
+            return m;
+        }
+
+        public static AlphaMask FromPixels(Texture2D t)
+        {
+            try
+            {
+                var px = t.GetPixels32();
+                int w = t.width, h = t.height, bw = (w + 3) / 4, bh = (h + 3) / 4;
+                var m = new AlphaMask { BW = bw, BH = bh, N = new byte[bw * bh] };
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                        if (px[y * w + x].a >= 170) m.N[(y / 4) * bw + x / 4]++;
+                return m;
+            }
+            catch { return null; }
+        }
+    }
 
     /// <summary>Bodenkachel i, Pivot links unten, Massstab AtlasMapDef.FloorPixelsPerMeter.</summary>
     public static Sprite MapFloorTile(AtlasMapDef m, int i)

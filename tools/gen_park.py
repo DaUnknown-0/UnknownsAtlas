@@ -23,6 +23,21 @@ import museum_art as A
 import park_art as PA
 import park_floor as PF
 import park_layout as L
+
+# Kollisionspruefung 26.10. (_reviews/<karte>/KOLLISION.md): Kollisionsform statt Layoutform, wo das Bild kleiner oder
+# anders geformt ist. Das Sprite bleibt an der Layoutform, nur der Kollider aendert sich.
+HITBOX = {
+    ('circle', -14.0, 1.5, 2.8): ('ellipse', -14.0, 0.6, 2.85, 1.95),       # PA-4 Karussell
+    ('ellipse', 11.8, 13.2, 1.2, 0.6): ('ellipse', 11.8, 13.2, 1.0, 0.6),   # PA-5 Lichtturm
+    ('rect', 19.9, -20.6, 21.7, -19.0): ('rect', 19.9, -20.35, 21.7, -19.0),# PA-5 Liege
+}
+# PA-1: bodengemalte Hindernisse ohne eigenen Layout-Eintrag (Parkbaenke, Generatorkasten am Lichtturm)
+EXTRA_GLASS = [("rect", -5.2, 19.0, -3.95, 19.4), ("rect", -5.75, 13.9, -4.6, 14.3), ("rect", 3.75, 14.45, 4.9, 14.85),
+               ("rect", 13.6, 13.7, 14.8, 14.3)]
+
+
+def hit(s):
+    return HITBOX.get(tuple(s), s)
 import park_geo as G
 import map_labels
 
@@ -403,8 +418,8 @@ def emit(walk, water, rooms, doors, tiles, props, consoles, console_sprites=()):
     # Wasser und Achterbahn sperren den Weg, nicht die Sicht
     rail = G.rail_block()
     shadow = unary_union([walk, translate(walk, 0, 0.45), water, rail]).buffer(0)
-    opaque = [G.shape(s) for s, _k in L.OPAQUE]
-    glass = [G.shape(s) for s, _k in L.GLASS]
+    opaque = [G.shape(hit(s)) for s, _k in L.OPAQUE]
+    glass = [G.shape(hit(s)) for s, _k in L.GLASS] + [G.shape(s) for s in EXTRA_GLASS]
     edges = unary_union([LineString(r + [r[0]]) for r in rings_of(walk)])
     casts = [p.distance(edges) > 0.08 for p in opaque]
     room_u = unary_union([g for _n, _s, g in rooms.values()])

@@ -612,8 +612,62 @@ internal static class AtlasMuseumBuilder
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
         if (mat != null) sr.sharedMaterial = mat;
-        if (!FloorBlocks.Contains(key) && standLine <= p.y + 0.001f) AddFootprint(go, key, e.W, e.H, e.PY);
+        if (!FloorBlocks.Contains(key))
+        {
+            if (!AddOpaqueFootprint(go, AtlasAssets.MaskOf(tex), e.X, e.Y, e.W, e.H, e.PX, e.PY, standLine - p.y)
+                && standLine <= p.y + 0.001f)
+                AddFootprint(go, key, e.W, e.H, e.PY);
+        }
         return sr;
+    }
+
+    /// <summary>
+    /// Grundflaeche aus den deckenden Pixeln der Konsole (Kollisionspruefung 26.10.: die feste Box 0,7 x Leinwandbreite
+    /// mittig am Pivot war bei den GPT-Konsolen rundherum groesser als das Bild, Seitenwand-Konsolen stehen zur Wand
+    /// versetzt, und Kisten knapp vor einem Hindernis hatten gar keine Box). Breite = deckender Fuss (unterste 0,15 m
+    /// des Bilds), Tiefe aus der deckenden Hoehe; steht dahinter ein Hindernis, reicht die Box bis an dessen Kante,
+    /// sofern dazwischen mehr als 0,45 m frei waeren (sonst bremst das Hindernis selbst). false = keine Maske.
+    /// </summary>
+    private static bool AddOpaqueFootprint(GameObject block, AtlasAssets.AlphaMask m, int x, int y, int w, int h,
+        float pivX, float pivY, float backed)
+    {
+        if (m == null) return false;
+        float ppm = D.PropPixelsPerMeter;
+        int bx0 = x / 4, bx1 = (x + w - 1) / 4, by0 = y / 4, by1 = (y + h - 1) / 4;
+        bool Row(int by) { int c = 0; for (int bx = bx0; bx <= bx1; bx++) if (m.At(bx, by) >= 8 && ++c >= 2) return true; return false; }
+        int bot = -1, top = -1;
+        for (int by = by0; by <= by1; by++) if (Row(by)) { bot = by; break; }
+        if (bot < 0) return true;                                 // durchsichtig: keine Grundflaeche
+        for (int by = by1; by >= bot; by--) if (Row(by)) { top = by; break; }
+        int footRows = Mathf.Max(1, Mathf.RoundToInt(0.15f * ppm / 4f));
+        int fx0 = int.MaxValue, fx1 = -1;
+        for (int by = bot; by < bot + footRows && by <= top; by++)
+            for (int bx = bx0; bx <= bx1; bx++)
+                if (m.At(bx, by) >= 8) { fx0 = Mathf.Min(fx0, bx); fx1 = Mathf.Max(fx1, bx); }
+        if (fx1 < 0) return true;
+        float px = x + pivX * w, py = y + pivY * h;               // Pivot in Atlas-Pixeln
+        float left = (fx0 * 4 - px) / ppm + 0.03f, right = ((fx1 + 1) * 4 - px) / ppm - 0.03f;
+        float yBot = Mathf.Max(0f, (bot * 4 - py) / ppm), yTop = ((top + 1) * 4 - py) / ppm;
+        if (right - left < 0.2f)                                  // Pfosten, Stange (Vogelscheuche): trotzdem fest
+        {
+            float mid = (left + right) / 2f;
+            left = mid - 0.1f; right = mid + 0.1f;
+        }
+        const float gap = 0.05f;
+        float y0 = yBot + gap;
+        float depth = Mathf.Clamp((yTop - yBot) * 0.6f, 0.2f, 0.8f);
+        if (backed > 0.001f)
+        {
+            float free = backed - 0.05f - y0;                     // bis zur Hinderniskante
+            if (free < 0.45f) return true;
+            depth = Mathf.Min(free, 0.9f);
+        }
+        var col = block.AddComponent<BoxCollider2D>();
+        col.size = new Vector2(right - left, depth);
+        col.offset = new Vector2((left + right) / 2f, y0 + depth / 2f);
+        FootprintCount++;
+        ExtendReach(block, y0 + depth);
+        return true;
     }
 
     // Freistehende Konsolen (keine Wand direkt noerdlich) hatten keinen Kollider: man lief in den
@@ -632,13 +686,18 @@ internal static class AtlasMuseumBuilder
         col.size = new Vector2(w, depth);
         col.offset = new Vector2(0f, gap + depth / 2f);
         FootprintCount++;
+        ExtendReach(block, gap + depth);
+    }
+
+    private static void ExtendReach(GameObject block, float farEdge)
+    {
         // Von hinten oder schraeg kam man wegen dieser Grundflaeche nie in die Benutzen-Reichweite (1 m) der Konsole
         // (User 24.10., Zugkarte: "manche Tasks nur aus bestimmten Winkeln"). Reichweite um die Tiefe verlaengern;
         // der Teil jenseits von 1 m gilt nur ohne Wand dazwischen (ReachPatch).
         try
         {
             var con = block.transform.parent != null ? block.transform.parent.GetComponent<Console>() : null;
-            float need = Mathf.Min(1.6f, gap + depth + 0.65f);
+            float need = Mathf.Min(1.6f, farEdge + 0.65f);
             if (con != null && con.usableDistance < need)
             {
                 con.usableDistance = need;

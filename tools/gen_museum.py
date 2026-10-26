@@ -18,6 +18,23 @@ from shapely.affinity import translate
 from shapely.ops import unary_union
 
 import museum_layout as L
+
+# Kollisionspruefung 26.10. (_reviews/<karte>/KOLLISION.md): Kollisionsform statt Layoutform, wo das Bild kleiner oder
+# anders geformt ist. Das Sprite bleibt an der Layoutform, nur der Kollider aendert sich.
+HITBOX = {
+    ('circle', 13.6, 6.0, 1.0): ('ellipse', 13.65, 5.85, 0.95, 0.45),   # MU-1 Schwungrad
+    ('circle', -10.4, -3.6, 0.28): ('circle', -10.4, -3.45, 0.25),      # MU-2 Spieluhr Sicherheit
+    ('circle', 1.6, 2.2, 0.28): ('circle', 1.6, 2.35, 0.25),            # MU-3 Spieluhr Rotunde
+    ('rect', -12.9, 5.3, -12.7, 7.5): ('rect', -13.0, 5.3, -12.6, 7.5), # MU-6 Stellwand
+    ('rect', -12.9, 0.5, -12.7, 2.7): ('rect', -13.0, 0.5, -12.6, 2.7), # MU-6 Stellwand
+}
+
+
+def hit(s):
+    s = tuple(s)
+    for k, v in HITBOX.items():
+        if k[0] == s[0] and len(k) == len(s) and all(abs(a - b) < 0.02 for a, b in zip(k[1:], s[1:])): return v
+    return s
 import museum_art as A
 import museum_consoles as MC
 
@@ -327,7 +344,7 @@ def emit_cs(walk, props=None, tiles=None, consoles=None):
     a("    public static readonly Vector2[][] Opaque =")
     a("    {")
     for shape, _c in L.OPAQUE:
-        a(f"        {chain_cs(L.shape_points(shape))},")
+        a(f"        {chain_cs(L.shape_points(hit(shape)))},")
     a("    };")
     a("")
     # Blickdichte Hindernisse, die an einer Wand stehen, werfen KEINEN eigenen Schatten: die Wand
@@ -345,7 +362,7 @@ def emit_cs(walk, props=None, tiles=None, consoles=None):
     a("    public static readonly Vector2[][] Glass =")
     a("    {")
     for shape in L.GLASS:
-        a(f"        {chain_cs(L.shape_points(shape))},")
+        a(f"        {chain_cs(L.shape_points(hit(shape)))},")
     a("    };")
     a("")
     a("    /// <summary>Raeume: Schluessel, Anzeigename, SystemTypes-Traeger, Umriss.</summary>")

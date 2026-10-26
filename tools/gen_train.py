@@ -124,7 +124,7 @@ HPARTS = [
 # Waende ohne Oeffnung (senkrecht): x, y0, y1
 VSOLID = [(-19.4, 3.6, AY1), (-17.4, 3.6, AY1), (-15.4, 3.6, AY1),
           (-19.4, -4.9, BY1B), (-17.4, -4.9, BY1B), (-15.4, -4.9, BY1B)]
-BOILER = (24.7, 2.5, 28.0, 4.0)             # Kessel der Lok: Umlauf noerdlich und suedlich davon
+BOILER = (24.7, 2.5, 28.7, 4.0)             # Kessel der Lok: Umlauf noerdlich und suedlich davon (26.10.: bis zur Rauchkammer, TR-1)
 
 # ------------------------------------------------------------------ Treppen (je Doppelstockwagen zwei)
 STAIR_LEN, STAIR_DEPTH = 1.6, 1.2
@@ -260,16 +260,16 @@ GLASS = [
     ("rect", -8.7, 1.0, -7.5, 1.9),
     ("rect", -7.0, 1.0, -5.8, 1.9),
     ("rect", -5.3, 1.0, -4.1, 1.9),
-    ("rect", -9.6, -3.3, -5.0, -2.5),        # Kueche: Herdzeile
-    ("rect", -10.2, -7.0, -8.0, -6.4),       # Kueche: Anrichte
+    ("rect", -8.5, -3.3, -6.1, -2.5),        # Kueche: Herdzeile (26.10.: so breit wie der GPT-Herd, TR-2)
+    ("rect", -9.95, -7.0, -8.25, -6.4),     # Kueche: Anrichte (TR-4)
     ("rect", 0.0, -7.0, 1.4, -6.2),          # Aussichtskuppel: Sessel (Oberdeck)
     ("rect", 2.0, -7.0, 3.4, -6.2),
     ("rect", 4.0, -7.0, 5.4, -6.2),
     ("rect", 1.2, -3.3, 2.4, -2.5),
     ("rect", 3.0, -3.3, 4.2, -2.5),
     ("rect", 17.4, 4.1, 19.0, 5.5),          # Tender: Kohlenhaufen
-    ("rect", 12.0, 1.0, 14.6, 1.4),          # Postraum: Sortierfaecher
-    ("rect", 12.4, 5.0, 14.1, 5.5),          # Postraum: Sortiertisch mit Streckenkarte an der Nordwand (Admin)
+    ("rect", 12.5, 1.0, 14.1, 1.4),          # Postraum: Sortierfaecher (TR-3)
+    ("rect", 12.6, 5.0, 13.9, 5.5),          # Postraum: Sortiertisch (TR-6) mit Streckenkarte an der Nordwand (Admin)
     ("rect", -4.0, 1.0, -3.0, 1.6),          # Speisewagen: Bar am Suedwand-Ostende (Westende = Speiseaufzug, Vent 3)
 ]
 # Fahrkarten-Lochzangen (Sabotage-Stationen) mit Kollision, Breite wie das Objekt (train_props "lochzange"). Steht

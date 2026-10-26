@@ -22,6 +22,21 @@ from shapely.ops import unary_union
 import handdraw as HD
 import museum_art as A
 import wald_layout as W
+
+# Kollisionspruefung 26.10. (_reviews/<karte>/KOLLISION.md): Kollisionsform statt Layoutform, wo das Bild kleiner oder
+# anders geformt ist. Das Sprite bleibt an der Layoutform, nur der Kollider aendert sich.
+HITBOX = {
+    ('circle', 18.6, -7.2, 0.8): ('ellipse', 18.6, -7.0, 0.45, 0.25),     # WA-1 Einzelbaum
+    ('circle', -0.3, 11.4, 0.8): ('ellipse', -0.3, 11.6, 0.45, 0.25),     # WA-1 Einzelbaum
+    ('circle', -21.0, 14.6, 1.6): ('ellipse', -21.0, 14.45, 1.55, 0.8),   # WA-2 Findling
+    ('circle', 4.3, 14.3, 0.9): ('ellipse', 4.22, 14.4, 0.55, 0.42),      # WA-3 Funkmast
+    ('circle', 12.0, 13.2, 2.2): ('ellipse', 12.0, 12.85, 1.9, 0.85),     # WA-4 Wassertank
+    ('circle', -24.6, 11.2, 0.55): ('ellipse', -24.6, 10.95, 0.75, 0.55), # WA-7 Lagerfeuer
+}
+
+
+def hit(s):
+    return HITBOX.get(tuple(s), s)
 import wald_geo as G
 import map_labels
 
@@ -1685,8 +1700,8 @@ def emit(walk, water, rooms, doors, tiles, props, consoles, blocks=()):
     solid = full.difference(walk)
     move = walk.difference(translate(solid, 0, -0.3)).buffer(0)
     shadow = unary_union([walk, translate(walk, 0, 0.45), water]).buffer(0)
-    opaque = [G.shape(s) for s, _k in W.OPAQUE]
-    glass = [G.shape(s) for s, _k in W.GLASS]
+    opaque = [G.shape(hit(s)) for s, _k in W.OPAQUE]
+    glass = [G.shape(hit(s)) for s, _k in W.GLASS]
     edges = unary_union([LineString(r + [r[0]]) for r in rings_of(walk)])
     casts = [p.distance(edges) > 0.08 for p in opaque]
     room_u = unary_union([g for _n, _s, g in rooms.values()])

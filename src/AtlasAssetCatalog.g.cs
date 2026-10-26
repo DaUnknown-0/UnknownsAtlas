@@ -9,7 +9,7 @@ namespace UnknownsAtlas;
 
 internal static class AtlasAssetCatalog
 {
-    public const string Tag = "v8";
+    public const string Tag = "v9";
 
     public static readonly (string Name, string Res, long Size, string Sha256)[] Files =
     {
@@ -39,7 +39,7 @@ internal static class AtlasAssetCatalog
         ("museum_floor_7.atx", "UnknownsAtlas.Resources.museum_floor_7.atx", 327793L, "eba01100c6995394d1f8983dbf75a92de5b69d3093ec27682c12f3862ec4d8f2"),
         ("museum_floor_8.atx", "UnknownsAtlas.Resources.museum_floor_8.atx", 330516L, "f141f72bfdf8d230bf4cc838f1b178f878868c7dd3fb783ec4c9ac9334792e83"),
         ("museum_floor_9.atx", "UnknownsAtlas.Resources.museum_floor_9.atx", 191794L, "536603b951f39edcd79b4dde1cb2f9fc001cbf753e5ef16f8576702bbc220cae"),
-        ("museum_props_0.atx", "UnknownsAtlas.Resources.museum_props_0.atx", 1222834L, "490bfa1497fb7d4ebf1ff4bfee44928b8791e1ec428dce2d4d2680411a6c75e8"),
+        ("museum_props_0.atx", "UnknownsAtlas.Resources.museum_props_0.atx", 1224018L, "ed2be50e6aaf3f6e861135931995ae2db7cf0030339947e8a0c712219de9eebc"),
         ("park_consoles_0.atx", "UnknownsAtlas.Resources.park_consoles_0.atx", 429336L, "9162faa39a627fd4ff5c1e92c6d19f74e2ab1188adbef26b9a1f02e143b8ee8a"),
         ("park_floor_0.atx", "UnknownsAtlas.Resources.park_floor_0.atx", 1249932L, "a8a8bef47d03ed5295590c5581fcc83f5f2ce75963834ceae8828ceae82cfb7b"),
         ("park_floor_1.atx", "UnknownsAtlas.Resources.park_floor_1.atx", 1381572L, "033dba424b0f17b0ea78b492c02833c11f8df96ba8b9a0073a3ad6fde885ede0"),
@@ -339,6 +339,7 @@ internal static class AtlasAssetCatalog
         ("task_trailmap.png", "UnknownsAtlas.Resources.task_trailmap.png", 305587L, "731c6162b743a5a337f4f69d2f524f45008a370742efc80d993487b10807296d"),
         ("task_train_brake.png", "UnknownsAtlas.Maps.train.task_train_brake.png", 23264L, "66401b4e9747535aa3e10f276b28df2acee127455f569b8a8f97806854de370d"),
         ("task_train_brake_lever.png", "UnknownsAtlas.Maps.train.task_train_brake_lever.png", 2988L, "b86bde0c73de3e705c0a824e4c5b346f5ba5813538422e769c87ec223954e56d"),
+        ("task_train_crank.png", "UnknownsAtlas.Maps.train.task_train_crank.png", 2937L, "33b194ff260341fcac1c5d73b62625f0623072ed243ec9bf1565dc12fe83c658"),
         ("task_train_gauge.png", "UnknownsAtlas.Maps.train.task_train_gauge.png", 28241L, "89bf2d11e1b172352866aca37a359cf44495074bd259a7c652369217489323c8"),
         ("task_train_gauge_needle.png", "UnknownsAtlas.Maps.train.task_train_gauge_needle.png", 1439L, "ffea1c7cffad20ce8aa2b29a071c4c5130c4d740694aab0062dad87560ace26a"),
         ("task_train_hatch.png", "UnknownsAtlas.Maps.train.task_train_hatch.png", 21682L, "4436227c1d433c0a9de16d3e18a13838692e2a5a2cc0a6a74d1c9af896af47cd"),
@@ -412,20 +413,21 @@ internal static class AtlasAssetCatalog
         ("task_wire_end.png", "UnknownsAtlas.Resources.task_wire_end.png", 1700L, "2c868e50139ab0ff33093f163bb74eebffb5deea777b21fbd07a8d6d04d3fde7"),
         ("train_consoles_0.png", "UnknownsAtlas.Maps.train.train_consoles_0.png", 1078061L, "0a35cfe6f4708e873b8d24bdfd0d90141370127db43b18c93db6f89bd6df4992"),
         ("train_consoles_1.png", "UnknownsAtlas.Maps.train.train_consoles_1.png", 125261L, "4dbf06190a07e43d29084a38ce0d2a9b0a896a27068cdc66b8656f5f08735812"),
-        ("train_floor_0.png", "UnknownsAtlas.Maps.train.train_floor_0.png", 946632L, "22462f9d81ae3951e8ba90dbed5617100aed45ca0f7f2a7698d00fe5415f8a68"),
-        ("train_floor_1.png", "UnknownsAtlas.Maps.train.train_floor_1.png", 927535L, "082303b9bf90e6a860d3ec84bc2da49e233fc5d9af388c4392880e5622e9244e"),
-        ("train_floor_2.png", "UnknownsAtlas.Maps.train.train_floor_2.png", 898550L, "25fef21bbb204fb6fbf98716d3b289f15f7b3225b8d3425480f08e7acd7455c4"),
-        ("train_floor_3.png", "UnknownsAtlas.Maps.train.train_floor_3.png", 566375L, "1623aa7f06f880b53cebd2acfd9381f805d471a6732980ecc4b842ee9a12a54a"),
-        ("train_floor_4.png", "UnknownsAtlas.Maps.train.train_floor_4.png", 529658L, "9c8b184994a9099535038427a047ab5d67ef1eb7c3272bcc05ff0ba84f2b71c4"),
-        ("train_floor_5.png", "UnknownsAtlas.Maps.train.train_floor_5.png", 608423L, "6813e51635ab6432f4bf9b9a2058da02e43c18d5e36f538e46be53daeb32a4e6"),
-        ("train_floor_6.png", "UnknownsAtlas.Maps.train.train_floor_6.png", 649048L, "f2cafdd24b500b95a28700026a426506d0a4d01941e12d1fe7264263818ba913"),
-        ("train_floor_7.png", "UnknownsAtlas.Maps.train.train_floor_7.png", 71856L, "9b5a0efda6b6208a00cb25785f4e5620b526fc75c455add3b03cb7470bb8e5fc"),
+        ("train_floor_0.png", "UnknownsAtlas.Maps.train.train_floor_0.png", 945460L, "f9d88a947281efef9999206e734561b0b30f2cbfdb44a3feb9a8aa5a68476c86"),
+        ("train_floor_1.png", "UnknownsAtlas.Maps.train.train_floor_1.png", 928169L, "ba4af45a477210e8ca5cb2dd57154e7643d1e3c768a5a9bbc33b758943b3e2cc"),
+        ("train_floor_2.png", "UnknownsAtlas.Maps.train.train_floor_2.png", 898233L, "940b6d339e3bf2177436decdde226681457f58b68aa0d5b53a38f09c26f3457b"),
+        ("train_floor_3.png", "UnknownsAtlas.Maps.train.train_floor_3.png", 551291L, "0e66606dfa70b19d224b96393f947b6df331b03e277877a43463d1f101aaf43d"),
+        ("train_floor_4.png", "UnknownsAtlas.Maps.train.train_floor_4.png", 531280L, "be2b7b57d990aec489e06097ab33a8840caf3f5d65f7a44e164720ad6b302630"),
+        ("train_floor_5.png", "UnknownsAtlas.Maps.train.train_floor_5.png", 608665L, "8e42542cb4f08739e1dff4c74572006b05836e5243bbfaf8483a6676310dd3ad"),
+        ("train_floor_6.png", "UnknownsAtlas.Maps.train.train_floor_6.png", 649060L, "edfeec8c475f89711f0b985122178e16412e42d47e52503b668fa506150554e4"),
+        ("train_floor_7.png", "UnknownsAtlas.Maps.train.train_floor_7.png", 71589L, "1e30d80115212468d7f522d0338296a95fa348a9f64fe976ac9fd35dda3f9e9e"),
         ("train_fx_fire.png", "UnknownsAtlas.Maps.train.train_fx_fire.png", 39234L, "9ec7599a9d9467a85c42e46dd3c387783135b0dd4e2f1d1e7c730cf92d6f75e7"),
         ("train_fx_smoke.png", "UnknownsAtlas.Maps.train.train_fx_smoke.png", 101066L, "33f56e828d08fb4e6a57e241263caabdae58d5d04f7945cf8dc80fb24ee82179"),
         ("train_fx_spark.png", "UnknownsAtlas.Maps.train.train_fx_spark.png", 100486L, "97a71a77e5b227443af3a0ee1a539822f6f208ad56da6feca2ddb92dc92803ae"),
+        ("train_fx_speed.png", "UnknownsAtlas.Maps.train.train_fx_speed.png", 5559L, "da68e301101f9589a7dd6678b7202c63b59e344e0a232995a3e15310d3f19e21"),
         ("train_intro.cine", "UnknownsAtlas.Maps.train.train_intro.cine", 87381780L, "2a490dc5a63f53b8b345d234f049aebee99ac7b851bc6d9fe3961efd53179167"),
-        ("train_props_0.png", "UnknownsAtlas.Maps.train.train_props_0.png", 1186346L, "eca464c6ceec86f52fec1cb33fdbe0c2c9891a294a12fa5fb1538197fd954be3"),
-        ("train_props_1.png", "UnknownsAtlas.Maps.train.train_props_1.png", 858180L, "a88f0b599f9fb98c15175ac0f0a0bba4fb354d5aed81ee08a062fdc7894db4e8"),
+        ("train_props_0.png", "UnknownsAtlas.Maps.train.train_props_0.png", 1186487L, "f7d5a8510c81dc161ac1de30e84042f6eac822edfa74d636dc8045c9f3f3c483"),
+        ("train_props_1.png", "UnknownsAtlas.Maps.train.train_props_1.png", 842173L, "8a4a9c6b13cd3518f6889a37d0f7ae473d4a3c005cbdedde1fc207fe69818f73"),
         ("train_scroll_0.png", "UnknownsAtlas.Maps.train.train_scroll_0.png", 1522791L, "4d2b11a20e6e2a905fbe58267285e2160d81b72f61500b3a6bdc14ede68aeff5"),
         ("train_scroll_far_0.png", "UnknownsAtlas.Maps.train.train_scroll_far_0.png", 222628L, "465a6769b0e41f9c478199a7c4ad8f5fcc2d2fdeb6eb36a46fc37fee0d8da4cd"),
         ("wald_consoles_0.atx", "UnknownsAtlas.Resources.wald_consoles_0.atx", 487048L, "37ce4ade9bf0772d6fa89508df29e8f3d8f31625ef6e7645d43374696a8cdfde"),
