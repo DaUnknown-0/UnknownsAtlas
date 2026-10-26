@@ -338,8 +338,9 @@ internal static class AtlasRex
     private static SpriteRenderer _eye;
     private static float _awake, _headAng, _jawAng, _roarShake;
 
-    /// <summary>Versatz von Kopf, Kiefer und Gelenken gegenueber den generierten Daten (GPT-Rumpf, Hals tiefer).</summary>
-    private static readonly Vector2 HeadShift = new(0.03f, -0.60f);
+    /// <summary>Versatz von Kopf, Kiefer und Gelenken gegenueber den generierten Daten. 1.0.3.8 brauchte (0,03/-0,60) fuer den
+    /// gespiegelten GPT-Rumpf; seit 1.0.3.9 folgt der neu gezeichnete Rumpf dem Original (User 26.10.: Beine an der Huefte).</summary>
+    private static readonly Vector2 HeadShift = Vector2.zero;
 
     /// <summary>Nach dem Kartenbau: Kopf und Unterkiefer (eigene Sprites, museum_art) an Gelenke haengen.</summary>
     public static void OnBuilt(ShipStatus ship)

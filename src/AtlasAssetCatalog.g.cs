@@ -9,7 +9,7 @@ namespace UnknownsAtlas;
 
 internal static class AtlasAssetCatalog
 {
-    public const string Tag = "v12";
+    public const string Tag = "v13";
 
     public static readonly (string Name, string Res, long Size, string Sha256)[] Files =
     {
@@ -39,7 +39,7 @@ internal static class AtlasAssetCatalog
         ("museum_floor_7.atx", "UnknownsAtlas.Resources.museum_floor_7.atx", 327793L, "eba01100c6995394d1f8983dbf75a92de5b69d3093ec27682c12f3862ec4d8f2"),
         ("museum_floor_8.atx", "UnknownsAtlas.Resources.museum_floor_8.atx", 330516L, "f141f72bfdf8d230bf4cc838f1b178f878868c7dd3fb783ec4c9ac9334792e83"),
         ("museum_floor_9.atx", "UnknownsAtlas.Resources.museum_floor_9.atx", 191794L, "536603b951f39edcd79b4dde1cb2f9fc001cbf753e5ef16f8576702bbc220cae"),
-        ("museum_props_0.atx", "UnknownsAtlas.Resources.museum_props_0.atx", 2918420L, "135ab3b7480d389a2864410eed2ab207e160c034100eb526debdde4108ecaf25"),
+        ("museum_props_0.atx", "UnknownsAtlas.Resources.museum_props_0.atx", 2854157L, "8c4aa0cae9fdba1d0ce1977e2cfe170fa0a3fa776af642b95575bcfe471f946d"),
         ("park_consoles_0.atx", "UnknownsAtlas.Resources.park_consoles_0.atx", 592601L, "577c49832c056926286a862ce20410f5aefc966120011c3d9bab285313f29079"),
         ("park_floor_0.atx", "UnknownsAtlas.Resources.park_floor_0.atx", 1249932L, "a8a8bef47d03ed5295590c5581fcc83f5f2ce75963834ceae8828ceae82cfb7b"),
         ("park_floor_1.atx", "UnknownsAtlas.Resources.park_floor_1.atx", 1381572L, "033dba424b0f17b0ea78b492c02833c11f8df96ba8b9a0073a3ad6fde885ede0"),
