@@ -121,7 +121,7 @@ public sealed class AtlasMapDef
         FloorPixelsPerMeter = AtlasMuseumData.FloorPixelsPerMeter, FloorTiles = AtlasMuseumData.FloorTiles,
         PropPixelsPerMeter = AtlasMuseumData.PropPixelsPerMeter, Props = AtlasMuseumData.Props,
         ConsoleSprites = AtlasMuseumData.ConsoleSprites,
-        NoFadeKinds = new() { "dino", "dino_rex" },
+        NoFadeKinds = new() { "dino", "dino_rex", "dino_rex_head", "dino_rex_jaw" },   // Kopf/Kiefer wurden sonst durchsichtig (User 26.10.)
         Consoles = AtlasMuseumLayout.Consoles,
         EmergencyButton = AtlasMuseumLayout.EmergencyButton, SurveillanceConsole = AtlasMuseumLayout.SurveillanceConsole,
         AdminTable = AtlasMuseumLayout.AdminTable, FreeplayLaptop = AtlasMuseumLayout.FreeplayLaptop,

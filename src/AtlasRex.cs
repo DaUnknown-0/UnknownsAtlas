@@ -338,6 +338,9 @@ internal static class AtlasRex
     private static SpriteRenderer _eye;
     private static float _awake, _headAng, _jawAng, _roarShake;
 
+    /// <summary>Versatz von Kopf, Kiefer und Gelenken gegenueber den generierten Daten (GPT-Rumpf, Hals tiefer).</summary>
+    private static readonly Vector2 HeadShift = new(0.03f, -0.60f);
+
     /// <summary>Nach dem Kartenbau: Kopf und Unterkiefer (eigene Sprites, museum_art) an Gelenke haengen.</summary>
     public static void OnBuilt(ShipStatus ship)
     {
@@ -359,24 +362,28 @@ internal static class AtlasRex
                 AtlasPlugin.Logger.LogWarning($"{LogPrefix} rex sprites missing (body {body != null}, head {head != null}, jaw {jaw != null})");
                 return;
             }
+            // GPT-Rumpf (1.0.3.7) hat den Hals 0,6 m tiefer als das alte Skelett, um das Kopf, Kiefer und Gelenke
+            // generiert sind (User 26.10.: Kopf schwebte bzw. sass an der Schwanzspitze): alles um HeadShift setzen
+            head.transform.position += (Vector3)HeadShift;
+            jaw.transform.position += (Vector3)HeadShift;
             // Tiefe: Kopf vor Unterkiefer vor Rumpf (alle drei haben dieselbe Standlinie)
             float z = body.transform.position.z;
             _headPivot = new GameObject("Atlas_RexHead") { layer = head.gameObject.layer }.transform;
             _headPivot.SetParent(body.transform.parent, false);
-            _headPivot.position = new Vector3(AtlasMuseumData.RexNeck.x, AtlasMuseumData.RexNeck.y, z - 0.0003f);
+            _headPivot.position = new Vector3(AtlasMuseumData.RexNeck.x + HeadShift.x, AtlasMuseumData.RexNeck.y + HeadShift.y, z - 0.0003f);
             var hp = head.transform.position;
             head.transform.SetParent(_headPivot, true);
             head.transform.position = new Vector3(hp.x, hp.y, z - 0.0003f);
             _jawPivot = new GameObject("Atlas_RexJaw") { layer = jaw.gameObject.layer }.transform;
             _jawPivot.SetParent(_headPivot, false);
-            _jawPivot.position = new Vector3(AtlasMuseumData.RexJaw.x, AtlasMuseumData.RexJaw.y, z - 0.00015f);
+            _jawPivot.position = new Vector3(AtlasMuseumData.RexJaw.x + HeadShift.x, AtlasMuseumData.RexJaw.y + HeadShift.y, z - 0.00015f);
             var jp = jaw.transform.position;
             jaw.transform.SetParent(_jawPivot, true);
             jaw.transform.position = new Vector3(jp.x, jp.y, z - 0.00015f);
             // rotes Glimmen in der Augenhoehle
             var eg = new GameObject("Atlas_RexEye") { layer = head.gameObject.layer };
             eg.transform.SetParent(_headPivot, false);
-            eg.transform.position = new Vector3(AtlasMuseumData.RexEye.x, AtlasMuseumData.RexEye.y, z - 0.0004f);
+            eg.transform.position = new Vector3(AtlasMuseumData.RexEye.x + HeadShift.x, AtlasMuseumData.RexEye.y + HeadShift.y, z - 0.0004f);
             _eye = eg.AddComponent<SpriteRenderer>();
             _eye.sprite = GlowSprite();
             _eye.color = new Color(1f, 0.2f, 0.12f, 0f);
