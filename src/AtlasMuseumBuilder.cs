@@ -969,14 +969,68 @@ internal static class AtlasMuseumBuilder
             }
             Mask(sr);
             PropRenderers.Add(sr);
+            SpriteRenderer topSr = null;
+            if (D.PropTops != null && D.PropTops.TryGetValue(n, out var splitY))
+            {
+                topSr = AddPropTop(go, p, splitY);
+                if (sprite == null && topSr != null)
+                {
+                    var pp = p; var ts = topSr;
+                    LateFill.Add(() => FillPropTop(ts, pp, splitY));
+                }
+                else FillPropTop(topSr, p, splitY);
+            }
             float top = p.WorldY + p.H / D.PropPixelsPerMeter;
             // Das Skelett ist das Schaustueck der Rotunde: nie ausblenden (User 22.09.).
             if (top - p.BaseY > FadeMinHeight && !D.NoFadeKinds.Contains(p.Kind))
-                FadeProps.Add(new FadeProp(sr, p.FootX0, p.FootX1, p.BaseY, top));
+                FadeProps.Add(new FadeProp(sr, p.FootX0, p.FootX1, p.BaseY, top) { TopR = topSr });
             n++;
         }
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} props sorted at the back of their footprint: {backSorted}/{n}");
         return n;
+    }
+
+    /// <summary>Oberes Stueck eines Props ueber dem Sichtschatten (AtlasMapDef.PropTops): eigenes Sprite ohne Masken-Material,
+    /// z vor dem Schatten-Viereck der Kamera. Das untere Stueck bleibt normal sortiert und maskiert.</summary>
+    private static SpriteRenderer AddPropTop(GameObject prop, (string Kind, int Atlas, int X, int Y, int W, int H, float WorldX, float WorldY, float BaseY, float FootX0, float FootX1) p, float splitY)
+    {
+        float rows = (splitY - p.WorldY) * D.PropPixelsPerMeter;
+        if (rows <= 1f || rows >= p.H - 2) return null;
+        var go = new GameObject("PropTop") { layer = prop.layer };
+        go.transform.SetParent(prop.transform, false);
+        go.transform.position = new Vector3(p.WorldX, splitY, TopZ());
+        return go.AddComponent<SpriteRenderer>();
+    }
+
+    private static void FillPropTop(SpriteRenderer sr, (string Kind, int Atlas, int X, int Y, int W, int H, float WorldX, float WorldY, float BaseY, float FootX0, float FootX1) p, float splitY)
+    {
+        if (sr == null) return;
+        var tex = AtlasAssets.MapPropsTexture(D, p.Atlas);
+        if (tex == null) return;
+        int rows = Mathf.RoundToInt((splitY - p.WorldY) * D.PropPixelsPerMeter);
+        var s = Sprite.Create(tex, new Rect(p.X, p.Y + rows, p.W, p.H - rows), Vector2.zero, D.PropPixelsPerMeter);
+        s.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
+        sr.sprite = s;
+        // das untere Stueck um die gleichen Zeilen kuerzen, sonst liegt dort das Bild doppelt
+        var low = sr.transform.parent != null ? sr.transform.parent.GetComponent<SpriteRenderer>() : null;
+        if (low != null && low.sprite != null && Mathf.Approximately(low.sprite.rect.height, p.H))
+        {
+            var s2 = Sprite.Create(tex, new Rect(p.X, p.Y, p.W, rows), Vector2.zero, D.PropPixelsPerMeter);
+            s2.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
+            low.sprite = s2;
+        }
+    }
+
+    /// <summary>z knapp vor dem Schatten-Viereck (ShadowCollab haengt an der Hauptkamera); ohne Schatten -1.</summary>
+    private static float TopZ()
+    {
+        try
+        {
+            foreach (var sc in Object.FindObjectsOfType<ShadowCollab>())
+                if (sc != null && sc.ShadowQuad != null) return sc.ShadowQuad.transform.position.z - 0.05f;
+        }
+        catch { }
+        return -1f;
     }
 
     /// <summary>
@@ -1091,6 +1145,7 @@ internal static class AtlasMuseumBuilder
 
     private sealed class FadeProp
     {
+        public SpriteRenderer TopR;
         public readonly SpriteRenderer R;
         public readonly float X0, X1, Base, Top;
         public float Alpha = 1f;
@@ -1199,6 +1254,7 @@ internal static class AtlasMuseumBuilder
             f.Alpha = Mathf.MoveTowards(f.Alpha, target, step);
             var c = f.R.color;
             f.R.color = new Color(c.r, c.g, c.b, f.Alpha);
+            if (f.TopR != null) f.TopR.color = new Color(c.r, c.g, c.b, f.Alpha);
         }
     }
 

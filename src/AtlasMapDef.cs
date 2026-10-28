@@ -69,6 +69,13 @@ public sealed class AtlasMapDef
     public Vector2[] Cameras;
     /// <summary>Eigener Blickpunkt je Kamera-Index (sonst die Mitte des Raums, in dem die Kamera haengt).</summary>
     public Dictionary<int, Vector2> CameraViews = new();
+    /// <summary>Bildausschnitt im Kamera-Minispiel: Faktor auf die Kamera-Groesse (1 = Vanilla, groesser = weiter
+    /// herausgezoomt).</summary>
+    public float CameraZoom = 1f;
+    /// <summary>Optional: Prop-Index (in Props) -> Welt-y, ab der das Bild ueber dem Sichtschatten liegt. Fuer hohe Moebel
+    /// an Innenwaenden, deren oberes Stueck sonst im Schatten der Wand verschwindet; das Stueck bleibt dann auch hinter
+    /// der Wand sichtbar (nur Moebel, keine Spieler).</summary>
+    public Dictionary<int, float> PropTops = new();
     public Dictionary<SystemTypes, Vector2> MapButtons;
     /// <summary>Raumnamen auf der Minimap (Weltmeter: Mitte, halbe Breite/Hoehe); Knoepfe weichen ihnen aus.</summary>
     public (float X, float Y, float HalfW, float HalfH)[] MapLabels = System.Array.Empty<(float, float, float, float)>();

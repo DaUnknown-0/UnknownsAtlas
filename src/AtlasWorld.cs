@@ -666,6 +666,32 @@ internal static class AtlasWorld
         }
     }
 
+    // ------------------------------------------------------------------ Kamera-Minispiel: Bildausschnitt
+
+    /// <summary>AtlasMapDef.CameraZoom: die Kameras des Minispiels rendern in dessen RenderTextures; ihre Groesse
+    /// einmal beim Oeffnen mit dem Faktor der Karte multiplizieren (jede Oeffnung legt neue Kameras an).</summary>
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(SurveillanceMinigame), nameof(SurveillanceMinigame.Begin))]
+    internal static void SurveillanceMinigame_Begin_Postfix(SurveillanceMinigame __instance)
+    {
+        try
+        {
+            float zoom = AtlasMuseumBuilder.D != null ? AtlasMuseumBuilder.D.CameraZoom : 1f;
+            if (!AtlasMuseumBuilder.Active || __instance == null || __instance.textures == null || Mathf.Approximately(zoom, 1f)) return;
+            var targets = new HashSet<IntPtr>();
+            foreach (var t in __instance.textures) if (t != null) targets.Add(t.Pointer);
+            int n = 0;
+            foreach (var cam in Camera.allCameras)
+            {
+                if (cam == null || cam.targetTexture == null || !targets.Contains(cam.targetTexture.Pointer)) continue;
+                cam.orthographicSize *= zoom;
+                n++;
+            }
+            AtlasPlugin.Logger.LogInfo($"[Atlas/World] surveillance: {n} camera(s) zoomed x{zoom:F2}");
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"[Atlas/World] surveillance zoom: {e.Message}"); }
+    }
+
     // ------------------------------------------------------------------ Kamera-Minispiel: Laserprotokoll
 
     [HarmonyPostfix]
