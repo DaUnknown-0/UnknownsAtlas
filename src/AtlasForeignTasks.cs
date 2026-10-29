@@ -78,6 +78,9 @@ internal static class AtlasForeignTasks
                 task.name = $"Atlas_{type}";
                 task.StartAt = room;
                 task.Index = myIndex;
+                // Reset Breakers wandert auf der Airship durch 7 Kaesten; hier steht EINE Konsole, siebenmal dasselbe ist zaeh
+                // (User 29.10.): 3 Durchgaenge. Alle Clients bauen dieselbe Kopie, die Schrittzahl stimmt also ueberall.
+                if (type == TaskTypes.ResetBreakers && task.MaxStep > 3) task.MaxStep = 3;
                 switch (kind)
                 {
                     case 0: ship.CommonTasks = Append(ship.CommonTasks, task); break;
@@ -179,6 +182,24 @@ internal static class AtlasForeignTasks
     {
         try { if (_holder != null) Object.Destroy(_holder); } catch { }
         _holder = null;
+    }
+
+    // Mehrstufige Leihaufgaben (Airship "Reset Breakers": 7 Kaesten, je Schritt nur ConsoleId == Data[Schritt]) haben auf
+    // der Karte EINE Konsole mit ConsoleId 0: vanilla verweigerte sie, sobald die ausgeloste Reihenfolge einen anderen Kasten
+    // verlangte (User 29.10.: "die task funktioniert nicht" nach Schritt 2 von 7). An ihrer eigenen Konsole gilt jeder Schritt.
+    [HarmonyLib.HarmonyPatch(typeof(NormalPlayerTask), nameof(NormalPlayerTask.ValidConsole))]
+    private static class OwnConsoleValid
+    {
+        private static void Postfix(NormalPlayerTask __instance, Console console, ref bool __result)
+        {
+            if (__result || _holder == null || console == null || __instance == null || __instance.IsComplete) return;
+            try
+            {
+                if (!console.name.StartsWith("Atlas_", StringComparison.Ordinal) || !__instance.name.StartsWith("Atlas_", StringComparison.Ordinal)) return;
+                if (console.TaskTypes != null && console.TaskTypes.Contains(__instance.TaskType)) __result = true;
+            }
+            catch { }
+        }
     }
 
     private static Il2CppReferenceArray<NormalPlayerTask> Append(Il2CppReferenceArray<NormalPlayerTask> list, NormalPlayerTask t)
