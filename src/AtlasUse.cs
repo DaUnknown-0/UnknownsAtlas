@@ -46,9 +46,32 @@ internal static class AtlasUse
         _label = label; _icon = iconFile; _act = enabled ? onUse : null; _enabled = enabled;
     }
 
+    // Jede Station, die ihren Use-Punkt hier prueft, landet in dieser Liste (AppDomain "UnknownsAtlas.UseSpots",
+    // Vector2[] der aktiven Karte). Andere Plugins koennen so vermeiden, eigene Use-Objekte direkt
+    // auf einen dieser Punkte zu stellen (28.10.: ein Schrank am Pendelwagen-Anleger, der Wagen nahm ihm den Use-Knopf weg).
+    private static readonly HashSet<Vector2Int> SpotKeys = new();
+    private static readonly List<Vector2> Spots = new();
+    private static string _spotMap;
+
+    private static void NoteSpot(Vector2 spot)
+    {
+        string map = null;
+        try { map = AppDomain.CurrentDomain.GetData("UnknownsAtlas.ActiveMap") as string; } catch { }
+        if (map != _spotMap) { _spotMap = map; SpotKeys.Clear(); Spots.Clear(); Publish(); }
+        if (map == null || !SpotKeys.Add(new Vector2Int(Mathf.RoundToInt(spot.x * 10f), Mathf.RoundToInt(spot.y * 10f)))) return;
+        Spots.Add(spot);
+        Publish();
+    }
+
+    private static void Publish()
+    {
+        try { AppDomain.CurrentDomain.SetData("UnknownsAtlas.UseSpots", Spots.ToArray()); } catch { }
+    }
+
     /// <summary>Gemeinsame Bedingung fuer Stationen in der Welt: lebend, frei beweglich, nichts offen.</summary>
     public static bool CanReach(PlayerControl lp, Vector2 spot, float radius)
     {
+        NoteSpot(spot);
         if (lp == null || lp.Data == null || lp.Data.IsDead || lp.inVent || !lp.CanMove) return false;
         if (Minigame.Instance != null || MeetingHud.Instance != null) return false;
         return Vector2.Distance(lp.GetTruePosition(), spot) < radius;
