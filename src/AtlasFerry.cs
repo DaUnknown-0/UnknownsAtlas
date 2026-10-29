@@ -263,7 +263,14 @@ internal sealed class AtlasFerry
     {
         PlayerControl pc = null;
         if (_rider != None) foreach (var p in PlayerControl.AllPlayerControls) if (p != null && p.PlayerId == _rider) pc = p;
-        if (pc != null) { AtlasFigure.Pose(pc, Vector2.zero, 1f); AtlasFigure.SetCollide(pc, true); }
+        if (pc != null)
+        {
+            AtlasFigure.Pose(pc, Vector2.zero, 1f);
+            AtlasFigure.SetCollide(pc, true);
+            // Transform-driven travel must release both physics and the riding animation.
+            AtlasFigure.StopBody(pc);
+            if (pc.MyPhysics != null) pc.MyPhysics.ResetAnimState();
+        }
         var lp = PlayerControl.LocalPlayer;
         if (_local && lp != null)
         {
