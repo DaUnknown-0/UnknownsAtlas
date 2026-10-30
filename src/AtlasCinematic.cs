@@ -167,6 +167,7 @@ public static class AtlasCinematic
                 }
                 _nextKey = play ? key : null;
                 _nextSeconds = secs;
+                _skip = false;
                 AtlasWorld.Send(OpCine, w =>
                 {
                     w.Write(SubPlay);
@@ -191,17 +192,21 @@ public static class AtlasCinematic
             float secs = reader.ReadUInt16() / 10f;
             _nextKey = play && key.Length > 0 ? key : null;
             _nextSeconds = secs;
+            _skip = false;
         }
         else if (sub == SubSkip)
         {
-            if (_playing) { _skip = true; Log("host skipped the intro"); }
+            // The client may still be loading the map, or CoBegin may have created a wrapper
+            // that has not started yet. Keep the skip until the next host announcement.
+            _skip = true;
+            Log("host skipped the intro");
         }
     }
 
     [HarmonyPatch(typeof(AmongUsClient), nameof(AmongUsClient.OnGameJoined))]
     internal static class JoinedPatch
     {
-        public static void Postfix() { _nextKey = null; }
+        public static void Postfix() { _nextKey = null; _nextSeconds = 0f; _skip = false; }
     }
 
     // ------------------------------------------------------------------ Einhaengen vor dem Rollen-Intro
@@ -341,7 +346,7 @@ public static class AtlasCinematic
 
     private static IEnumerator Play(string key, float announcedSeconds)
     {
-        _skip = false;
+        if (_skip) yield break;
         var read = Sources.TryGetValue(key, out var src) ? src() : null;
         var meta = Meta.Load(read);
         bool de = German();
@@ -617,6 +622,7 @@ public static class AtlasCinematic
 
     private static IEnumerator DiagRun(string key, bool skip)
     {
+        _skip = false;   // diagnostics start without a host announcement
         float[] at = { 1.5f, 6.0f, 15.0f, 25.0f, 40.0f, 52.0f };
         int next = 0;
         float t0 = Time.time;
