@@ -190,6 +190,7 @@ public class AtlasMinigame : Minigame
         // 28.10.: fuer Karten anderer Plugins (Grafik/Texte ueber TaskArt/TaskText)
         "watering" => new HoldTargetsMechanic("watering"),
         "roast" => new HoldTargetsMechanic("roast"),
+        "feed" => new HoldTargetsMechanic("feed"),
         "lunch" => step == 0 ? new SortMechanic(false) : new HoldLeverMechanic(false),
         _ => null,
     };

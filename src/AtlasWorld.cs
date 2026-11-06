@@ -184,6 +184,7 @@ internal static class AtlasWorld
             byte op = reader.ReadByte();
             // Versions-Abgleich und Bau-Meldung gelten auch in der Lobby bzw. ohne gebaute Karte
             if (op == AtlasHandshake.OpHello || op == AtlasHandshake.OpBuildFailed) { AtlasHandshake.Receive(op, __instance, reader); return; }
+            if (op == AtlasTaskDefer.OpTaskRequest || op == AtlasTaskDefer.OpTaskList) { AtlasTaskDefer.Receive(op, __instance, reader); return; }
             // Krisen der Vanilla-Karten laufen ohne gebaute Atlas-Karte
             if (op == AtlasVanillaCrisis.OpCrisis) { AtlasVanillaCrisis.Receive(__instance, fromHost, reader); return; }
             // Vorspann einer Karte: Ansage und Ueberspringen kommen vor dem Kartenbau

@@ -80,6 +80,9 @@ internal static class AtlasTaskDefer
         _started = __instance;
         _startedAt = Time.realtimeSinceStartup;
         _repaired = 0;
+        _lastCounts.Clear();
+        _nextRequest = 0f;
+        _repairFailed.Clear();
         Replay("map built");
     }
 
@@ -103,15 +106,19 @@ internal static class AtlasTaskDefer
         catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} repair failed: {e.Message}"); _nextRepair = Time.realtimeSinceStartup + 10f; }
     }
 
-    // ------------------------------------------------------------------ Wächter (User 30.10.: "als Backup")
+    // ------------------------------------------------------------------ Waechter (User 30.10.: "als Backup")
     //
-    // Die Host-Liste steht bei jedem Client in Data.Tasks (der Host synchronisiert sie). Fehlen davon lokal Tasks in myTasks,
-    // werden sie genau wie in vanilla CoSetTasks nachgebaut (Prototyp aus ShipStatus.GetTaskById, Id/Owner, Initialize).
-    // Nur in Atlas-Runden, nur der eigene Spieler, nie als Impostor (Fake-Tasks, der UC-Auditor raeumt seine absichtlich
-    // lokal ab), fruehestens 3 s nach dem Bau, alle 2 s. Erledigte bleiben erledigt.
+    // Die Host-Liste steht bei jedem Client in Data.Tasks. Fehlen davon Task-Objekte in myTasks, werden sie genau wie in vanilla
+    // CoSetTasks nachgebaut (Prototyp aus ShipStatus.GetTaskById, Id/Owner, Initialize). Erledigte bleiben erledigt.
+    // Gilt fuer ALLE Spieler (User-Screenshot 30.10.: DrSuspect sah bei sich 6/8, Mo 1/8): vermutlich ignoriert CompleteTask eine
+    // Meldung, wenn das Objekt dieses Spielers auf dem Empfaenger fehlt. Bei fremden Spielern nur, wenn ihre Liste TEILWEISE
+    // da ist (Muster eines Abbruchs); eine leere fremde Liste wird nur protokolliert. Nur Atlas-Runden, fruehestens 3 s nach dem
+    // Bau, alle 2 s, nie fuer Impostor (Fake-Tasks, der UC-Auditor raeumt seine absichtlich lokal ab).
 
     private static float _nextRepair, _startedAt = -1f;
     private static int _repaired;
+    private static readonly Dictionary<byte, (int Local, int Host)> _lastCounts = new();
+    private static readonly HashSet<(byte Player, uint Id)> _repairFailed = new();
 
     private static void RepairTick()
     {
@@ -121,41 +128,149 @@ internal static class AtlasTaskDefer
         var ship = ShipStatus.Instance;
         if (ship == null || ship != _started || !AtlasMuseumBuilder.Active || Held.Count > 0) return;
         if (_startedAt < 0f || now - _startedAt < 3f) return;
-        var lp = PlayerControl.LocalPlayer;
-        var data = lp != null ? lp.Data : null;
-        if (data == null || data.Tasks == null || lp.myTasks == null || data.Tasks.Count == 0) return;
-        if (data.Role != null && data.Role.IsImpostor) return;
         if (AmongUsClient.Instance == null || AmongUsClient.Instance.IsGameOver) return;
+        var lp = PlayerControl.LocalPlayer;
+        if (lp != null && lp.Data != null && lp.Data.Role != null && !lp.Data.Role.IsImpostor) RequestHostList(now);
+        foreach (var pc in PlayerControl.AllPlayerControls)
+        {
+            if (pc == null) continue;
+            try { CheckPlayer(pc, ship, pc == lp, now); }
+            catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} check of {Name(pc)} failed: {e.Message}"); }
+        }
+    }
+
+    private static void CheckPlayer(PlayerControl pc, ShipStatus ship, bool local, float now)
+    {
+        var data = pc.Data;
+        if (data == null || data.Disconnected || data.Tasks == null || pc.myTasks == null || data.Tasks.Count == 0) return;
+        if (data.Role != null && data.Role.IsImpostor) return;
 
         var have = new HashSet<uint>();
-        foreach (var t in lp.myTasks)
+        foreach (var t in pc.myTasks)
             if (t != null && t.TryCast<NormalPlayerTask>() != null) have.Add(t.Id);
-        if (have.Count >= data.Tasks.Count) return;
+
+        // Diagnose: einmal je Runde der eigene Stand, danach jede Aenderung und jede Luecke; native Abbrueche stehen in keinem Log
+        var counts = (Local: have.Count, Host: data.Tasks.Count);
+        bool known = _lastCounts.TryGetValue(pc.PlayerId, out var last);
+        if ((!known && (local || have.Count < data.Tasks.Count)) || (known && last != counts))
+        {
+            var list = new List<string>();
+            foreach (var info in data.Tasks)
+            {
+                if (info == null) continue;
+                string kind;
+                try { var proto = ship.GetTaskById(info.TypeId); kind = proto != null ? proto.TaskType.ToString() : "NO_PROTOTYPE"; }
+                catch (Exception e) { kind = "THROWS:" + e.GetType().Name; }
+                list.Add($"{info.Id}:{kind}#{info.TypeId}{(info.Complete ? "(done)" : "")}{(have.Contains(info.Id) ? "" : "(missing)")}");
+            }
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} task check {Name(pc)}{(local ? " (me)" : "")}, {now - _startedAt:F0} s after the build: " +
+                $"list {counts.Host}, objects {counts.Local}: {string.Join(", ", list)}");
+        }
+        _lastCounts[pc.PlayerId] = counts;
+        if (have.Count >= data.Tasks.Count || (!local && have.Count == 0)) return;
 
         int built = 0;
         foreach (var info in data.Tasks)
         {
-            if (info == null || have.Contains(info.Id)) continue;
-            var proto = ship.GetTaskById(info.TypeId);
-            if (proto == null)
+            if (info == null || have.Contains(info.Id) || _repairFailed.Contains((pc.PlayerId, info.Id))) continue;
+            // je Task eigener Versuch: bricht einer ab, kommen die uebrigen trotzdem; einmal ins Log, nicht alle 2 s erneut
+            NormalPlayerTask task = null;
+            string kind = "?";
+            try
             {
-                AtlasPlugin.Logger.LogWarning($"{LogPrefix} repair: task {info.Id} (type index {info.TypeId}) has no prototype on this map");
-                continue;
+                var proto = ship.GetTaskById(info.TypeId);
+                if (proto == null) throw new InvalidOperationException("no prototype on this map");
+                kind = proto.TaskType.ToString();
+                task = UnityEngine.Object.Instantiate(proto, pc.transform);
+                task.Id = info.Id;
+                task.Owner = pc;
+                task.Initialize();
+                if (info.Complete) task.taskStep = task.MaxStep;
+                pc.myTasks.Add(task);
+                built++;
             }
-            var task = UnityEngine.Object.Instantiate(proto, lp.transform);
-            task.Id = info.Id;
-            task.Owner = lp;
-            task.Initialize();
-            if (info.Complete) task.taskStep = task.MaxStep;
-            lp.myTasks.Add(task);
-            built++;
+            catch (Exception e)
+            {
+                _repairFailed.Add((pc.PlayerId, info.Id));
+                AtlasPlugin.Logger.LogError($"{LogPrefix} repair {Name(pc)}: task {info.Id} ({kind}, type index {info.TypeId}) failed: {e}");
+                try { if (task != null) UnityEngine.Object.Destroy(task.gameObject); } catch { }
+            }
         }
         if (built > 0)
         {
             _repaired += built;
-            AtlasPlugin.Logger.LogWarning($"{LogPrefix} repair: {built} missing task(s) rebuilt from the host's list " +
+            AtlasPlugin.Logger.LogWarning($"{LogPrefix} repair {Name(pc)}: {built} missing task object(s) rebuilt " +
                 $"({have.Count + built} of {data.Tasks.Count} now, {_repaired} this round)");
         }
+    }
+
+    // ------------------------------------------------------------------ Abgleich mit dem Host (User 30.10.)
+    //
+    // Der Waechter oben vergleicht nur mit der EIGENEN Data.Tasks. Ist schon die zu kurz, sieht er nichts. Deshalb fragt ein
+    // Gast 4 s nach dem Bau und danach alle 30 s den Host nach seiner Liste. Fehlende Eintraege kommen in Data.Tasks, die
+    // Task-Objekte baut dann RepairTick. Abweichender Fortschritt wird nur protokolliert ("nicht geteilt"), nicht veraendert.
+    // Nur eine Antwort vom Host zaehlt (Absender aus dem Transport). Ein Host ohne diese Version antwortet nicht: dann bleibt
+    // alles, wie es ist.
+    internal const byte OpTaskRequest = 22, OpTaskList = 23;
+    private const int MaxListed = 64;
+    private static float _nextRequest;
+
+    private static void RequestHostList(float now)
+    {
+        var ac = AmongUsClient.Instance;
+        if (ac.AmHost || now - _startedAt < 4f || now < _nextRequest) return;
+        _nextRequest = now + 30f;
+        AtlasWorld.Send(OpTaskRequest, null);
+    }
+
+    internal static void Receive(byte op, PlayerControl sender, Hazel.MessageReader reader)
+    {
+        var ac = AmongUsClient.Instance;
+        if (ac == null || sender == null) return;
+        if (op == OpTaskRequest)
+        {
+            if (!ac.AmHost || sender.Data?.Tasks == null) return;
+            var tasks = sender.Data.Tasks;
+            int n = Math.Min(tasks.Count, MaxListed);
+            AtlasWorld.Send(OpTaskList, w =>
+            {
+                w.Write(sender.PlayerId);
+                w.Write((byte)n);
+                for (int i = 0; i < n; i++) { var t = tasks[i]; w.Write(t.Id); w.Write(t.TypeId); w.Write(t.Complete); }
+            });
+            return;
+        }
+        if (op != OpTaskList || sender.OwnerId != ac.HostId || ac.AmHost) return;
+        byte target = reader.ReadByte();
+        int count = reader.ReadByte();
+        var lp = PlayerControl.LocalPlayer;
+        bool mine = lp != null && lp.PlayerId == target && lp.Data?.Tasks != null && count <= MaxListed;
+        int added = 0, doneHost = 0, doneLocal = 0;
+        for (int i = 0; i < count; i++)
+        {
+            uint id = reader.ReadUInt32();
+            byte type = reader.ReadByte();
+            bool complete = reader.ReadBoolean();
+            if (!mine) continue;
+            if (complete) doneHost++;
+            NetworkedPlayerInfo.TaskInfo own = null;
+            foreach (var t in lp.Data.Tasks) if (t != null && t.Id == id) { own = t; break; }
+            if (own == null)
+            {
+                lp.Data.Tasks.Add(new NetworkedPlayerInfo.TaskInfo(type, id) { Complete = complete });
+                added++;
+            }
+            else if (own.Complete) doneLocal++;
+        }
+        if (!mine) return;
+        if (added > 0)
+        {
+            AtlasPlugin.Logger.LogWarning($"{LogPrefix} host list has {count} task(s), {added} were missing in this client's list: added");
+            _nextRepair = 0f;
+            GameData.Instance?.RecomputeTaskCounts();
+        }
+        if (doneHost != doneLocal || added > 0)
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} progress: host says {doneHost} of {count} done, this client {doneLocal}");
     }
 
     private static void Replay(string why)
