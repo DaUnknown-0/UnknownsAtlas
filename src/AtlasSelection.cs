@@ -600,6 +600,11 @@ internal static class AtlasSelection
     // Mit Submerged stehen 9 Symbole in der Reihe; Forest und Carnival lagen rechts ausserhalb des
     // sichtbaren (und klickbaren) Bereichs (User 24.09.: "nicht alle Maps waehlbar"). Rueckt die
     // ganze Reihe zusammen und verkleinert sie gleichmaessig, bis sie in ButtonClickMask passt.
+    // 06.11. (User-Screenshot, 15 Knoepfe mit den Winterkarten): die Reihe haette 0,41 gebraucht, bei 0,55
+    // war Schluss und die letzten Symbole lagen wieder ausserhalb. Unter MinRowScale werden die Knoepfe
+    // deshalb auf mehrere Reihen verteilt (von links nach rechts, Reihe fuer Reihe, um die alte Mitte).
+    private const float MinRowScale = 0.8f;
+
     private static void FitLobbyRow(GameOptionsMapPicker picker, float step)
     {
         try
@@ -612,20 +617,35 @@ internal static class AtlasSelection
             var mask = picker.ButtonClickMask;
             if (mask == null || parent == null) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} lobby picker: no click mask, row not fitted"); return; }
             float left = all[0].transform.localPosition.x;
+            float y0 = all[0].transform.localPosition.y;
             float right = parent.InverseTransformPoint(mask.bounds.max).x;
             float needed = (all.Count - 1) * step;
             float avail = right - left - step * 0.5f;     // der letzte Knopf muss ganz hinein
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} lobby picker: {all.Count} buttons, left {left:F2}, mask right {right:F2}, needed {needed:F2}, available {avail:F2}");
             if (avail >= needed) return;
-            float s = Mathf.Clamp(avail / needed, 0.55f, 1f);
+
+            int rows = 1;
+            float s = avail / needed;
+            if (s < MinRowScale)
+            {
+                int perRowMax = Mathf.Max(2, Mathf.FloorToInt(avail / (step * MinRowScale)) + 1);
+                rows = Mathf.CeilToInt(all.Count / (float)perRowMax);
+                int perRow = Mathf.CeilToInt(all.Count / (float)rows);
+                s = perRow > 1 ? avail / ((perRow - 1) * step) : 1f;
+                s = Mathf.Min(s, 1f, 1.6f / rows);           // hoechstens so hoch wie zwei Reihen in MinRowScale
+            }
+            s = Mathf.Clamp(s, 0.4f, 1f);
+            int cols = Mathf.CeilToInt(all.Count / (float)rows);
+            float rowGap = step * s;
             for (int i = 0; i < all.Count; i++)
             {
+                int r = i / cols, c = i % cols;
                 var t = all[i].transform;
                 var p = t.localPosition;
-                t.localPosition = new Vector3(left + i * step * s, p.y, p.z);
+                t.localPosition = new Vector3(left + c * step * s, y0 + ((rows - 1) / 2f - r) * rowGap, p.z);
                 t.localScale *= s;
             }
-            AtlasPlugin.Logger.LogInfo($"{LogPrefix} lobby picker: row fitted, scale {s:F2}");
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} lobby picker: fitted into {rows} row(s) of up to {cols}, scale {s:F2}");
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} lobby picker fit: {e.Message}"); }
     }
