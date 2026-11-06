@@ -12,8 +12,9 @@
 //   - Task: KOPIE des NormalPlayerTask-Prefabs der Quellkarte unter einem inaktiven Halter am ShipStatus (nie
 //     das Prefab selbst aendern: das Asset gilt in der naechsten Airship-Runde weiter). StartAt = Raum der
 //     Karte, Index = groesster vorhandener + 1, angehaengt an dieselbe Liste (Common/Short/Long) wie in der
-//     Quellkarte. Verteilung, RpcSetTasks und GetTaskById laufen damit vanilla; alle Clients bauen dieselbe
-//     Karte mit demselben Code und kommen auf denselben Index.
+//     Quellkarte. Verteilung, RpcSetTasks und GetTaskById laufen damit vanilla. Achtung (06.11.): der Index hier
+//     ist nur vorlaeufig. Der Host nummeriert in ShipStatus.Begin alle Listen neu (Common, Long, Short); jeder
+//     Client tut nach dem Bau dasselbe (AtlasTaskDefer.RenumberLikeHost), erst dann stimmen die Nummern ueberein.
 //   - Konsole: Kopie einer gewoehnlichen Skeld-Konsole der Karte (Kollider, Kontur-Material, Benutzbarkeit),
 //     umgestellt auf die fremde Aufgabe, an die Lage aus Consoles[Key] gesetzt, Bild aus ConsoleSprites[Key].
 

@@ -17,6 +17,10 @@
 // Fix: solange eine Atlas-Karte gewaehlt ist und das Schiff noch nicht gestartet (gebaut) ist, haelt ein Prefix den
 // SetTasks-Aufruf an und spielt ihn nach ShipStatus.Start (nach dem Bau, Priority.Last) unveraendert ab. Sicherheitsnetz:
 // spaetestens nach MaxWait Sekunden mit Schiff wird trotzdem abgespielt.
+//
+// 06.11.: Das war nur ein Teil. Die eigentliche Ursache des Abbruchs war die Nummerierung: der Host zaehlt die Aufgaben in
+// ShipStatus.Begin neu durch, die Gaeste nicht (siehe RenumberLikeHost unten). Seitdem zaehlt jeder Client nach dem Bau
+// genauso, und der Abbruch an "NO_PROTOTYPE" kann nicht mehr entstehen.
 
 using System;
 using System.Collections.Generic;
@@ -83,7 +87,58 @@ internal static class AtlasTaskDefer
         _lastCounts.Clear();
         _nextRequest = 0f;
         _repairFailed.Clear();
+        RenumberLikeHost(__instance, "map built");
         Replay("map built");
+    }
+
+    // ------------------------------------------------------------------ Nummerierung wie beim Host (Ursache, 06.11.)
+    //
+    // User 06.11.: "Der Taskbar von letzter Woche ist wieder dabei", Gaeste mit 1 von 7 Tasks, Log: "1:NO_PROTOTYPE#3(missing)".
+    // ShipStatus.Begin laeuft nur beim Host und ruft als Erstes AssignTaskIndexes: alle Aufgaben in der Reihenfolge Common,
+    // Long, Short lueckenlos neu durchnummeriert (im GameAssembly nachgelesen, Werkzeuge in TOR Mod/docs/il2cpp-disasm). Gaeste
+    // nummerieren nie neu, sie behalten die Nummern der Prefabs und die, die AtlasForeignTasks vergibt (groesster + 1). Solange
+    // die Listen vanilla sind, stimmt beides; auf Atlas-Karten haengen die geliehenen Aufgaben aber am Ende IHRER Liste (Long
+    // vor Short, also verschoben sich beim Host alle Short-Nummern), und Hollowmere entfernt Clear Asteroids und Align Engine
+    // Output (Luecken an 2 und 3). Die Nummer des Hosts meinte beim Gast eine andere Aufgabe oder keine: CoSetTasks brach an
+    // der ersten fehlenden ab (Common-Tasks da, der Rest fehlte; das war auch der Fehler vom 30.10.), der Waechter baute
+    // andere Typen nach. Der Host baut die Karte in ShipStatus.Start, Begin kommt erst Frames spaeter (CoStartGameHost wartet
+    // auf die Clients), also nummeriert er die fertigen Listen. Jeder Client tut nach dem Bau dasselbe, bevor zurueckgehaltene
+    // Listen abgespielt werden; der Waechter prueft spaeter, ob ein Plugin die Listen danach noch geaendert hat.
+    internal static void RenumberLikeHost(ShipStatus ship, string why)
+    {
+        if (ship == null || !AtlasMuseumBuilder.Active) return;
+        var ac = AmongUsClient.Instance;
+        // beim Host nummeriert Begin selbst; danach neu zu zaehlen wuerde seine schon verteilten Nummern verschieben
+        if (ac != null && ac.AmHost && TasksHandedOut()) return;
+        try
+        {
+            int n = 0, changed = 0;
+            var before = new Dictionary<IntPtr, int>();
+            foreach (var list in new[] { ship.CommonTasks, ship.LongTasks, ship.ShortTasks })
+                if (list != null) foreach (var t in list) if (t != null) before[t.Pointer] = t.Index;
+            ship.AssignTaskIndexes();
+            foreach (var list in new[] { ship.CommonTasks, ship.LongTasks, ship.ShortTasks })
+                if (list != null) foreach (var t in list)
+                    if (t != null) { n++; if (before.TryGetValue(t.Pointer, out int old) && old != t.Index) changed++; }
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} task indexes numbered like the host's ShipStatus.Begin ({why}): {n} task(s), {changed} changed");
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogError($"{LogPrefix} renumbering failed ({why}): {e}"); }
+    }
+
+    // Listen nach dem Bau noch geaendert (ein Karten-Plugin kuerzt erst im ersten Tick)? Dann nicht mehr lueckenlos.
+    private static bool Sequential(ShipStatus ship)
+    {
+        int i = 0;
+        foreach (var list in new[] { ship.CommonTasks, ship.LongTasks, ship.ShortTasks })
+            if (list != null) foreach (var t in list) if (t != null && t.Index != i++) return false;
+        return true;
+    }
+
+    private static bool TasksHandedOut()
+    {
+        foreach (var pc in PlayerControl.AllPlayerControls)
+            if (pc != null && pc.Data != null && pc.Data.Tasks != null && pc.Data.Tasks.Count > 0) return true;
+        return false;
     }
 
     [HarmonyPostfix]
@@ -127,6 +182,8 @@ internal static class AtlasTaskDefer
         _nextRepair = now + 2f;
         var ship = ShipStatus.Instance;
         if (ship == null || ship != _started || !AtlasMuseumBuilder.Active || Held.Count > 0) return;
+        // Gast: hat ein Plugin die Listen nach dem Bau geaendert, wieder wie der Host zaehlen (der Host bleibt bei Begin)
+        if (AmongUsClient.Instance != null && !AmongUsClient.Instance.AmHost && !Sequential(ship)) RenumberLikeHost(ship, "lists changed after the build");
         if (_startedAt < 0f || now - _startedAt < 3f) return;
         if (AmongUsClient.Instance == null || AmongUsClient.Instance.IsGameOver) return;
         var lp = PlayerControl.LocalPlayer;
