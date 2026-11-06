@@ -145,9 +145,15 @@ internal static class AtlasUse
     {
         private static void Postfix(PlayerControl __instance)
         {
-            if (!_owned || !__instance.AmOwner) return;
+            if (!__instance.AmOwner) return;
             var ub = HudManager.InstanceExists ? HudManager.Instance.UseButton : null;
-            if (ub != null) TakeFromPet(ub);
+            if (ub == null) return;
+            // 06.11. (User: "man muss erst den Pet-Knopf druecken, um etwas aufzuheben"): im Streichel-Zweig ruft
+            // ToggleUseAndPetButton UseButton.SetTarget nie auf, der Use-Knopf behielt sein letztes Ziel (Konsole von
+            // vorhin, Lobby-Laptop). Jedes Angebot sah "Vanilla hat ein Ziel" und schwieg, bis ein Streicheln den Tausch
+            // einmal umdrehte. Hier zuruecksetzen, wie es das Spiel fuer Spieler ohne Haustier jeden Schritt selbst tut.
+            if (__instance.CanMove && __instance.closest == null && ub.currentTarget != null) ub.SetTarget(null);
+            if (_owned) TakeFromPet(ub);
         }
     }
 
