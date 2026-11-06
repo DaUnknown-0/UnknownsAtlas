@@ -13,6 +13,7 @@
 
 using System;
 using System.Collections.Generic;
+using HarmonyLib;
 using UnityEngine;
 
 namespace UnknownsAtlas;
@@ -131,6 +132,23 @@ internal static class AtlasUse
             _petSwapped = true;
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} pet swap: {e.Message}"); }
+    }
+
+    // 06.11. (User: E an Kerze/Beschwoerungskreis streichelte das Haustier): das Spiel schaltet den Streichel-Knopf nach
+    // JEDEM Physik-Schritt wieder ein (PlayerControl.FixedUpdate -> HudManager.ToggleUseAndPetButton, ohne Vanilla-Ziel),
+    // also noch vor der Tasten- und Klickverarbeitung des Frames; Commit nimmt ihn erst am Frame-Ende weg. Streicheln
+    // laeuft nur ueber PetButton.DoClick -> PlayerControl.TryPet, und DoClick bricht bei inaktivem Knopf ab (im
+    // GameAssembly nachgelesen). Solange wir anbieten, darum gleich nach dem Physik-Schritt wieder wegnehmen.
+    // PlayerControl.FixedUpdate patcht TOR selbst, also kein Dedup-Risiko (Memory "Il2Cpp-Dedup-Detour").
+    [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.FixedUpdate))]
+    private static class KeepPetAway
+    {
+        private static void Postfix(PlayerControl __instance)
+        {
+            if (!_owned || !__instance.AmOwner) return;
+            var ub = HudManager.InstanceExists ? HudManager.Instance.UseButton : null;
+            if (ub != null) TakeFromPet(ub);
+        }
     }
 
     // zurueck in den Zustand, den das Spiel ohne uns haette (falls es nur bei Aenderungen umschaltet)
