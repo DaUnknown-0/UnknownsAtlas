@@ -1,7 +1,7 @@
 // Unknown's Atlas - Copyright (C) 2026 DaUnknown-0
 // Licensed under GPL-3.0-or-later. See LICENSE for details.
 //
-// AtlasTaskDefer - Task-Listen erst nach dem Kartenbau anlegen (Bug 30.10., Hollowmere Manor).
+// AtlasTaskDefer - Task-Listen erst nach dem Kartenbau anlegen (Bug 30.10., auf einer Zusatzkarte).
 //
 // Spielbericht: bei wechselnden Gaesten (nie beim Host) standen nur 2 oder 3 von 8 Tasks in der Liste, der Rest fehlte
 // komplett (keine Zeile, keine Markierung, Konsole tot). Das Log einer Betroffenen zeigte: ihr Client hatte nur die
@@ -86,6 +86,7 @@ internal static class AtlasTaskDefer
         _repaired = 0;
         _lastCounts.Clear();
         _nextRequest = 0f;
+        _lastAnswer.Clear();
         _repairFailed.Clear();
         RenumberLikeHost(__instance, "map built");
         Replay("map built");
@@ -98,7 +99,7 @@ internal static class AtlasTaskDefer
     // Long, Short lueckenlos neu durchnummeriert (im GameAssembly nachgelesen, Werkzeuge in TOR Mod/docs/il2cpp-disasm). Gaeste
     // nummerieren nie neu, sie behalten die Nummern der Prefabs und die, die AtlasForeignTasks vergibt (groesster + 1). Solange
     // die Listen vanilla sind, stimmt beides; auf Atlas-Karten haengen die geliehenen Aufgaben aber am Ende IHRER Liste (Long
-    // vor Short, also verschoben sich beim Host alle Short-Nummern), und Hollowmere entfernt Clear Asteroids und Align Engine
+    // vor Short, also verschoben sich beim Host alle Short-Nummern), und eine Zusatzkarte entfernt Clear Asteroids und Align Engine
     // Output (Luecken an 2 und 3). Die Nummer des Hosts meinte beim Gast eine andere Aufgabe oder keine: CoSetTasks brach an
     // der ersten fehlenden ab (Common-Tasks da, der Rest fehlte; das war auch der Fehler vom 30.10.), der Waechter baute
     // andere Typen nach. Der Host baut die Karte in ShipStatus.Start, Begin kommt erst Frames spaeter (CoStartGameHost wartet
@@ -271,6 +272,9 @@ internal static class AtlasTaskDefer
     internal const byte OpTaskRequest = 22, OpTaskList = 23;
     private const int MaxListed = 64;
     private static float _nextRequest;
+    // Host: hoechstens eine Antwort je Spieler und 10 s, und nur an den Anfrager (nicht an alle).
+    private const float AnswerInterval = 10f;
+    private static readonly Dictionary<byte, float> _lastAnswer = new();
 
     private static void RequestHostList(float now)
     {
@@ -287,6 +291,9 @@ internal static class AtlasTaskDefer
         if (op == OpTaskRequest)
         {
             if (!ac.AmHost || sender.Data?.Tasks == null) return;
+            float now = Time.realtimeSinceStartup;
+            if (_lastAnswer.TryGetValue(sender.PlayerId, out float last) && now - last < AnswerInterval) return;
+            _lastAnswer[sender.PlayerId] = now;
             var tasks = sender.Data.Tasks;
             int n = Math.Min(tasks.Count, MaxListed);
             AtlasWorld.Send(OpTaskList, w =>
@@ -294,10 +301,10 @@ internal static class AtlasTaskDefer
                 w.Write(sender.PlayerId);
                 w.Write((byte)n);
                 for (int i = 0; i < n; i++) { var t = tasks[i]; w.Write(t.Id); w.Write(t.TypeId); w.Write(t.Complete); }
-            });
+            }, sender.OwnerId);
             return;
         }
-        if (op != OpTaskList || sender.OwnerId != ac.HostId || ac.AmHost) return;
+        if (op != OpTaskList || !UnknownsNet.SenderIsHost(sender) || ac.AmHost) return;
         byte target = reader.ReadByte();
         int count = reader.ReadByte();
         var lp = PlayerControl.LocalPlayer;

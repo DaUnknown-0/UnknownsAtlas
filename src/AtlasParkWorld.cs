@@ -395,7 +395,10 @@ internal static class AtlasParkWorld
             // The mascot suit hides colour, hat and name only through switched-off renderers; the
             // outfit underneath is unchanged (audit 04.10.: the photo showed the wearer's real colour).
             if (pc.PlayerId == wearer && wearer != AtlasParkFun.NoWearer) { ids.Add(MascotColor); continue; }
-            int c = pc.CurrentOutfit != null ? pc.CurrentOutfit.ColorId : pc.Data.DefaultOutfit.ColorId;
+            // The colour actually drawn: TOR's setLook (Camouflager, Morphling) recolours the cosmetics
+            // only and leaves CurrentOutfit unchanged, so reading the outfit leaked the real colour.
+            int c = pc.cosmetics != null ? pc.cosmetics.ColorId
+                  : pc.CurrentOutfit != null ? pc.CurrentOutfit.ColorId : pc.Data.DefaultOutfit.ColorId;
             ids.Add((byte)Mathf.Clamp(c, 0, 253));
         }
         ShowPhoto(ids);

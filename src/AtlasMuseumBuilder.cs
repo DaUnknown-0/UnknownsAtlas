@@ -744,15 +744,19 @@ internal static class AtlasMuseumBuilder
         public Sprite[] Frames;        // [0] = S (zu) .. [n] = offen; null ohne Animation
         public Vent V;
         public float AnimStart = -10f;
+        // Managed mirror of what was last written: reading enabled/sprite back from Unity every frame
+        // boxes on the il2cpp heap (Il2CppInterop), so the per-frame loop compares against these.
+        public int OrigOn = -1, ArtOn = -1;
+        public Sprite Shown;
     }
     private static readonly List<VentArtEntry> VentArt = new();
     private const float VentFrameSecs = 0.05f, VentHoldSecs = 0.35f;
 
-    private static Sprite VentFrameAt(VentArtEntry e)
+    private static Sprite VentFrameAt(VentArtEntry e, float now)
     {
         if (e.Frames == null) return e.S;
         int n = e.Frames.Length - 1;
-        float t = Time.time - e.AnimStart;
+        float t = now - e.AnimStart;
         if (t < 0f) return e.S;
         float up = n * VentFrameSecs;
         int k;
@@ -1188,27 +1192,32 @@ internal static class AtlasMuseumBuilder
     internal static void HudManager_Update_FadePostfix()
     {
         if (!Active) return;
+        float now = Time.time;                              // one boxed read per frame, not one per vent
+        bool sealCheck = now >= _sealCheckAt;
         for (int i = 0; i < VentArt.Count; i++)
         {
             var ve = VentArt[i];
             var (orig, art, vent) = (ve.Orig, ve.Art, ve.V);
-            var sp = VentFrameAt(ve);
+            var sp = VentFrameAt(ve, now);
             // TOR shows a Security Guard seal (and the guard's half-transparent preview) on myRend and
             // renames the vent "SealedVent_" / "FutureSealedVent_". Such a vent shows TOR's renderer
             // instead of the Atlas art, or a sealed vent looks like any other (Opus audit 2026-10-02).
             // The name, not the sprite: entering/exiting a vent animates myRend's sprite too.
-            if (Time.time >= _sealCheckAt && vent != null)
+            if (sealCheck && vent != null)
             {
                 string n = vent.name;
                 if (n.StartsWith("SealedVent_", StringComparison.Ordinal) || n.StartsWith("FutureSealedVent_", StringComparison.Ordinal)) SealedVentArt.Add(i);
                 else SealedVentArt.Remove(i);
             }
             bool sealedVent = SealedVentArt.Contains(i);
-            if (orig != null && orig.enabled != sealedVent) orig.enabled = sealedVent;
-            if (art != null && art.enabled == sealedVent) art.enabled = !sealedVent;
-            if (art != null && art.sprite != sp) art.sprite = sp;
+            int origWant = sealedVent ? 1 : 0, artWant = sealedVent ? 0 : 1;
+            // Re-read from Unity on the seal check (4x a second) in case something else switched the renderer.
+            if (sealCheck) { ve.OrigOn = -1; ve.ArtOn = -1; ve.Shown = null; }
+            if (orig != null && ve.OrigOn != origWant) { if (orig.enabled != sealedVent) orig.enabled = sealedVent; ve.OrigOn = origWant; }
+            if (art != null && ve.ArtOn != artWant) { if (art.enabled == sealedVent) art.enabled = !sealedVent; ve.ArtOn = artWant; }
+            if (art != null && !ReferenceEquals(ve.Shown, sp)) { if (art.sprite != sp) art.sprite = sp; ve.Shown = sp; }
         }
-        if (Time.time >= _sealCheckAt) _sealCheckAt = Time.time + 0.25f;
+        if (sealCheck) _sealCheckAt = now + 0.25f;
         if (FadeProps.Count == 0) return;
         var lp = PlayerControl.LocalPlayer;
         if (lp == null) return;

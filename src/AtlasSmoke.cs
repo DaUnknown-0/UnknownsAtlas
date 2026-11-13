@@ -115,6 +115,7 @@ internal static class AtlasSmoke
     {
         if (!Active || from == null || from.Data == null || from.Data.IsDead || i >= HatchCount) return;
         if (IsOpen(i)) return;
+        if (!AtlasUse.HostNear(from, D.SmokeHatches[i], Reach)) return;   // nur an der Luke selbst
         OpenBits |= (byte)(1 << i);
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} host: hatch {i} opened by {from.Data.PlayerName} ({OpenCount}/{HatchCount})");
     }

@@ -69,6 +69,17 @@ internal static class AtlasUse
         try { AppDomain.CurrentDomain.SetData("UnknownsAtlas.UseSpots", Spots.ToArray()); } catch { }
     }
 
+    /// <summary>Host: steht der Absender einer Stationsmeldung plausibel an der Station? Reichweite des Clients plus
+    /// Spielraum fuer die Netzverzoegerung (der Host sieht die Position etwas spaeter). Gegen Meldungen aus der Ferne
+    /// (Krisen, Sturmholz): sonst loest ein veraenderter Client eine Zwei-Personen-Krise allein und von ueberall.</summary>
+    public static bool HostNear(PlayerControl from, Vector2 spot, float radius)
+    {
+        if (from == null || from.Data == null || from.Data.IsDead || from.inVent) return false;
+        return Vector2.Distance(from.GetTruePosition(), spot) < radius + HostSlack;
+    }
+
+    private const float HostSlack = 2f;
+
     /// <summary>Gemeinsame Bedingung fuer Stationen in der Welt: lebend, frei beweglich, nichts offen.</summary>
     public static bool CanReach(PlayerControl lp, Vector2 spot, float radius)
     {

@@ -33,7 +33,7 @@ internal static class AtlasPlanetarium
 
     public static void Reset()
     {
-        _t0 = -100f; _next = -1f; _level = 0f;
+        _t0 = -100f; _next = -1f; _level = 0f; _idleWritten = false;
         _root = null; _shade = _sky = null; _hasRoom = false;
         for (int i = 0; i < Planets.Length; i++) Planets[i] = null;
     }
@@ -115,6 +115,8 @@ internal static class AtlasPlanetarium
 
     // ------------------------------------------------------------------ Ablauf
 
+    private static bool _idleWritten;
+
     public static void Tick(float dt)
     {
         if (!Museum || _root == null) return;
@@ -130,6 +132,15 @@ internal static class AtlasPlanetarium
                 target = Mathf.Min(a, b);
             }
             _level = Mathf.MoveTowards(_level, target, dt / FadeT * 1.5f);
+            // Idle (no show, faded out): everything is invisible once it has been written with level 0. Moving and
+            // re-colouring invisible planets every frame read their colour back from Unity each time, which boxes on
+            // the il2cpp heap (multi-client test 2026-11-12).
+            if (_level <= 0f && target <= 0f)
+            {
+                if (_idleWritten) return;
+                _idleWritten = true;
+            }
+            else _idleWritten = false;
             float t = Time.time;
             if (_shade != null) _shade.color = new Color(0.02f, 0.03f, 0.08f, 0.72f * _level);
             if (_sky != null)

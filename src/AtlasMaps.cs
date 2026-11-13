@@ -60,6 +60,10 @@ public static class AtlasMaps
     /// <summary>Schluessel der fuer die naechste Runde gewaehlten Karte (Lobby/Freeplay), sonst null.</summary>
     public static string SelectedKey => AtlasSelection.CurrentKey;
 
+    /// <summary>Key of a map the host chose that is not registered on this client yet (its plugin is still
+    /// downloading the map files), otherwise null. The owning plugin can fetch those files first.</summary>
+    public static string RequestedKey => AtlasSelection.PendingKey;
+
     // ------------------------------------------------------------------ Welt-Mechaniken (API 2, seit 15.10.)
     // Helfer fuer AtlasMapDef.World: der Use-Knopf, die gebauten Moebel, Bildfolgen, Geraeusche und der
     // Autotest. Alles nur waehrend eine Atlas-Karte steht; sonst still ohne Wirkung.

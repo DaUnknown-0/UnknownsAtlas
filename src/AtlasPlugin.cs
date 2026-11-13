@@ -26,7 +26,7 @@ public class AtlasPlugin : BasePlugin
 {
     public const string Id = "com.daunknown0.atlas";
     public const string PluginName = "Unknown's Atlas";
-    public const string VersionString = "1.1.6";
+    public const string VersionString = "1.1.6.1";
     public static readonly System.Version Version = System.Version.Parse(VersionString);
 
     public static BepInEx.Logging.ManualLogSource Logger = null!;
@@ -170,7 +170,7 @@ internal static class AtlasVersionDisplayPatch
     [HarmonyPriority(Priority.Low)]
     public static void Postfix(PingTracker __instance)
     {
-        if (__instance == null || __instance.text == null) return;
+        if (ReferenceEquals(__instance, null) || ReferenceEquals(__instance.text, null) || __instance.text.m_CachedPtr == System.IntPtr.Zero) return;   // no Unity ==: it boxes a bool per call (il2cpp heap), every frame in every mod
         string text = __instance.text.text;
         if (string.IsNullOrEmpty(text)) return;
 

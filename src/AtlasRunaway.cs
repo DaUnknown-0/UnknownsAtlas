@@ -131,7 +131,11 @@ internal static class AtlasRunaway
     {
         if (!Active || from == null || from.Data == null || from.Data.IsDead || station > 1) return;
         var set = station == Brake ? BrakeUsers : HandbrakeUsers;
-        if (on) set.Add(from.PlayerId); else set.Remove(from.PlayerId);
+        if (!on) { set.Remove(from.PlayerId); return; }
+        // Nur an der Station selbst, und je Spieler nur eine Station (sonst loest einer die Krise allein und aus der Ferne)
+        if (!AtlasUse.HostNear(from, station == Brake ? D.RunawayBrake : D.RunawayHandbrake, Reach)) return;
+        (station == Brake ? HandbrakeUsers : BrakeUsers).Remove(from.PlayerId);
+        set.Add(from.PlayerId);
     }
 
     private static void Prune(HashSet<byte> set)

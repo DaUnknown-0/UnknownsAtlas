@@ -159,12 +159,13 @@ internal static class AtlasWorld
     /// <summary>Host: Rauswurf-Szene an alle (AtlasEject.HostPick).</summary>
     internal static void SendEjectScene(byte normal, byte skip) => Send(OpEjectScene, w => { w.Write(normal); w.Write(skip); });
 
-    internal static void Send(byte op, Action<MessageWriter> body)
+    /// <param name="targetClientId">-1 = an alle, sonst nur an diesen Client.</param>
+    internal static void Send(byte op, Action<MessageWriter> body, int targetClientId = -1)
     {
         try
         {
             if (AmongUsClient.Instance == null || AmongUsClient.Instance.NetworkMode == NetworkModes.FreePlay || PlayerControl.LocalPlayer == null) return;
-            var w = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, RpcId, SendOption.Reliable, -1);
+            var w = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, RpcId, SendOption.Reliable, targetClientId);
             w.Write(op);
             body?.Invoke(w);
             AmongUsClient.Instance.FinishRpcImmediately(w);
@@ -180,7 +181,7 @@ internal static class AtlasWorld
         try
         {
             var client = AmongUsClient.Instance;
-            bool fromHost = __instance != null && client != null && __instance.OwnerId == client.HostId;
+            bool fromHost = UnknownsNet.SenderIsHost(__instance);
             byte op = reader.ReadByte();
             // Versions-Abgleich und Bau-Meldung gelten auch in der Lobby bzw. ohne gebaute Karte
             if (op == AtlasHandshake.OpHello || op == AtlasHandshake.OpBuildFailed) { AtlasHandshake.Receive(op, __instance, reader); return; }
@@ -204,7 +205,7 @@ internal static class AtlasWorld
                 }
                 case OpSabEnd when fromHost: ApplySabEnd(reader.ReadByte(), reader.ReadByte()); break;
                 case OpSabReq when AmHost: HostSabRequest(__instance, reader.ReadByte()); break;
-                case OpRepair when AmHost: HostRepair(reader.ReadByte(), reader.ReadByte()); break;
+                case OpRepair when AmHost: HostRepair(__instance, reader.ReadByte(), reader.ReadByte()); break;
                 case OpEjectScene when fromHost: AtlasEject.NextScene = reader.ReadByte(); AtlasEject.NextSkip = reader.ReadByte(); break;
                 case OpSabWait when fromHost:
                     _waitUntil = Time.time + reader.ReadUInt16() / 10f;
@@ -388,9 +389,17 @@ internal static class AtlasWorld
         Send(OpSabStart, w => { w.Write(kind); w.Write((byte)idx.Count); foreach (var i in idx) w.Write((byte)i); });
     }
 
-    private static void HostRepair(byte kind, byte arg)
+    // Absenderpruefung: nur Sturmholz (keine andere Art weiterreichen), nur lebend, nicht im Vent und
+    // in Reichweite des Stamms (Client: 1,9 um die Mitte, AtlasUse.HostNear gibt Spielraum fuer die Netzverzoegerung).
+    private static void HostRepair(PlayerControl from, byte kind, byte arg)
     {
-        if (kind == SabTrees && !Trees.ContainsKey(arg)) return;
+        if (kind != SabTrees || !Trees.TryGetValue(arg, out var tree) || tree == null) return;
+        if (MeetingHud.Instance != null) return;
+        if (!AtlasUse.HostNear(from, tree.transform.position, 1.9f))
+        {
+            AtlasPlugin.Logger.LogWarning($"{LogPrefix} repair from {(from != null ? from.PlayerId.ToString() : "?")} rejected: not at tree {arg}");
+            return;
+        }
         ApplySabEnd(kind, arg);
         Send(OpSabEnd, w => { w.Write(kind); w.Write(arg); });
     }
@@ -492,7 +501,7 @@ internal static class AtlasWorld
     public static void RepairDone(string name)
     {
         byte kind = SabTrees, arg = _pendingArg;
-        if (AmHost) HostRepair(kind, arg);
+        if (AmHost) HostRepair(PlayerControl.LocalPlayer, kind, arg);
         else Send(OpRepair, w => { w.Write(kind); w.Write(arg); });
     }
 
@@ -1037,39 +1046,52 @@ internal static class AtlasWorld
     internal static void HudManager_Update_Postfix()
     {
         if (!AtlasMuseumBuilder.Active || _root == null) return;
-        try
+        // Je Takt ein eigenes try: wirft ein frueher Takt, laufen die spaeteren (bis AtlasUse.Commit) trotzdem.
+        // Lambdas ohne Capture (dt liegt im Feld _dt), damit pro Frame nichts allokiert wird.
+        _dt = Time.deltaTime;
+        Run("guard", () => AtlasBlockGuard.Track());
+        Run("host", () => HostTick());
+        Run("laser", () => LaserTick(_dt));
+        Run("click", () => ClickTick());
+        Run("mapbutton", () => MapButtonTick());
+        Run("weather", () => AtlasWeatherFx.Tick(_dt, Wald));
+        Run("park", () => AtlasParkWorld.Tick(_dt));
+        Run("parkfun", () => { if (Park) AtlasParkFun.Tick(_dt); });
+        Run("planetarium", () => AtlasPlanetarium.Tick(_dt));
+        Run("dusk", () => AtlasDusk.Tick(_dt));
+        Run("gallery", () => AtlasGallery.Tick(_dt));
+        Run("ferry", () => AtlasFerry.TickAll(_dt));               // Pendelwagen (Park), Kanu (Wald)
+        Run("rex", () => AtlasRex.Tick(_dt));
+        Run("ticket", () => AtlasTicket.Tick(_dt));
+        Run("runaway", () => AtlasRunaway.Tick(_dt));
+        Run("smoke", () => AtlasSmoke.Tick(_dt));
+        Run("lookout", () => AtlasLookout.Tick(_dt));
+        Run("stairs", () => AtlasStairs.Tick(_dt));
+        var world = AtlasMuseumBuilder.D?.World;                   // Karten anderer Plugins (API 2)
+        if (world != null)
         {
-            float dt = Time.deltaTime;
-            AtlasBlockGuard.Track();
-            HostTick();
-            LaserTick(dt);
-            ClickTick();
-            MapButtonTick();
-            AtlasWeatherFx.Tick(dt, Wald);
-            AtlasParkWorld.Tick(dt);
-            if (Park) AtlasParkFun.Tick(dt);
-            AtlasPlanetarium.Tick(dt);
-            AtlasDusk.Tick(dt);
-            AtlasGallery.Tick(dt);
-            AtlasFerry.TickAll(dt);                                // Pendelwagen (Park), Kanu (Wald)
-            AtlasRex.Tick(dt);
-            AtlasTicket.Tick(dt);
-            AtlasRunaway.Tick(dt);
-            AtlasSmoke.Tick(dt);
-            AtlasLookout.Tick(dt);
-            AtlasStairs.Tick(dt);
-            var world = AtlasMuseumBuilder.D?.World;               // Karten anderer Plugins (API 2)
-            if (world != null)
-            {
-                try { world.Tick(dt); }
-                catch (Exception e) { if (_worldErrors++ < 5) AtlasPlugin.Logger.LogWarning($"{LogPrefix} map world tick: {e}"); }
-            }
-            AtlasUse.Commit();                                     // nach allen Mechaniken, die den Knopf anbieten
+            try { world.Tick(_dt); }
+            catch (Exception e) { if (_worldErrors++ < 5) AtlasPlugin.Logger.LogWarning($"{LogPrefix} map world tick: {e}"); }
         }
-        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} tick: {e.Message}"); }
+        Run("use", () => AtlasUse.Commit());                       // nach allen Mechaniken, die den Knopf anbieten
     }
 
     private static int _worldErrors;
+    private static float _dt;
+    // Warnung je Takt hoechstens alle 5 s (vorher jeden Frame ungedrosselt).
+    private static readonly Dictionary<string, float> _tickWarnAt = new();
+
+    private static void Run(string name, Action tick)
+    {
+        try { tick(); }
+        catch (Exception e)
+        {
+            float now = Time.realtimeSinceStartup;
+            if (_tickWarnAt.TryGetValue(name, out float last) && now - last < 5f) return;
+            _tickWarnAt[name] = now;
+            AtlasPlugin.Logger.LogWarning($"{LogPrefix} tick {name}: {e}");
+        }
+    }
 
     [HarmonyPostfix]
     [HarmonyPatch(typeof(ShipStatus), nameof(ShipStatus.OnDestroy))]

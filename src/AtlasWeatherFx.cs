@@ -34,6 +34,17 @@ internal static class AtlasWeatherFx
     private static float _nextOneShot;
     private static bool _dropsPlaced;
     private static readonly List<(float At, float Vol)> ThunderQueue = new();
+    // Managed mirror of the drops. Every Unity getter that returns a struct (color, localPosition,
+    // localScale, activeSelf ...) allocates a box on the il2cpp heap through Il2CppInterop; reading the
+    // colour of all 70 drops every frame, even on maps where it never rains, was the largest single
+    // source of il2cpp garbage in an Atlas round (12.8 MB per round, multi-client test 2026-11-12).
+    private const int DropCount = 70;
+    private static readonly float[] DropA = new float[DropCount];
+    private static readonly Vector3[] DropP = new Vector3[DropCount];
+    private static int _dropsLit;
+    private static float _dropRot = float.NaN;
+    private static bool _screenShown = true;
+    private static Vector3 _fullScale;
 
     public static void Reset()
     {
@@ -42,6 +53,7 @@ internal static class AtlasWeatherFx
         if (_screen != null) Object.Destroy(_screen.gameObject);
         if (_bolt != null && _bolt.sharedMaterial != null) Object.Destroy(_bolt.sharedMaterial);
         _screen = null; _tint = _flash = null; _bolt = null; _dropsPlaced = false;
+        Array.Clear(DropA, 0, DropA.Length); _dropsLit = 0; _dropRot = float.NaN; _screenShown = true; _fullScale = default;
         Drops.Clear(); Flames.Clear(); ThunderQueue.Clear();
         _weather = AtlasWorld.Weather.Clear; _tintNow = Color.clear; _flashT = 0f; _boltT = 0f;
         StopLoop(ref _ambience); StopLoop(ref _rain); StopLoop(ref _fire);
@@ -62,14 +74,16 @@ internal static class AtlasWeatherFx
         _screen = go.transform;
         _tint = Quad("tint", 0);
         _flash = Quad("flash", 2);
-        for (int i = 0; i < 70; i++)
+        for (int i = 0; i < DropCount; i++)
         {
             var d = new GameObject("drop") { layer = 5 };
             d.transform.SetParent(_screen, false);
             var sr = d.AddComponent<SpriteRenderer>();
             sr.sprite = AtlasAssets.TaskSprite("task_raindrop.png", 100f, new Vector2(0.5f, 0.5f));
             sr.color = new Color(0.75f, 0.85f, 1f, 0f);
-            d.transform.localPosition = new Vector3(Random.Range(-7f, 7f), Random.Range(-4f, 4f), -0.01f);
+            DropP[i] = new Vector3(Random.Range(-7f, 7f), Random.Range(-4f, 4f), -0.01f);
+            DropA[i] = 0f;
+            d.transform.localPosition = DropP[i];
             d.transform.localScale = Vector3.one * Random.Range(0.5f, 0.9f);
             d.transform.localEulerAngles = new Vector3(0f, 0f, 12f);
             Drops.Add(sr);
@@ -139,7 +153,7 @@ internal static class AtlasWeatherFx
         if (!EnsureScreen()) return;
         // Rauswurf-Szenen (Atlas wie UC-Void) bringen ihr eigenes Wetter mit; der Schleier lag sonst darueber
         bool cutscene = ExileController.Instance != null;
-        if (_screen.gameObject.activeSelf == cutscene) _screen.gameObject.SetActive(!cutscene);
+        if (_screenShown == cutscene) { _screenShown = !cutscene; _screen.gameObject.SetActive(!cutscene); }
         var cam = Camera.main;
         // Kamera-Kind: lokale Einheiten koennen skaliert sein, also die Sichtflaeche in den lokalen Raum umrechnen
         float sc = Mathf.Max(0.01f, _screen.lossyScale.y);
@@ -147,13 +161,21 @@ internal static class AtlasWeatherFx
         // Tint and flash cover the real view, like the drops do. A fixed 30 x 20 left bare strips at
         // the sides on an ultrawide screen with the lookout's zoom (32:9 at zoom 6 is 42 wide).
         var full = new Vector3(Mathf.Max(30f, halfW * 2.3f) / 0.16f, Mathf.Max(20f, halfH * 2.3f) / 0.16f, 1f);
-        if (_tint != null && _tint.transform.localScale != full) _tint.transform.localScale = full;
-        if (_flash != null && _flash.transform.localScale != full) _flash.transform.localScale = full;
+        if (full != _fullScale)
+        {
+            _fullScale = full;
+            if (_tint != null) _tint.transform.localScale = full;
+            if (_flash != null) _flash.transform.localScale = full;
+        }
         if (!_dropsPlaced)
         {
             _dropsPlaced = true;
             AtlasPlugin.Logger.LogInfo($"[Atlas/Fx] weather screen: ortho {(cam != null ? cam.orthographicSize : -1f):F2}, scale {sc:F3}");
-            foreach (var d in Drops) d.transform.localPosition = new Vector3(Random.Range(-halfW, halfW), Random.Range(-halfH, halfH), -0.01f);
+            for (int i = 0; i < Drops.Count && i < DropCount; i++)
+            {
+                DropP[i] = new Vector3(Random.Range(-halfW, halfW), Random.Range(-halfH, halfH), -0.01f);
+                if (Drops[i] != null) Drops[i].transform.localPosition = DropP[i];
+            }
         }
 
         // Grundfarbe: Wald nachts leicht blau, Wetter legt nach
@@ -197,20 +219,34 @@ internal static class AtlasWeatherFx
         bool raining = wald && (_weather == AtlasWorld.Weather.Rain || _weather == AtlasWorld.Weather.Storm);
         float slant = _weather == AtlasWorld.Weather.Storm ? 4f : 1.8f;
         int visible = raining ? (_weather == AtlasWorld.Weather.Storm ? Drops.Count : Drops.Count * 2 / 3) : 0;
-        for (int i = 0; i < Drops.Count; i++)
+        // Nothing to move while no drop is lit and none should be (every map but the wood when it does not rain).
+        if (visible > 0 || _dropsLit > 0)
         {
-            var d = Drops[i];
-            var c = d.color;
-            float target = i < visible ? 0.55f : 0f;
-            c.a = Mathf.MoveTowards(c.a, target, dt * 0.8f);
-            d.color = c;
-            if (c.a <= 0.001f) continue;
-            var p = d.transform.localPosition;
-            p += new Vector3(-slant * dt, -14f * dt, 0f);
-            if (p.y < -halfH - 0.5f) { p.y += halfH * 2f + 1f + Random.Range(0f, 0.8f); p.x = Random.Range(-halfW - 1f, halfW + 3f); }
-            if (p.x < -halfW - 1f) p.x += halfW * 2f + 2f;
-            d.transform.localPosition = p;
-            d.transform.localEulerAngles = new Vector3(0f, 0f, Mathf.Atan2(slant, 14f) * Mathf.Rad2Deg);
+            float rot = Mathf.Atan2(slant, 14f) * Mathf.Rad2Deg;
+            bool turn = rot != _dropRot;
+            _dropRot = rot;
+            int lit = 0;
+            for (int i = 0; i < Drops.Count && i < DropCount; i++)
+            {
+                var d = Drops[i];
+                if (d == null) continue;
+                float target = i < visible ? 0.55f : 0f;
+                bool was = DropA[i] > 0.001f;
+                float a = Mathf.MoveTowards(DropA[i], target, dt * 0.8f);
+                if (a != DropA[i]) { DropA[i] = a; d.color = new Color(0.75f, 0.85f, 1f, a); }
+                if (a <= 0.001f) continue;
+                lit++;
+                var p = DropP[i];
+                p += new Vector3(-slant * dt, -14f * dt, 0f);
+                if (p.y < -halfH - 0.5f) { p.y += halfH * 2f + 1f + Random.Range(0f, 0.8f); p.x = Random.Range(-halfW - 1f, halfW + 3f); }
+                if (p.x < -halfW - 1f) p.x += halfW * 2f + 2f;
+                DropP[i] = p;
+                var t = d.transform;
+                t.localPosition = p;
+                if (turn || !was) t.localEulerAngles = new Vector3(0f, 0f, rot);
+            }
+            _dropsLit = lit;
+            if (lit == 0) _dropRot = float.NaN;       // next shower sets the angle again
         }
 
         FireTick(dt, wald);

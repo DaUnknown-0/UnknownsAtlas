@@ -76,6 +76,19 @@ internal static class AtlasSelection
         e.External = true;
         Maps.Add(e);
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} external map registered: {e.Key} ({e.Label}), index {Maps.Count}");
+        // A map that joins late (its plugin was still downloading the map files): the host may have chosen it
+        // while it was unknown here. Take the choice over now and tell the lobby that this client has the map,
+        // otherwise the host keeps the old answer and the start stays blocked.
+        try
+        {
+            if (_pendingKey != null && string.Equals(_pendingKey, e.Key, StringComparison.OrdinalIgnoreCase))
+            {
+                _pendingKey = null;
+                Set(Maps.Count, broadcast: false);
+            }
+            AtlasHandshake.Resend();
+        }
+        catch (Exception ex) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} late registration follow-up failed: {ex.Message}"); }
         return true;
     }
 
@@ -161,7 +174,7 @@ internal static class AtlasSelection
         try
         {
             var client = AmongUsClient.Instance;
-            if (client == null || __instance == null || __instance.OwnerId != client.HostId) return;
+            if (client == null || !UnknownsNet.SenderIsHost(__instance)) return;
             int idx = reader.ReadByte();
             if (idx > BuiltInCount)
             {
@@ -172,14 +185,19 @@ internal static class AtlasSelection
                     _missingLogged = key;
                     AtlasPlugin.Logger.LogWarning($"{LogPrefix} host chose map '{key}', which is not installed here - staying on the Skeld");
                 }
+                _pendingKey = local == 0 ? key : null;
                 idx = local;
             }
+            else _pendingKey = null;
             Set(idx, broadcast: false);
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} rpc read failed: {e.Message}"); }
     }
 
     private static string _missingLogged;
+    /// <summary>Key the host chose while that map was not registered here yet (see Register).</summary>
+    private static string _pendingKey;
+    internal static string PendingKey => _pendingKey;
 
     [HarmonyPostfix]
     [HarmonyPatch(typeof(AmongUsClient), nameof(AmongUsClient.OnGameJoined))]
@@ -188,6 +206,7 @@ internal static class AtlasSelection
         // Als Gast gilt nur, was der Host sagt. Der Host behaelt seine letzte Wahl.
         if (!AmHost) Set(0, broadcast: false);
         _missingLogged = null;
+        _pendingKey = null;
         _resendTimer = 1f;
     }
 
@@ -207,15 +226,19 @@ internal static class AtlasSelection
     [HarmonyPatch(typeof(HudManager), nameof(HudManager.Update))]
     internal static void LobbyBehaviour_Update_Postfix()
     {
-        AtlasAssetStore.LobbyTick();
+        try { AtlasAssetStore.LobbyTick(); } catch { }
         if (LobbyBehaviour.Instance == null) return;
-        LobbyVisualTick();
-        AtlasPreload.Tick();
-        if (!AmHost) return;
-        _resendTimer -= Time.deltaTime;
-        if (_resendTimer > 0f) return;
-        _resendTimer = 5f;
-        Broadcast();
+        // The repeat of the host's choice comes first and stands alone: an exception in the banner or the
+        // preload below must never stop it, a guest whose map joined late depends on it.
+        if (AmHost)
+        {
+            _resendTimer -= Time.unscaledDeltaTime;
+            if (_resendTimer <= 0f) { _resendTimer = 5f; Broadcast(); }
+        }
+        try { LobbyVisualTick(); }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} lobby view tick: {e.Message}"); }
+        try { AtlasPreload.Tick(); }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} preload tick: {e.Message}"); }
     }
 
     // ------------------------------------------------------------ Lobby-Ansicht (nicht editieren)

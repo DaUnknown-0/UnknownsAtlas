@@ -121,6 +121,7 @@ namespace UnknownsAtlas {
 
             // First the Atom feed: not counted against the API's 60 requests per hour (ReleaseFeed).
             var feed = new UnityWebRequest();
+            feed.timeout = UnknownsNet.RequestTimeout;   // a hanging request must not keep the updater busy for the session
             feed.SetMethod(UnityWebRequest.UnityWebRequestMethod.Get);
             feed.SetUrl(ReleaseFeed.Url(RepositoryOwner, RepositoryName));
             feed.SetRequestHeader("User-Agent", $"UnknownsAtlas/{AtlasPlugin.VersionString}");
@@ -158,6 +159,7 @@ namespace UnknownsAtlas {
             }
 
             var www = new UnityWebRequest();
+            www.timeout = UnknownsNet.RequestTimeout;   // a hanging request must not keep the updater busy for the session
             www.SetMethod(UnityWebRequest.UnityWebRequestMethod.Get);
             www.SetUrl($"https://api.github.com/repos/{RepositoryOwner}/{RepositoryName}/releases");
             // GitHub rejects UA-less clients - set a distinct one.
@@ -237,6 +239,7 @@ namespace UnknownsAtlas {
             }
 
             var www = new UnityWebRequest();
+            www.timeout = UnknownsNet.DownloadTimeout;   // a hanging request must not keep the updater busy for the session
             www.SetMethod(UnityWebRequest.UnityWebRequestMethod.Get);
             www.SetUrl(asset.DownloadUrl);
             www.downloadHandler = new DownloadHandlerBuffer();
@@ -252,7 +255,8 @@ namespace UnknownsAtlas {
                 yield return new WaitForEndOfFrame();
             }
 
-            if (www.isNetworkError || www.isHttpError) {
+            // Only a PE image may replace the plugin: an error page that came back as HTTP 200 is a failed download.
+            if (www.isNetworkError || www.isHttpError || !UnknownsNet.IsPluginImage(www.downloadHandler.data)) {
                 _updateState = 3;
                 if (!managerMode && popup != null) {
                     popup.TextAreaTMP.text = "Update failed.";

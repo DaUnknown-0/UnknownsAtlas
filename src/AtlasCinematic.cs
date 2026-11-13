@@ -416,7 +416,7 @@ public static class AtlasCinematic
                     for (int i = 0; i < n; i++) f[i] = (short)(pcm[2 * i] | (pcm[2 * i + 1] << 8)) / 32768f;
                     _clip = AudioClip.Create("atlas_cine_" + key, n, 1, meta.AudioRate, false);
                     _clip.hideFlags |= HideFlags.DontUnloadUnusedAsset;
-                    _clip.SetData(f, 0);
+                    ClipFill.SetData(_clip, f, 1);   // not SetData(float[]): one il2cpp array per intro (ClipFill)
                     _audio = SoundManager.Instance.PlaySound(_clip, false, 1f);
                 }
                 catch (Exception e) { Warn($"audio failed: {e.Message}"); }

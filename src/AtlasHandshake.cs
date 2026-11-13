@@ -57,6 +57,7 @@ internal static class AtlasHandshake
     }
 
     private static readonly Dictionary<int, Peer> Peers = new();
+    private static readonly Dictionary<int, float> BuildFailedAt = new();
     private static bool _sent, _boardDirty = true, _boardListed;
     private static float _resendAt, _nextCheck;
     private static List<string> _warn = new();
@@ -93,6 +94,9 @@ internal static class AtlasHandshake
         });
     }
 
+    /// <summary>The local map list changed (a map of another plugin joined late): the next lobby tick sends the hello again.</summary>
+    internal static void Resend() { _sent = false; _nextCheck = 0f; }
+
     /// <summary>Aus AtlasWorld.PlayerControl_HandleRpc_Postfix (Kanal 237), vor dessen Active-Pruefung.</summary>
     internal static void Receive(byte op, PlayerControl sender, MessageReader reader)
     {
@@ -117,6 +121,10 @@ internal static class AtlasHandshake
             }
             case OpBuildFailed when ac.AmHost:
             {
+                // Drossel: ein ehrlicher Client meldet einmal je Runde; mehr als eine Meldung je Absender
+                // und 30 s waere nur Spam im Host-Chat.
+                if (BuildFailedAt.TryGetValue(sender.OwnerId, out float last) && Time.time - last < 30f) break;
+                BuildFailedAt[sender.OwnerId] = Time.time;
                 var def = AtlasPlugin.SelectedMap();
                 string who = sender.Data != null ? sender.Data.PlayerName : $"#{sender.OwnerId}";
                 AtlasPlugin.Logger.LogError($"{LogPrefix} {who} reports: Atlas map was NOT built on their client");
@@ -131,6 +139,7 @@ internal static class AtlasHandshake
     internal static void AmongUsClient_OnGameJoined_Postfix()
     {
         Peers.Clear();
+        BuildFailedAt.Clear();
         _sent = false;
         _boardDirty = true;
     }
@@ -381,6 +390,7 @@ internal static class AtlasHandshake
             if (_checkedShip == ship || Time.time - _seenAt < 3f) return;
             _checkedShip = ship;
             var def = AtlasPlugin.SelectedMap();
+            if (def != null && AtlasMuseumBuilder.Active) { TaskConsoleCheck(ship, def.DisplayName); return; }
             if (def == null || !AtlasMuseumBuilder.IsSkeld(ship) || AtlasMuseumBuilder.Active) return;
 
             AtlasPlugin.Logger.LogError($"{LogPrefix} self check: {def.DisplayName} was selected but NOT built - this client plays the plain Skeld");
@@ -389,6 +399,35 @@ internal static class AtlasHandshake
             if (DiagBuildFail) _diagDoneAt = Time.time + 2f;
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} self check: {e.Message}"); }
+    }
+
+    /// <summary>Map check 3 s into the round: every task the map can hand out needs a console that takes it,
+    /// otherwise the crew can never win by tasks. Log only, the lists stay as the map built them.</summary>
+    private static void TaskConsoleCheck(ShipStatus ship, string mapName)
+    {
+        try
+        {
+            var have = new HashSet<TaskTypes>();
+            var consoles = ship.AllConsoles;
+            if (consoles == null) return;
+            foreach (var c in consoles)
+            {
+                if (c == null) continue;
+                if (c.TaskTypes != null) foreach (var t in c.TaskTypes) have.Add(t);
+                if (c.ValidTasks != null) foreach (var set in c.ValidTasks) if (set != null) have.Add(set.taskType);
+            }
+            var missing = new List<string>();
+            void Scan(Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<NormalPlayerTask> list)
+            {
+                if (list == null) return;
+                foreach (var t in list)
+                    if (t != null && !have.Contains(t.TaskType) && !missing.Contains(t.TaskType.ToString())) missing.Add(t.TaskType.ToString());
+            }
+            Scan(ship.CommonTasks); Scan(ship.ShortTasks); Scan(ship.LongTasks);
+            if (missing.Count > 0)
+                AtlasPlugin.Logger.LogError($"{LogPrefix} map check: {mapName} hands out tasks without any console: {string.Join(", ", missing)} - a task win is impossible until the map removes them");
+        }
+        catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} map check: {e.Message}"); }
     }
 
     private static void Notify(string msg)
