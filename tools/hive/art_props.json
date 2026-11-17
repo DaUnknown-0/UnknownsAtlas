@@ -1,0 +1,312 @@
+[
+ {
+  "kind": "mead_table",
+  "foot_w": 1.6,
+  "foot_d": 0.9,
+  "height": 0.8,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Sechseckiger Holztisch der Mead Hall mit zwei Hockern davor, Krug und Wabenbrot darauf",
+  "shape": "rect"
+ },
+ {
+  "kind": "mead_barrel",
+  "foot_w": 0.9,
+  "foot_d": 0.9,
+  "height": 1.1,
+  "frames": 1,
+  "mode": "opaque",
+  "desc": "Stehendes Metfass mit Messingzapfhahn und Wabenbrand",
+  "shape": "circle"
+ },
+ {
+  "kind": "hive_banner",
+  "foot_w": 1.8,
+  "foot_d": 0.25,
+  "height": 1.6,
+  "frames": 1,
+  "mode": "deco",
+  "desc": "Stoffbanner mit Bienenwappen an der Nordwand (nur 1 Etage, dort steht sonst die Treppe)",
+  "shape": "rect"
+ },
+ {
+  "kind": "queen_throne",
+  "foot_w": 2.4,
+  "foot_d": 1.1,
+  "height": 2.2,
+  "frames": 1,
+  "mode": "opaque",
+  "desc": "Thron der Koenigin aus Wachs und Bernstein, hohe Waben-Lehne, Gelee-Royal-Schale daneben",
+  "shape": "rect"
+ },
+ {
+  "kind": "royal_cells",
+  "foot_w": 1.4,
+  "foot_d": 0.8,
+  "height": 1.4,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Stapel grosser koeniglicher Weiselzellen (laengliche Wachszapfen) auf einem Sockel",
+  "shape": "rect"
+ },
+ {
+  "kind": "jar_shelf",
+  "foot_w": 3.2,
+  "foot_d": 0.5,
+  "height": 1.9,
+  "frames": 1,
+  "mode": "opaque",
+  "desc": "Hohes Holzregal voller Honiggläser in Bernsteintoenen, an der Wand",
+  "shape": "rect"
+ },
+ {
+  "kind": "honey_barrels",
+  "foot_w": 1.0,
+  "foot_d": 1.7,
+  "height": 1.2,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Drei liegende/stehende Honigfaesser gestapelt",
+  "shape": "rect"
+ },
+ {
+  "kind": "crate_stack",
+  "foot_w": 1.2,
+  "foot_d": 0.8,
+  "height": 1.0,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Zwei gestapelte Holzkisten mit Wabenrahmen, eine offen",
+  "shape": "rect"
+ },
+ {
+  "kind": "bookshelf",
+  "foot_w": 2.4,
+  "foot_d": 0.5,
+  "height": 1.9,
+  "frames": 1,
+  "mode": "opaque",
+  "desc": "Buecherregal des Imkers mit Buechern, Glaesern, Imkerhut",
+  "shape": "rect"
+ },
+ {
+  "kind": "smoker_stand",
+  "foot_w": 0.6,
+  "foot_d": 0.6,
+  "height": 1.3,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Ständer mit Imker-Smoker (Blasebalg-Kanne) und Imkerhut am Haken",
+  "shape": "circle"
+ },
+ {
+  "kind": "bellows_big",
+  "foot_w": 2.2,
+  "foot_d": 1.0,
+  "height": 1.6,
+  "frames": 6,
+  "mode": "opaque",
+  "desc": "Riesiger Leder-Blasebalg im Holzgestell (Belueftung des Stocks), ANIMIERT: pumpt, 6 Bilder Zyklus",
+  "shape": "rect"
+ },
+ {
+  "kind": "brood_cradle",
+  "foot_w": 1.0,
+  "foot_d": 0.7,
+  "height": 0.8,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Wiege aus Wachswaben mit schlafender Larve unter Decke",
+  "shape": "rect"
+ },
+ {
+  "kind": "nurse_cart",
+  "foot_w": 1.0,
+  "foot_d": 0.5,
+  "height": 0.9,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Kleiner Rollwagen mit Pollenbrot, Pipetten, Gelee",
+  "shape": "rect"
+ },
+ {
+  "kind": "glow_rack",
+  "foot_w": 0.6,
+  "foot_d": 2.8,
+  "height": 2.0,
+  "frames": 3,
+  "mode": "opaque",
+  "desc": "Hohes Regal mit leuchtenden Gluehonig-Glaesern, ANIMIERT: Glaeser pulsieren, 3 Bilder",
+  "shape": "rect"
+ },
+ {
+  "kind": "lantern_cart",
+  "foot_w": 0.9,
+  "foot_d": 0.7,
+  "height": 0.9,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Karren mit Ersatzlaternen",
+  "shape": "rect"
+ },
+ {
+  "kind": "wax_cauldron",
+  "foot_w": 1.5,
+  "foot_d": 1.5,
+  "height": 1.3,
+  "frames": 4,
+  "mode": "glass",
+  "desc": "Grosser Kupferkessel mit fluessigem Wachs auf Feuerstelle, ANIMIERT: Blasen, 4 Bilder",
+  "shape": "circle"
+ },
+ {
+  "kind": "candle_rack",
+  "foot_w": 1.4,
+  "foot_d": 0.4,
+  "height": 1.6,
+  "frames": 1,
+  "mode": "opaque",
+  "desc": "Gestell mit frisch gezogenen Kerzen an Schnueren, an der Wand",
+  "shape": "rect"
+ },
+ {
+  "kind": "periscope",
+  "foot_w": 0.6,
+  "foot_d": 0.6,
+  "height": 1.8,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Messing-Periskop der Wache, das durch die Decke nach oben fuehrt",
+  "shape": "circle"
+ },
+ {
+  "kind": "dance_floor",
+  "foot_w": 2.8,
+  "foot_d": 1.8,
+  "height": 0.05,
+  "frames": 4,
+  "mode": "deco",
+  "desc": "Flache sechseckige Tanzbuehne im Boden (Schwaenzeltanz), Lichtpunkte im Muster, ANIMIERT: Lichter laufen, 4 Bilder; nur Boden, flach",
+  "shape": "rect"
+ },
+ {
+  "kind": "flower_pots",
+  "foot_w": 0.5,
+  "foot_d": 1.0,
+  "height": 0.9,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Blumentoepfe mit Bluetenduft-Proben, gestapelt",
+  "shape": "rect"
+ },
+ {
+  "kind": "nectar_press",
+  "foot_w": 2.4,
+  "foot_d": 1.0,
+  "height": 1.9,
+  "frames": 6,
+  "mode": "opaque",
+  "desc": "Grosse Nektarpresse mit Holzspindel und Messingrad, Trog davor, ANIMIERT: Spindelrad dreht, 6 Bilder",
+  "shape": "rect"
+ },
+ {
+  "kind": "target_board",
+  "foot_w": 1.2,
+  "foot_d": 0.3,
+  "height": 1.4,
+  "frames": 1,
+  "mode": "opaque",
+  "desc": "Zielscheibe der Wespenwache an der Wand mit Pfeilen",
+  "shape": "rect"
+ },
+ {
+  "kind": "pollen_cannon",
+  "foot_w": 1.0,
+  "foot_d": 0.6,
+  "height": 0.9,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Kleine Pollenkanone auf Lafette (verscheucht Wespen)",
+  "shape": "rect"
+ },
+ {
+  "kind": "sundial",
+  "foot_w": 1.4,
+  "foot_d": 1.4,
+  "height": 1.0,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Grosse Sonnenuhr/Sonnenkompass auf Sockel in der Raummitte, Messingzeiger",
+  "shape": "circle"
+ },
+ {
+  "kind": "stair_up",
+  "foot_w": 1.6,
+  "foot_d": 1.25,
+  "height": 1.6,
+  "frames": 1,
+  "mode": "deco",
+  "desc": "Wachstreppe mit Gelaender, die nach Norden in die Wand hinauf fuehrt (Etagenwechsel)",
+  "shape": "rect"
+ },
+ {
+  "kind": "stair_down",
+  "foot_w": 1.6,
+  "foot_d": 0.6,
+  "height": 0.6,
+  "frames": 1,
+  "mode": "deco",
+  "desc": "Treppenoeffnung im Boden mit Gelaender, Stufen fuehren hinab",
+  "shape": "rect"
+ },
+ {
+  "kind": "chute_top",
+  "foot_w": 1.1,
+  "foot_d": 1.1,
+  "height": 0.4,
+  "frames": 1,
+  "mode": "deco",
+  "desc": "Rutscheneinstieg: runde Wabenoeffnung im Boden mit Messingrand, Honigschimmer",
+  "shape": "circle"
+ },
+ {
+  "kind": "chute_exit",
+  "foot_w": 1.2,
+  "foot_d": 0.7,
+  "height": 0.9,
+  "frames": 1,
+  "mode": "deco",
+  "desc": "Rutschenende: Rohrmuendung aus der Wand mit Honigtropfen",
+  "shape": "rect"
+ },
+ {
+  "kind": "telescope",
+  "foot_w": 0.9,
+  "foot_d": 0.9,
+  "height": 1.6,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Messing-Teleskop auf Dreibein",
+  "shape": "circle"
+ },
+ {
+  "kind": "archive_shelf",
+  "foot_w": 4.4,
+  "foot_d": 0.4,
+  "height": 2.0,
+  "frames": 1,
+  "mode": "opaque",
+  "desc": "Archivregal mit Wachstafeln und Schriftrollen, an der Wand",
+  "shape": "rect"
+ },
+ {
+  "kind": "drone_perch",
+  "foot_w": 1.2,
+  "foot_d": 1.2,
+  "height": 1.2,
+  "frames": 1,
+  "mode": "glass",
+  "desc": "Landeplatz fuer Drohnenbienen: runder Holzteller auf Pfosten mit Blueten",
+  "shape": "circle"
+ }
+]

@@ -26,7 +26,7 @@ public class AtlasPlugin : BasePlugin
 {
     public const string Id = "com.daunknown0.atlas";
     public const string PluginName = "Unknown's Atlas";
-    public const string VersionString = "1.1.6.1";
+    public const string VersionString = "1.1.6.2";
     public static readonly System.Version Version = System.Version.Parse(VersionString);
 
     public static BepInEx.Logging.ManualLogSource Logger = null!;
@@ -40,6 +40,7 @@ public class AtlasPlugin : BasePlugin
     public static ConfigEntry<bool> CfgBuildPocMap = null!;
     public static ConfigEntry<bool> CfgErrorStackTraces = null!;
     public static ConfigEntry<bool> CfgMapFileTest = null!;
+    public static ConfigEntry<int> CfgHiveFloorsTest = null!;
     public static ConfigEntry<string> CfgForceMap = null!;
     public static ConfigEntry<bool> CfgMapShot = null!;
     public static ConfigEntry<bool> CfgUiShot = null!;
@@ -78,11 +79,14 @@ public class AtlasPlugin : BasePlugin
             "shots and view spots after the round start only run in autotests (freeplay with ForceMap or TaskTest).");
         CfgViewTestVanilla = Config.Bind("Diagnostics", "ViewTestVanilla", false,
             "Diagnostics only: on an UNMODIFIED map, snap the local player to a test spot and take a screen shot + vision log once per round.");
+        CfgHiveFloorsTest = Config.Bind("Diagnostics", "AmberhiveFloorsTest", -1,
+            "Diagnostics only: build Amberhive with 0 = one floor or 1 = two floors, ignoring the host option. -1 = off.");
         CfgMapFileTest = Config.Bind("Diagnostics", "MapFileTest", false,
             "Diagnostics only: export the built-in maps as map.json to <game>/AtlasShots/maps, check the round trip " +
             "and register the museum a second time from its file as 'museum_file'.");
         AtlasVanillaOptions.Bind(Config);
         AtlasCinematic.Bind(Config);
+        AtlasAmberhiveSound.Bind(Config); // Amberhive sound: lokale Client-Einstellungen
         AtlasCinematic.RegisterBuiltIn();
         CfgAssetSource = Config.Bind("Assets", "Download source", "",
             "Where the map images are downloaded from. Empty = the UnknownsAtlas-Assets repository at the tag of " +
@@ -148,6 +152,7 @@ public class AtlasPlugin : BasePlugin
         try { if (CfgMapFileTest.Value) AtlasMapFile.DiagTest(); } catch (System.Exception e) { Logger.LogError($"[Atlas] map file test: {e}"); }
         AtlasMapFile.Worlds["train"] = () => new AtlasTrainWorld();            // Polaris Express: Fahrt, Rauch, Funken
         try { AtlasMapFile.RegisterAll(); } catch (System.Exception e) { Logger.LogError($"[Atlas] map files: {e}"); }
+        try { AtlasAmberhive.Register(); } catch (System.Exception e) { Logger.LogError($"[Atlas] Amberhive: {e}"); }
 
         // Self-updater: checks the GitHub releases and offers an in-game update (main menu and
         // Mod Manager), like the family's other mods.

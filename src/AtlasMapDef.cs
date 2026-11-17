@@ -48,6 +48,13 @@ public sealed class AtlasMapDef
 
     public Dictionary<string, Vector2> Consoles;
     /// <summary>
+    /// Feste Grundflaechen einzelner Konsolen statt der aus dem Bild berechneten (Kollisionspruefung 15.11.: Hebelpfosten,
+    /// deren unterste Bildzeilen ein Kabel am Boden sind; Altar- und Tischbeine unter dem Pivot). Schluessel = Konsole,
+    /// Wert = { x0, y0, x1, y1 } in Metern relativ zur Konsolenlage; ein leeres Feld = gar keine Grundflaeche
+    /// (flaches Bodengitter). Kartendatei: "consoleFootprints".
+    /// </summary>
+    public Dictionary<string, float[]> ConsoleFootprints = new();
+    /// <summary>
     /// Aufgaben aus anderen Karten (AtlasForeignTasks): Aufgabenart, Karte (Index in AmongUsClient.ShipPrefabs, 4 =
     /// Airship), Konsolen-Schluessel (Lage in Consoles, Bild in ConsoleSprites) und Raum. Leer = keine.
     /// </summary>

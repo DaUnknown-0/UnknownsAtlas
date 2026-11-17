@@ -1,0 +1,67 @@
+{
+  "sample_rate": 24000,
+  "channels": 1,
+  "origin": "Original, prozedural mit numpy",
+  "clips": {
+    "hive_buzz.ogg": {
+      "frames": 288000,
+      "seconds": 12.0,
+      "master_rms": 0.16,
+      "master_peak": 0.469926
+    },
+    "brood_buzz.ogg": {
+      "frames": 288000,
+      "seconds": 12.0,
+      "master_rms": 0.16,
+      "master_peak": 0.493641
+    },
+    "honey_well.ogg": {
+      "frames": 288000,
+      "seconds": 12.0,
+      "master_rms": 0.13104,
+      "master_peak": 0.65
+    },
+    "bellows.ogg": {
+      "frames": 288000,
+      "seconds": 12.0,
+      "master_rms": 0.081517,
+      "master_peak": 0.65
+    },
+    "nectar_press.ogg": {
+      "frames": 288000,
+      "seconds": 12.0,
+      "master_rms": 0.075575,
+      "master_peak": 0.65
+    },
+    "wax_foundry.ogg": {
+      "frames": 288000,
+      "seconds": 12.0,
+      "master_rms": 0.136395,
+      "master_peak": 0.65
+    },
+    "mead_chimes.ogg": {
+      "frames": 576000,
+      "seconds": 24.0,
+      "master_rms": 0.100875,
+      "master_peak": 0.65
+    },
+    "bridge_turn.ogg": {
+      "frames": 288000,
+      "seconds": 12.0,
+      "master_rms": 0.136183,
+      "master_peak": 0.65
+    },
+    "honey_flood.ogg": {
+      "frames": 288000,
+      "seconds": 12.0,
+      "master_rms": 0.121932,
+      "master_peak": 0.65
+    },
+    "nectar_chute.ogg": {
+      "frames": 288000,
+      "seconds": 12.0,
+      "master_rms": 0.137983,
+      "master_peak": 0.65
+    }
+  }
+}

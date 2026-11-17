@@ -1,0 +1,12 @@
+<Project>
+    <!-- Amberhive sound: eigener Build-Abschnitt, Import im Hauptprojekt. -->
+    <PropertyGroup>
+        <ILRepackTargetsFile>$(MSBuildThisFileDirectory)AmberhiveVorbisMerge.targets</ILRepackTargetsFile>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="NVorbis" Version="0.10.5" />
+        <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.34.2" PrivateAssets="all" />
+        <EmbeddedResource Include="assets\amberhive\sound\*.ogg" LogicalName="UnknownsAtlas.Maps.amberhive.sound.%(Filename)%(Extension)" />
+        <EmbeddedResource Include="tools\hive\sound\LICENSE_NVORBIS.txt" LogicalName="UnknownsAtlas.Licenses.NVorbis.txt" />
+    </ItemGroup>
+</Project>

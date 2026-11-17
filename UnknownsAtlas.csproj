@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <TargetFramework>net6.0</TargetFramework>
-        <Version>1.1.6.1</Version>
+        <Version>1.1.6.2</Version>
         <Description>UNKNOWN'S ATLAS - custom maps for Among Us, built into the Skeld (relocate-in-place). Current map: Vesper Museum. Built for AU 2024.11.26 / BepInEx 6.0.0-be.697 / Reactor 2.3.1.</Description>
         <Authors>DaUnknown-0</Authors>
         <LangVersion>latest</LangVersion>
@@ -54,6 +54,10 @@
              aus dem Asset-Repo (tools/build_assets_repo.py, Gruppe "train"). -->
         <EmbeddedResource Include="assets\train\map.json;assets\train\button_*.png;assets\train\icon_*.png;assets\train\*_minimap.png;assets\train\task_*_button.png"
                           LogicalName="UnknownsAtlas.Maps.train.%(Filename)%(Extension)" />
+        <!-- Amberhive: Registrierung, Auswahl und Klang bleiben eingebettet. Die grossen Bilder
+             kommen aus Asset-Katalog v16, Szenen unter UnknownsAtlas.Resources.* wie bei den anderen Karten. -->
+        <EmbeddedResource Include="assets\amberhive\amberhive_?f.json;assets\amberhive\button_*.png;assets\amberhive\icon_*.png;assets\amberhive\*_minimap.png;assets\amberhive\task_*_button.png"
+                          LogicalName="UnknownsAtlas.Maps.amberhive.%(Filename)%(Extension)" />
         <!-- Zusatz-Sabotagen der Vanilla-Karten (AtlasVanillaCrisis), erzeugt von tools/vc_art.py. Eingebettet nur die
              Kartenknoepfe (icon_vc_*); Minispiel-Tafeln (task_vc_*) und Effektbilder (fx_vc_*) kommen aus dem
              Asset-Repo. Fehlen sie noch, zeichnen Minispiele und Effekte ihre Laufzeitformen wie vorher. -->
@@ -83,4 +87,5 @@
         <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AmongUsDir)\BepInEx\plugins\" />
         <Message Text="[Atlas] deployed $(TargetFileName) -> $(AmongUsDir)\BepInEx\plugins\" Importance="high" />
     </Target>
+    <Import Project="tools\hive\sound\AmberhiveSound.targets" /> <!-- Amberhive sound -->
 </Project>

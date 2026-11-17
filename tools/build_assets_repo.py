@@ -45,6 +45,11 @@ GROUPS = [
      ["train_floor_*.png", "train_props_*.png", "train_consoles_*.png", "train_scroll*.png", "train_fx_*.png",
       "task_train_*.png"],
      ["*_button.png"]),
+    # Amberhive: gepackte Atlanten und alle Welt-/Minispielbilder, Szenen im EjectEngine-Namensraum.
+    ("amberhive", "UnknownsAtlas.Maps.amberhive.",
+     ["amberhive_floor_*.atx", "amberhive_props_*.atx", "amberhive_consoles_*.atx", "task_hive_*.png"],
+     ["*_button.png"]),
+    ("amberhive", RES, ["task_eject_*.png", "task_eject_*.jpg"], []),
 ]
 
 

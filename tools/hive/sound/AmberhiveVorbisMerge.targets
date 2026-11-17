@@ -1,0 +1,14 @@
+<Project>
+    <!-- Decoder in die Mod einbetten, auch bei Debug und vor optionalem Deployment. -->
+    <Target Name="AmberhiveMergeVorbis" AfterTargets="Build" BeforeTargets="DeployToGame">
+        <ItemGroup>
+            <AmberhiveMergeInput Include="$(IntermediateOutputPath)$(TargetName)$(TargetExt)" />
+            <AmberhiveMergeInput Include="@(ReferencePath)" Condition="'%(ReferencePath.Filename)' == 'NVorbis'" />
+            <AmberhiveMergeLib Include="$(TargetDir)" />
+            <AmberhiveMergeLib Include="@(ReferencePathWithRefAssemblies->'%(RootDir)%(Directory)')" />
+            <AmberhiveMergeLib Include="$(NuGetPackageRoot)harmonyx\2.10.2\lib\netstandard2.0" />
+        </ItemGroup>
+        <ILRepack Parallel="true" Internalize="true" InputAssemblies="@(AmberhiveMergeInput)"
+                  LibraryPath="@(AmberhiveMergeLib)" OutputFile="$(TargetPath)" />
+    </Target>
+</Project>

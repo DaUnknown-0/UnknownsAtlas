@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using BepInEx.Configuration;
 using HarmonyLib;
+using UnityEngine;
 
 namespace UnknownsAtlas;
 
@@ -31,7 +32,10 @@ internal static class AtlasVanillaOptions
 
     private static ConfigEntry<bool> _localOn;
     private static readonly Dictionary<byte, ConfigEntry<Mode>> Local = new();
-    private static object _header, _intro;
+    private static object _header, _intro, _hiveFloors;
+    private static ConfigEntry<int> _localHiveFloors;
+    /// <summary>Amberhive: 0 = eine Etage, 1 = zwei Etagen (mit der Krone). TOR-Option 1729, sonst Config.</summary>
+    public const int HiveFloorsId = 1729;
     private static readonly Dictionary<byte, object> Opts = new();
     private static FieldInfo _fSel;
     private static bool _tried;
@@ -39,11 +43,24 @@ internal static class AtlasVanillaOptions
 
     public static void Bind(ConfigFile cfg)
     {
+        AtlasAmberhiveLife.Bind(cfg); // AMBERHIVE LIFE: eigene Konfiguration.
         _localOn = cfg.Bind("VanillaCrises", "Enabled", false,
             "Extra sabotages on the vanilla maps (Skeld, Polus, Airship). With The Other Roles installed this is a HOST "
             + "setting in the TOR settings (General tab, 'Atlas: Extra Sabotages'); this entry is only the fallback.");
+        _localHiveFloors = cfg.Bind("Amberhive", "Floors", 0,
+            "Amberhive: 0 = one floor, 1 = two floors (the Crown). With The Other Roles installed this is a HOST setting " +
+            "(General tab, 'Amberhive Floors'); this entry is only the fallback.");
         foreach (var d in AtlasVanillaCrisis.Defs)
             Local[d.Id] = cfg.Bind("VanillaCrises", d.Key, Mode.Extra, $"{d.Title} on {d.MapName}: Extra, Replace ({d.ReplacesLabel}) or Off.");
+    }
+
+    public static int AmberhiveFloors()
+    {
+        int t = AtlasPlugin.CfgHiveFloorsTest?.Value ?? -1;      // Autotest: Fassung erzwingen
+        if (t >= 0 && AmongUsClient.Instance != null && AmongUsClient.Instance.NetworkMode == NetworkModes.FreePlay)
+            return Mathf.Clamp(t, 0, 1);
+        int s = Sel(_hiveFloors);
+        return s >= 0 ? s : Mathf.Clamp(_localHiveFloors?.Value ?? 0, 0, 1);
     }
 
     public static bool On
@@ -116,12 +133,15 @@ internal static class AtlasVanillaOptions
             // Vorspann der Karten (AtlasCinematic), eigene Ueberschrift
             _intro = Make(AtlasCinematic.OptionId, "Atlas: Map Intro", new[] { "Once Per Evening", "Every Round", "Off" }, null, true);
             AtlasCinematic.SetOption(_intro);
+            // Amberhive: zweite Etage (die Krone) zuschalten (User 15.11.)
+            _hiveFloors = Make(HiveFloorsId, "Amberhive Floors", new[] { "1 Floor", "2 Floors" }, null, true);
+            AtlasAmberhiveLife.RegisterOption(co, Make); // AMBERHIVE LIFE: Host-Option 1730, Standard Off.
             MoveToEnd(co);
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} registered as TOR options {HeaderId}-{HeaderId + Opts.Count} (host-synchronised)");
         }
         catch (Exception e)
         {
-            _header = null; _intro = null; Opts.Clear(); AtlasCinematic.SetOption(null);
+            _header = null; _intro = null; _hiveFloors = null; Opts.Clear(); AtlasCinematic.SetOption(null);
             AtlasPlugin.Logger.LogWarning($"{LogPrefix} could not register with The Other Roles ({e.Message}); using the local config, NOT shared with the lobby");
         }
     }
@@ -134,6 +154,8 @@ internal static class AtlasVanillaOptions
             var mine = new List<object> { _header };
             foreach (var d in AtlasVanillaCrisis.Defs) if (Opts.TryGetValue(d.Id, out var o)) mine.Add(o);
             if (_intro != null) mine.Add(_intro);
+            if (_hiveFloors != null) mine.Add(_hiveFloors);
+            if (AtlasAmberhiveLife.PollenOption != null) mine.Add(AtlasAmberhiveLife.PollenOption); // AMBERHIVE LIFE
             foreach (var o in mine) { int i = list.IndexOf(o); if (i >= 0) list.RemoveAt(i); }
             foreach (var o in mine) list.Add(o);
         }

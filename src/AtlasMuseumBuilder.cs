@@ -612,9 +612,21 @@ internal static class AtlasMuseumBuilder
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
         if (mat != null) sr.sharedMaterial = mat;
-        if (!FloorBlocks.Contains(key))
+        if (!FloorBlocks.Contains(key) && D.ConsoleFootprints != null && D.ConsoleFootprints.TryGetValue(key, out var fixedFp))
         {
-            if (!AddOpaqueFootprint(go, AtlasAssets.MaskOf(tex), e.X, e.Y, e.W, e.H, e.PX, e.PY, standLine - p.y)
+            if (fixedFp != null && fixedFp.Length == 4 && fixedFp[2] > fixedFp[0] && fixedFp[3] > fixedFp[1])
+            {
+                var col = go.AddComponent<BoxCollider2D>();
+                col.size = new Vector2(fixedFp[2] - fixedFp[0], fixedFp[3] - fixedFp[1]);
+                col.offset = new Vector2((fixedFp[0] + fixedFp[2]) / 2f, (fixedFp[1] + fixedFp[3]) / 2f);
+                FootprintCount++;
+                ExtendReach(go, fixedFp[3]);
+            }
+        }
+        else if (!FloorBlocks.Contains(key))
+        {
+            if (!AddOpaqueFootprint(go, AtlasAssets.MaskOf(tex), e.X, e.Y, e.W, e.H, e.PX, e.PY, standLine - p.y,
+                    !key.Contains("FixWiring") && !key.Contains("HandConsole"))
                 && standLine <= p.y + 0.001f)
                 AddFootprint(go, key, e.W, e.H, e.PY);
         }
@@ -629,7 +641,7 @@ internal static class AtlasMuseumBuilder
     /// sofern dazwischen mehr als 0,45 m frei waeren (sonst bremst das Hindernis selbst). false = keine Maske.
     /// </summary>
     private static bool AddOpaqueFootprint(GameObject block, AtlasAssets.AlphaMask m, int x, int y, int w, int h,
-        float pivX, float pivY, float backed)
+        float pivX, float pivY, float backed, bool fillToWall = true)
     {
         if (m == null) return false;
         float ppm = D.PropPixelsPerMeter;
@@ -647,7 +659,9 @@ internal static class AtlasMuseumBuilder
         if (fx1 < 0) return true;
         float px = x + pivX * w, py = y + pivY * h;               // Pivot in Atlas-Pixeln
         float left = (fx0 * 4 - px) / ppm + 0.03f, right = ((fx1 + 1) * 4 - px) / ppm - 0.03f;
-        float yBot = Mathf.Max(0f, (bot * 4 - py) / ppm), yTop = ((top + 1) * 4 - py) / ppm;
+        float yBotRaw = (bot * 4 - py) / ppm;
+        float yBot = Mathf.Max(0f, yBotRaw), yTop = ((top + 1) * 4 - py) / ppm;
+        float footW = right - left;
         if (right - left < 0.2f)                                  // Pfosten, Stange (Vogelscheuche): trotzdem fest
         {
             float mid = (left + right) / 2f;
@@ -659,8 +673,19 @@ internal static class AtlasMuseumBuilder
         if (backed > 0.001f)
         {
             float free = backed - 0.05f - y0;                     // bis zur Hinderniskante
-            if (free < 0.45f) return true;
-            depth = Mathf.Min(free, 0.9f);
+            if (free < 0.45f)
+            {
+                // Kollisionspruefung 15.11.: Pult, Kiste oder Staffelei 0,4 bis 0,6 m vor der Wand hatten gar keine Grundflaeche
+                // (man lief quer durch den Tisch). Dann fuellt die Box den Platz vom gezeichneten Fuss (auch unter dem Pivot)
+                // bis an die Wand. Unter 0,3 m Tiefe oder Fussbreite bleibt sie weg: das sind Wandkaesten, deren Bild auf der
+                // Wandfront haengt (Sicherungskasten, Kabel bis zum Boden); Kabelkaesten (FixWiring) haengen immer an der Wand,
+                // Reaktor-Handflaechen bleiben wie bisher (Forest: Hebel auf dem Huettendach).
+                float y0b = yBotRaw + gap, fill = backed - 0.05f - y0b;
+                if (!fillToWall || fill < 0.3f || footW < 0.3f) return true;
+                y0 = y0b;
+                depth = fill;
+            }
+            else depth = Mathf.Min(free, 0.9f);
         }
         var col = block.AddComponent<BoxCollider2D>();
         col.size = new Vector2(right - left, depth);
@@ -1171,7 +1196,7 @@ internal static class AtlasMuseumBuilder
     }
     private static readonly List<Vector2> FadeFeet = new();
     private static readonly List<GameObject> OpaqueShadowObjects = new();
-    private static readonly List<SpriteRenderer> PropRenderers = new();
+    internal static readonly List<SpriteRenderer> PropRenderers = new();
 
     /// <summary>Gebaute Moebel einer Art mit Index in D.Props und Standpunkt (fuer Karten-Plugins, AtlasMaps.Props).</summary>
     internal static List<(int Index, SpriteRenderer Renderer, Vector2 Pos)> PropsOfKind(string kind)

@@ -1,0 +1,171 @@
+{
+ "consoles": {
+  "Admin/FixWiringConsole/2": "comb_wirebox",
+  "Admin/NoOxyConsole/1": "air_keypad",
+  "Admin/SwipeCardConsole/0": "stamp_desk",
+  "Admin/UploadDataConsole/0": "scroll_desk",
+  "Cafeteria/DataConsole/2": "notice_board",
+  "Cafeteria/FixWiringConsole/4": "comb_wirebox",
+  "Cafeteria/GarbageConsole/2": "scrap_bin",
+  "Comms/DivertPowerConsole/1": "nectar_valve",
+  "Comms/FixCommsConsole/0": "gramophone",
+  "Comms/UploadDataConsole/1": "scroll_desk",
+  "Electrical/CalibrateConsole/0": "glow_dials",
+  "Electrical/DivertPowerConsole/0": "nectar_valve",
+  "Electrical/FixWiringConsole/0": "comb_wirebox",
+  "Electrical/SwitchConsole/0": "lamp_switches",
+  "Electrical/UploadDataConsole/0": "scroll_desk",
+  "LifeSupp/CleanFilterConsole/0": "bellows_filter",
+  "LifeSupp/DivertPowerConsole/1": "nectar_valve",
+  "LifeSupp/GarbageConsole/0": "scrap_bin",
+  "LifeSupp/NoOxyConsole/0": "air_keypad",
+  "LowerEngine/AlignEngineConsole/1": "press_dial",
+  "LowerEngine/DivertPowerConsole/1": "nectar_valve",
+  "LowerEngine/FuelEngineConsole/0": "nectar_tank_valve",
+  "MedBay/MedBayConsole/0": "sample_table",
+  "MedBay/MedScanner/0": "scan_pad",
+  "Nav/ChartCourseConsole/0": "route_table",
+  "Nav/DivertPowerConsole/1": "nectar_valve",
+  "Nav/FixWiringConsole/3": "comb_wirebox",
+  "Nav/StabilizeSteeringConsole/0": "compass_wheel",
+  "Nav/UploadDataConsole/0": "scroll_desk",
+  "Reactor/LowerHandConsole/1": "cooling_comb",
+  "Reactor/StartReactorConsole/2": "royal_keypad",
+  "Reactor/UnlockManifoldsConsole/2": "royal_cells_panel",
+  "Reactor/UpperHandConsole/0": "cooling_comb",
+  "Security/DivertPowerConsole/1": "nectar_valve",
+  "Security/FixWiringConsole/5": "comb_wirebox",
+  "Shields/DivertPowerConsole/1": "nectar_valve",
+  "Shields/ShieldConsole/0": "wax_plates",
+  "Storage/AirlockConsole/0": "chute_hatch",
+  "Storage/FixWiringConsole/1": "comb_wirebox",
+  "Storage/gasCanConsole/0": "honey_cans",
+  "UpperEngine/AlignEngineConsole/0": "press_dial",
+  "UpperEngine/DivertPowerConsole/1": "nectar_valve",
+  "UpperEngine/FuelEngineConsole/0": "nectar_tank_valve",
+  "Weapons/DivertPowerConsole/1": "nectar_valve",
+  "Weapons/UploadDataConsole/1": "scroll_desk",
+  "Weapons/WeaponConsole/0": "wasp_cannon_seat",
+  "EmergencyButton": "queen_bell",
+  "SurveillanceConsole": "periscope_desk",
+  "AdminTable": "hive_map_table",
+  "FreeplayLaptop": "keeper_notebook",
+  "Records/UnlockSafe/0": "royal_vault",
+  "Records/PolishRuby/0": "amber_polish",
+  "ViewingDeck/FixShower/0": "flower_sprinkler",
+  "ViewingDeck/CleanToilet/0": "dew_basin",
+  "CargoBay/PutAwayPistols/0": "stinger_rack",
+  "CargoBay/MakeBurger/0": "pollen_lunch"
+ },
+ "motifs": {
+  "notice_board": "Pinnwand auf Staender mit Tanznotizen (Download), 0,9 m breit",
+  "comb_wirebox": "Wandkasten aus Holz mit Wachsdraehten/Faeden in Wabenmuster, Klappe; haengt an der Wand, 0,5 m breit",
+  "scroll_desk": "Schreibpult mit Schriftrollen und Federkiel (Upload), 0,8 m breit",
+  "nectar_valve": "Messing-Ventilpfosten mit Rohr in den Boden, Handrad, kleine Anzeige, 0,45 m breit",
+  "scrap_bin": "Grosser Abfalleimer fuer Wachsreste mit Klappdeckel, 0,6 m breit",
+  "stamp_desk": "Kleiner Tisch mit Stempel, Stempelkissen und Logbuch, 0,7 m breit",
+  "glow_dials": "Kasten mit drei Gluehonig-Zeigerinstrumenten, an der Wand, 0,9 m breit",
+  "royal_keypad": "Pult mit 3x3 Wachsknoepfen und Wabenanzeige, 0,9 m breit",
+  "royal_cells_panel": "Wandtafel mit 10 nummerierten Weiselzellen-Klappen, 0,9 m breit",
+  "route_table": "Kartentisch mit Flugroutenkarte und Blumensymbolen, 1,0 m breit",
+  "compass_wheel": "Steuerrad mit Sonnenkompass auf Saeule, 0,8 m breit",
+  "wax_plates": "Pult mit sieben sechseckigen Wachsplatten in Rahmen, 0,9 m breit",
+  "press_dial": "Ziffernblatt mit Hebel an Staender (Pressenspindel einstellen), 0,7 m breit",
+  "nectar_tank_valve": "Kleiner Nektartank mit Einfuelltrichter und Schlauch, 0,7 m breit",
+  "honey_cans": "Zwei Honigkanister mit Henkel auf Holzpalette, 0,8 m breit",
+  "chute_hatch": "Bodenluke mit Wabengitter und Hebel (Abfallschacht), 0,8 m breit, flach",
+  "bellows_filter": "Filterkasten mit Lamellen und Pollenstaub, 0,9 m breit",
+  "sample_table": "Tisch mit Reagenzglaesern voller Honigproben und Lupe, 0,9 m breit",
+  "scan_pad": "Sechseckige Scannerplatte im Boden mit Leuchtring, flach, 1,1 m breit",
+  "wasp_cannon_seat": "Sitz mit Pollenkanone und Zielfernrohr, 1,0 m breit",
+  "cooling_comb": "Kuehlwabe: Sockel mit einer Handflaechenplatte aus kuehlem blauem Wachs, 0,7 m breit",
+  "air_keypad": "Lueftungsklappe mit Tastenfeld und Zahnrad, an der Wand, 0,7 m breit",
+  "lamp_switches": "Schalttafel mit fuenf Messinghebeln und Gluehonig-Lampen, an der Wand, 1,0 m breit",
+  "gramophone": "Grammophon mit Wabentrichter auf Tischchen (Tanzmusik/Funk), 0,8 m breit",
+  "queen_bell": "Grosse Messingglocke der Koenigin an Holzgalgen mit rotem Zugseil, 1,0 m breit",
+  "periscope_desk": "Wachpult mit vier runden Wabenfenstern (Kamerabilder) und Messingrohren, 1,3 m breit",
+  "hive_map_table": "Grosser Tisch mit Wabenkarte des ganzen Stocks und Markierungsnadeln, 1,8 m breit",
+  "keeper_notebook": "Aufgeklapptes Imker-Notizbuch auf Pult, 0,6 m breit"
+ },
+ "doors": [
+  {
+   "label": "hex-V1",
+   "axis": "x",
+   "length": 1.6
+  },
+  {
+   "label": "hex-V2",
+   "axis": "x",
+   "length": 1.6
+  },
+  {
+   "label": "hex-V5",
+   "axis": "x",
+   "length": 1.6
+  },
+  {
+   "label": "hex-V7",
+   "axis": "x",
+   "length": 1.6
+  },
+  {
+   "label": "hex-V10",
+   "axis": "x",
+   "length": 1.0
+  },
+  {
+   "label": "hex-V11",
+   "axis": "x",
+   "length": 1.4
+  },
+  {
+   "label": "hex-V12",
+   "axis": "x",
+   "length": 2.6
+  },
+  {
+   "label": "hex-H0",
+   "axis": "y",
+   "length": 3.0
+  },
+  {
+   "label": "hex-H3",
+   "axis": "y",
+   "length": 2.2
+  },
+  {
+   "label": "hex-H4",
+   "axis": "y",
+   "length": 2.2
+  },
+  {
+   "label": "hex-H6",
+   "axis": "y",
+   "length": 1.8
+  },
+  {
+   "label": "hex-H8",
+   "axis": "y",
+   "length": 2.0
+  },
+  {
+   "label": "hex-H9",
+   "axis": "y",
+   "length": 2.0
+  }
+ ],
+ "vents": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10
+ ],
+ "cameras": 4
+}

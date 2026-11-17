@@ -82,6 +82,8 @@ public static class AtlasMapFile
             Flt(e, "pivotX"), Flt(e, "pivotY"))).ToArray();
         d.NoFadeKinds = new HashSet<string>(Arr(r, "noFadeKinds").Select(e => e.GetString()));
         d.Consoles = Obj(r, "consoles").ToDictionary(p => p.Name, p => Vec(p.Value));
+        d.ConsoleFootprints = Obj(r, "consoleFootprints").ToDictionary(p => p.Name,
+            p => p.Value.ValueKind == JsonValueKind.Array ? p.Value.EnumerateArray().Select(x => x.GetSingle()).ToArray() : Array.Empty<float>());
         d.ForeignTasks = Arr(r, "foreignTasks").Select(e => (Enum<TaskTypes>(e, "type"), Int(e, "ship"), Str(e, "console"), Enum<SystemTypes>(e, "room"))).ToArray();
         d.Vents = Obj(r, "vents").ToDictionary(p => int.Parse(p.Name, CultureInfo.InvariantCulture), p => Vec(p.Value));
         d.VentNetworks = Ints2(r, "ventNetworks");
@@ -181,6 +183,17 @@ public static class AtlasMapFile
             w.WriteEndArray();
             w.WriteStartArray("noFadeKinds"); foreach (var k in d.NoFadeKinds ?? new HashSet<string>()) w.WriteStringValue(k); w.WriteEndArray();
             w.WriteStartObject("consoles"); foreach (var kv in d.Consoles ?? new()) { w.WritePropertyName(kv.Key); VecOut(w, kv.Value); } w.WriteEndObject();
+            if (d.ConsoleFootprints != null && d.ConsoleFootprints.Count > 0)
+            {
+                w.WriteStartObject("consoleFootprints");
+                foreach (var kv in d.ConsoleFootprints)
+                {
+                    w.WriteStartArray(kv.Key);
+                    foreach (var f in kv.Value ?? Array.Empty<float>()) w.WriteNumberValue(Math.Round(f, 4));
+                    w.WriteEndArray();
+                }
+                w.WriteEndObject();
+            }
             w.WriteStartArray("foreignTasks");
             foreach (var x in d.ForeignTasks ?? Array.Empty<(TaskTypes, int, string, SystemTypes)>())
             { w.WriteStartObject(); w.WriteString("type", x.Type.ToString()); w.WriteNumber("ship", x.ShipId); w.WriteString("console", x.ConsoleKey); w.WriteString("room", x.Room.ToString()); w.WriteEndObject(); }

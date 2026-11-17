@@ -956,6 +956,419 @@ SCENES.append({
 })
 
 
+# ============================================================================ Amberhive (Bienenstock-Station)
+# Stil V2 "Bernsteinlicht": alle Bilder in Blender modelliert und gerendert (UnknownsAtlas/tools/hive/blender/eject_<szene>.py,
+# Kino-Schraegblick wie die Karte). Lage und Anker jedes Bildes stehen in tools/hive/art/eject/<bild>.json und werden hier
+# gelesen (_hv), ebenso die Punkte der Szenen (<szene>_pts.json): nach einem neuen Rendern genuegt dieser Lauf.
+import math  # noqa: E402
+
+HV = "task_eject_hive_"
+_HV_ART = Path(__file__).resolve().parent / "hive" / "art" / "eject"
+
+
+def _hvm(name):
+    return json.loads((_HV_ART / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def _r4(v):
+    return round(v, 4)
+
+
+def _hv(oid, name, z, **kw):
+    """Objekt aus einem gerenderten Bild: liegt dort, wo es modelliert wurde (Anker aus den Metadaten), kw ueberschreibt."""
+    m = _hvm(name)
+    o = {"id": oid, "sprite": m["sprite"], "z": z}
+    if "pivot" in m:
+        o.update(pivot=m["pivot"], x=m["px"], y=m["py"])
+    else:
+        o.update(x=m["cx"], y=m["cy"])
+    o.update(kw)
+    return o
+
+
+def _hv_glow(oid, x, y, s, z=-50, tint="#ffc860", a=0.45, amp=0.15, f=5.0, **kw):
+    o = {"id": oid, "sprite": "task_eject_glow.png", "z": z, "x": _r4(x), "y": _r4(y), "s": s, "tint": tint, "a": a,
+         "flicker": {"amp": amp, "f": f}}
+    o.update(kw)
+    return o
+
+
+def _hv_rel(p, base):
+    return (_r4(p[0] - base[0]), _r4(p[1] - base[1]))
+
+
+HV_BEE_PIV = _hvm("bee")["pivot"]      # Biene: Anker = Mitte des Bruststuecks
+HV_WING_PIV = _hvm("wing")["pivot"]    # Fluegel: Anker = Wurzel
+
+
+def _hv_bee(bid, z, keys, s=0.55, parent=None, flap=None, bob=None, wing_keys=None):
+    """Biene mit zwei Fluegeln (Kinder). flap = [(t0, t1, amp)] schnelles Schlagen auf sy, bob = Schweben."""
+    b = {"id": bid, "sprite": HV + "bee.png", "z": z, "pivot": HV_BEE_PIV, "s": s, "keys": keys}
+    if parent:
+        b["parent"] = parent
+    if bob:
+        b["wobble"] = bob
+    out = [b]
+    for k, (wx, wy, rot, ws, dz, bb, ph) in enumerate(((0.0, 0.134, 24, 1.0, 1, 1.0, 0.0), (-0.07, 0.19, 46, 0.82, -1, 0.82, 1.6))):
+        w = {"id": f"{bid}_w{k}", "sprite": HV + "wing.png", "parent": bid, "z": z + dz, "x": wx, "y": wy, "rot": rot, "s": ws,
+             "pivot": HV_WING_PIV, "a": 0.88, "b": bb,
+             "wobble": [{"p": "sy", "amp": amp, "f": 23 + k * 2, "t0": t0, "t1": t1, "ph": ph} for t0, t1, amp in (flap or [(0, 99, 0.55)])]}
+        if wing_keys:
+            w["keys"] = [key(t, e, rot=rot + d * (1 + k * 0.4)) for t, e, d in wing_keys]
+        out.append(w)
+    return out
+
+
+# ---------------------------------------------------------------------------- Amberhive: Schwarm
+# Kronensaal: kuehler Wabenboden, Petrol-Teppich, leuchtende Wachswand, hinten die runde Kronenoeffnung zum Abendhimmel.
+# Der Spieler steht auf dem Teppich, Bienen schwirren von allen Seiten heran und packen zu. Ein Ruck, der Schwarm hebt
+# ihn hoch, schwebt mit ihm durch die Oeffnung und traegt ihn in den Sonnenuntergang, bis er ein Punkt vor der Sonne ist.
+_hv_sw = _hvm("swarm_pts")
+HV_SW_P0 = (-0.5, _hv_sw["floor"] + 0.5)               # Spielermitte am Boden
+HV_SW_END = (_r4(_hv_sw["sun"][0] - 0.05), _r4(_hv_sw["sun"][1] + 0.14))
+HV_SW_LIFT = 2.3
+HV_SW_BEES = [  # id, z, Ziel (relativ zum Trageobjekt), Start (relativ), Ankunft, Blickrichtung
+    ("hb1", 3, (-0.45, 0.62), (-6.4, 2.6), 1.25, 1), ("hb2", 3, (0.45, 0.66), (7.2, 3.2), 1.45, -1),
+    ("hb3", -3, (0.05, 0.94), (2.5, 6.0), 1.7, -1), ("hb4", 4, (-0.68, 0.06), (-6.6, 0.6), 1.85, 1),
+    ("hb5", 4, (0.68, 0.1), (7.4, 1.4), 2.0, -1), ("hb6", -4, (-0.25, 1.02), (-3.4, 6.0), 2.1, 1),
+]
+_hv_sw_objs = [
+    _hv("bg", "swarm_bg", -100),
+    _hv_glow("sunGlow", _hv_sw["sun"][0], _hv_sw["sun"][1], 2.6, z=-90, tint="#ffcf88", a=0.5, amp=0.08, f=1.5),
+    {"id": "shaft", "sprite": "task_eject_glow.png", "z": -60, "x": 0.5, "y": -1.0, "sx": 3.8, "sy": 4.6, "tint": "#ffd890", "a": 0.16,
+     "flicker": {"amp": 0.06, "f": 0.7}},
+]
+for i, (lx, ly) in enumerate(_hv_sw["lamps"]):             # Laternen haengen an Ketten und schaukeln leise
+    _hv_sw_objs.append(_hv(f"lamp{i}", "swarm_lamp", -40, x=lx, y=ly,
+                           wobble=[{"p": "rot", "amp": 2.5, "f": 0.42 + 0.07 * i, "ph": 1.7 * i}]))
+    _hv_sw_objs.append({"id": f"lampGlow{i}", "sprite": "task_eject_glow.png", "parent": f"lamp{i}", "z": -39, "x": 0, "y": -0.93, "s": 1.5,
+                        "tint": "#ffc060", "a": 0.5, "flicker": {"amp": 0.2, "f": 5 - 0.7 * i}})
+_hv_sw_objs += [
+    _hv("shadow", "shadow", -2, x=HV_SW_P0[0] + 0.04, y=_r4(_hv_sw["floor"] + 0.02),
+        keys=[key(0, "lin", a=0.9, sx=1, sy=1), key(HV_SW_LIFT, "hold", a=0.9, sx=1, sy=1), key(HV_SW_LIFT + 0.5, "out", a=0.5, sx=0.8, sy=0.8),
+              key(3.6, "io", a=0, sx=0.4, sy=0.4)]),
+    {"id": "carry", "keys": [key(0, "lin", x=HV_SW_P0[0], y=HV_SW_P0[1], s=1, a=1),
+                             key(HV_SW_LIFT, "hold", x=HV_SW_P0[0], y=HV_SW_P0[1], s=1),
+                             key(HV_SW_LIFT + 0.45, "out", y=_r4(HV_SW_P0[1] + 0.35)), key(3.6, "io", x=-0.2, y=-0.55, s=0.85),
+                             key(5.0, "io", x=0.75, y=1.15, s=0.4), key(6.2, "in", x=HV_SW_END[0], y=HV_SW_END[1], s=0.05, a=1),
+                             key(6.3, "lin", a=0)],
+     "wobble": [{"p": "x", "amp": 0.06, "f": 0.9, "t0": HV_SW_LIFT + 0.3, "t1": 6.0}]},
+]
+for i, (bid, z, end, start, arrive, face) in enumerate(HV_SW_BEES):
+    _hv_sw_objs += _hv_bee(bid, z, [key(0, "hold", x=start[0], y=start[1], rot=0, flip=face),
+                                    key(arrive - 1.1, "hold", x=start[0], y=start[1], rot=0),
+                                    key(arrive - 0.4, "lin", rot=-12 * face),
+                                    key(arrive, "out", x=end[0], y=end[1], rot=0, arc=0.35),
+                                    key(HV_SW_LIFT + 0.4, "io", rot=8 * face), key(4.0, "io", rot=0)],
+                           s=0.55, parent="carry",
+                           bob=[{"p": "y", "amp": 0.045, "f": 2.4 + 0.3 * i, "t0": arrive, "t1": 7.0, "ph": i}])
+_hv_sw_objs += [
+    {"id": "spark", "sprite": "task_eject_glow.png", "z": 6, "x": HV_SW_END[0], "y": HV_SW_END[1], "tint": "#fff2c0",
+     "keys": [key(0, "hold", a=0, s=0.3), key(6.22, "hold", a=0, s=0.3), key(6.32, "out", a=0.9, s=0.9), key(6.9, "io", a=0, s=0.4)]},
+    _hv("fgL", "swarm_fg_l", 30, depth=1.12),
+    _hv("fgR", "swarm_fg_r", 30, depth=1.12),
+]
+SCENES.append({
+    "id": "hive_swarm", "map": "amberhive", "title": "Schwarm", "length": 7.0, "text": [1.2, 2.5],
+    "bounds": [12, 6.8],
+    "camera": [key(0, "lin", z=1.3, x=-0.5, y=-1.2), key(HV_SW_LIFT, z=1.33, x=-0.45, y=-1.15), key(4.6, "io", z=1.18, x=0.5, y=0.65),
+               key(7.0, z=1.24, x=0.9, y=0.75)],
+    "objects": _hv_sw_objs,
+    "player": {"parent": "carry", "hide": 6.3, "keys": [
+        key(0, "lin", x=0, y=0, rot=0, s=1, sx=1, sy=1, flip=1), key(0.95, "hold", flip=1), key(1.0, "hold", flip=-1),
+        key(1.55, "hold", flip=-1), key(1.6, "hold", flip=1), key(1.9, y=0, sx=1, sy=1), key(2.0, "out", y=0.12, sx=0.9, sy=1.12),
+        key(2.15, "in", y=0, sx=1.08, sy=0.92), key(HV_SW_LIFT, sx=1, sy=1)],
+        "wobble": [{"p": "rot", "amp": 7, "f": 1.4, "t0": HV_SW_LIFT + 0.1, "t1": 6.2},
+                   {"p": "x", "amp": 0.03, "f": 3.1, "t0": HV_SW_LIFT + 0.1, "t1": 5.0}]},
+    "emitters": [
+        burst(HV + "bee_far.png", -30, 0, 5, area=[-5.0, -1.2, 5.0, 2.4], vel=[0.6, -0.1, 1.2, 0.1], life=[5, 8], size=[0.22, 0.3]),
+        em(HV + "bee_far.png", -30, t0=0, t1=7.0, rate=1.0, area=[-6.8, -1.2, -6.4, 2.4], vel=[0.8, -0.15, 1.5, 0.2], life=[8, 10],
+           size=[0.22, 0.32]),
+        em(HV + "bee_far.png", -5, t0=HV_SW_LIFT, t1=3.6, rate=7, area=[-1.4, -3.0, 0.6, -2.6], vel=[-0.2, 1.6, 0.8, 2.6], drag=0.2,
+           life=[1.6, 2.4], size=[0.2, 0.3], fade=[0.15, 0.4]),
+        em("task_eject_mote.png", 20, t0=0, t1=7.0, rate=6, area=[-2.5, -2.6, 3.5, 2.0], vel=[-0.08, 0.03, 0.12, 0.18], life=[3, 5],
+           size=[0.03, 0.06], tint="#ffe49a", a=0.8, fade=[0.3, 0.4]),
+        em("task_eject_droplet.png", -45, t0=0.4, t1=7.0, rate=0.8, area=[-3.62, 1.72, -3.58, 1.76], vel=[0, 0, 0, 0], acc=[0, -6],
+           life=[1.02, 1.06], size=[0.07, 0.09], tint="#ffa020", a=1, fade=[0.05, 0.05]),
+        burst("task_eject_puff.png", 5, HV_SW_LIFT, 8, area=[-1.0, -2.65, 0.0, -2.5], vel=[-0.8, 0.05, 0.8, 0.4], drag=1.5,
+              life=[0.8, 1.4], size=[0.35, 0.6], grow=0.5, tint="#e8dcc8", a=0.5),
+        burst("task_eject_mote.png", 7, 6.25, 10, area=[HV_SW_END[0] - 0.05, HV_SW_END[1] - 0.05, HV_SW_END[0] + 0.05, HV_SW_END[1] + 0.05],
+              vel=[-0.6, -0.6, 0.6, 0.6], drag=1.0, life=[0.4, 0.8], size=[0.04, 0.08], tint="#fff4c0", a=1),
+    ],
+    "events": [ev(0.2, sound="rush", vol=0.2), ev(1.0, sound="rush", vol=0.35), ev(1.95, sound="pop", vol=0.3),
+               ev(HV_SW_LIFT, sound="whoosh", vol=0.7), ev(HV_SW_LIFT, shake=[0.35, 0.05]), ev(2.45, sound="rush", vol=0.55),
+               ev(4.7, sound="whoosh", vol=0.4), ev(6.25, sound="chime", vol=0.6)],
+})
+
+# ---------------------------------------------------------------------------- Amberhive: Honigbrunnen
+# Der Brunnenring, vorne aufgeschnitten: man schaut in den runden Schacht auf den Honigspiegel. Der Spieler steht auf der
+# Drehbruecke. Die Winde ruckt an, die Bruecke dreht sich wirklich weg (19 gerenderte Stellungen als Daumenkino), ihr Ende
+# schwenkt nach vorn, er faehrt mit. Harter Anschlag, er rudert, stolpert rueckwaerts ueber das Brueckenende und platscht in
+# den Honig. Er versinkt langsam hinter dem durchscheinenden Honig, Blasen steigen, die letzte ploppt.
+_hv_w = _hvm("well_pts")
+HV_W_AX = _hv_w["axis"]                                 # Drehachse im Bild
+HV_W_HONEY = _r4(_hv_w["honey"] + _hv_w["kz"] * _hv_w["ys"])     # Spiegellinie an der Einschlagstelle
+HV_W_T0, HV_W_STOP, HV_W_SPLASH = 1.0, 3.0, 4.35
+HV_W_REST = 68.0                                        # Ruhestellung nach dem Anschlag (Grad)
+HV_W_X = -1.05                                          # Einschlagstelle
+_hv_w_imp = (_r4(_hv_w["impact"][0]), _r4(_hv_w["impact"][1]))
+_hv_w_sp = (_r4(_hv_w["spout"][0]), _r4(_hv_w["spout"][1]))
+
+
+def _hv_w_angle(t):
+    """Brueckenwinkel: zaeh anlaufen, schneller werden, hart anschlagen (72 Grad) und auf 68 zurueckfedern."""
+    if t <= HV_W_T0:
+        return 0.0
+    if t < HV_W_STOP:
+        u = (t - HV_W_T0) / (HV_W_STOP - HV_W_T0)
+        return 72.0 * u * u * (2.2 - 1.2 * u)
+    d = t - HV_W_STOP
+    return HV_W_REST + 4.0 * math.exp(-6 * d) * math.cos(18 * d)
+
+
+def _hv_w_on(a, r=None):
+    """Spielermitte auf der Bruecke beim Winkel a, r = Abstand von der Achse."""
+    r = _hv_w["pr"] if r is None else r
+    return (_r4(HV_W_AX[0] - r * math.cos(math.radians(a))), _r4(HV_W_AX[1] - r * _hv_w["kz"] * math.sin(math.radians(a)) + 0.5))
+
+
+def _hv_w_frames():
+    """Je Brueckenbild die Zeiten, in denen es zu sehen ist (hold-Keys auf a)."""
+    n, step = _hv_w["frames"], _hv_w["step"]
+    spans = {i: [] for i in range(n)}
+    cur, t_on = 0, 0.0
+    for k in range(1, int(4.2 * 240)):
+        t = k / 240
+        i = max(0, min(n - 1, int(round(_hv_w_angle(t) / step))))
+        if i != cur:
+            spans[cur].append((t_on, t))
+            cur, t_on = i, t
+    spans[cur].append((t_on, None))
+    out = []
+    for i in range(n):
+        ks = [key(0, "hold", a=1 if i == 0 else 0)]
+        for t0, t1 in spans[i]:
+            if t0 > 0:
+                ks.append(key(_r4(t0), "hold", a=1))
+            if t1 is not None:
+                ks.append(key(_r4(t1), "hold", a=0))
+        out.append(_hv(f"br{i:02d}", f"well_br{i:02d}", -4, keys=ks,
+                       wobble=[{"p": "rot", "amp": 1.3, "f": 7, "t0": HV_W_STOP, "t1": HV_W_STOP + 0.7},
+                               {"p": "y", "amp": 0.008, "f": 9, "t0": HV_W_T0, "t1": HV_W_STOP}]))
+    return out
+
+
+_hv_w_p0, _hv_w_p1, _hv_w_p2 = _hv_w_on(0), _hv_w_on(HV_W_REST), _hv_w_on(HV_W_REST, 2.55)
+_hv_w_pk = [key(0, "lin", x=_hv_w_p0[0], y=_hv_w_p0[1], rot=0, s=1, sx=1, sy=1, flip=1), key(1.7, "hold", flip=-1), key(2.5, "hold", flip=1)]
+for i in range(17):                                     # mit der Bruecke mitfahren
+    _t = HV_W_T0 + (HV_W_STOP - HV_W_T0) * i / 16
+    _p = _hv_w_on(_hv_w_angle(_t) if i < 16 else 72.0)
+    _hv_w_pk.append(key(_r4(_t), "lin", x=_p[0], y=_p[1], rot=0))
+_hv_w_pk += [
+    key(HV_W_STOP + 0.12, "out", x=_hv_w_p1[0], y=_hv_w_p1[1], rot=-20), key(3.35, "io", x=_r4(_hv_w_p1[0] - 0.08), y=_hv_w_p1[1], rot=14),
+    key(3.55, "io", x=_r4(_hv_w_p1[0] - 0.2), y=_r4(_hv_w_p1[1] - 0.06), rot=-12),
+    key(3.85, "io", x=_hv_w_p2[0], y=_hv_w_p2[1], rot=26, s=1, sx=1, sy=1),
+    key(HV_W_SPLASH, "in", x=HV_W_X, y=_r4(HV_W_HONEY + 0.1), rot=70, sx=1, sy=1, arc=0.3),
+    key(4.45, "out", sx=1.15, sy=0.85, y=_r4(HV_W_HONEY + 0.1), rot=62), key(4.7, sx=1, sy=1, y=_r4(HV_W_HONEY + 0.1), rot=40),
+    key(5.0, "io", y=_r4(HV_W_HONEY + 0.05), rot=18), key(6.0, "io", y=_r4(HV_W_HONEY - 0.55), rot=6),
+    key(6.45, "in", y=_r4(HV_W_HONEY - 1.15), rot=0),
+]
+_hv_w_pk.sort(key=lambda k: k[0])
+_hv_w_objs = [
+    _hv("bg", "well_bg", -100),
+    {"id": "topLight", "sprite": "task_eject_glow.png", "z": -60, "x": 0, "y": 3.4, "sx": 7, "sy": 3, "tint": "#fff0c0", "a": 0.25},
+    _hv_glow("lamp", _hv_w["lamp"][0], _hv_w["lamp"][1], 1.4, tint="#ffd070", a=0.55, amp=0.2, f=5),
+    {"id": "honeyGlow", "sprite": "task_eject_glow.png", "z": -20, "x": 0, "y": -1.0, "sx": 5.2, "sy": 1.5, "tint": "#ffb030", "a": 0.25,
+     "flicker": {"amp": 0.1, "f": 0.8}},
+]
+for i, (gx, gy) in enumerate(_hv_w["glows"]):
+    _hv_w_objs.append(_hv_glow(f"cell{i}", gx, gy, 1.0, z=-55, a=0.35, amp=0.14, f=1.3 + 0.35 * i))
+_hv_w_objs += [
+    _hv("stream", "well_stream", -12, wobble=[{"p": "sx", "amp": 0.07, "f": 4.5}, {"p": "rot", "amp": 0.5, "f": 1.3}]),
+    _hv("foam", "well_foam", -11, x=_hv_w_imp[0], y=_hv_w_imp[1],
+        wobble=[{"p": "sx", "amp": 0.12, "f": 3.1}, {"p": "sy", "amp": 0.12, "f": 3.1, "ph": 1.5}]),
+    _hv("cog", "well_cog", -9, x=_r4(_hv_w["cog"][0]), y=_r4(_hv_w["cog"][1]),
+        keys=[key(0, rot=0), key(HV_W_T0, "hold", rot=0), key(HV_W_STOP, "in", rot=-310), key(HV_W_STOP + 0.1, "out", rot=-322),
+              key(HV_W_STOP + 0.4, "io", rot=-316)]),
+] + _hv_w_frames() + [
+    _hv("honey", "well_honey", 20, a=0.74),
+    _hv("ripple", "well_ripple", 21, x=HV_W_X, y=HV_W_HONEY,
+        keys=[key(0, "hold", a=0, sx=0.4, sy=0.6), key(HV_W_SPLASH, "hold", a=0.9, sx=0.4, sy=0.6), key(5.6, "out", a=0, sx=2.4, sy=1.5)]),
+    _hv("ripple2", "well_ripple", 21, x=HV_W_X + 0.05, y=HV_W_HONEY,
+        keys=[key(0, "hold", a=0, sx=0.3, sy=0.5), key(6.95, "hold", a=0.9, sx=0.3, sy=0.5), key(7.2, "out", a=0.3, sx=1.2, sy=0.9)]),
+    _hv("lastBubble", "well_bubble", 21, x=HV_W_X + 0.05, y=_r4(HV_W_HONEY - 0.02),
+        keys=[key(0, "hold", s=0, a=1), key(6.55, "hold", s=0), key(6.9, "out", s=2.4), key(6.95, "hold", a=1), key(6.96, "hold", a=0)],
+        wobble=[{"p": "sy", "amp": 0.06, "f": 6, "t0": 6.6, "t1": 6.95}]),
+]
+SCENES.append({
+    "id": "hive_well", "map": "amberhive", "title": "Honigbrunnen", "length": 7.2, "text": [1.2, 2.6],
+    "bounds": [12, 6.8],
+    "camera": [key(0, "lin", z=1.22, x=-0.5, y=0.55), key(HV_W_STOP, z=1.3, x=-0.5, y=0.45), key(3.8, "io", z=1.32, x=-0.6, y=0.3),
+               key(4.5, "io", z=1.3, x=-0.7, y=-0.7), key(6.3, "io", z=1.42, x=-0.8, y=-1.0), key(7.2, z=1.48, x=-0.8, y=-1.05)],
+    "objects": _hv_w_objs,
+    "player": {"hide": 6.5, "keys": _hv_w_pk,
+               "wobble": [{"p": "rot", "amp": 4, "f": 2.4, "t0": 1.3, "t1": 2.9}, {"p": "rot", "amp": 9, "f": 3, "t0": 3.1, "t1": 3.8},
+                          {"p": "rot", "amp": 9, "f": 2.2, "t0": 4.5, "t1": 6.0}, {"p": "x", "amp": 0.04, "f": 1.3, "t0": 4.5, "t1": 6.3}]},
+    "emitters": [
+        em("task_eject_mote.png", -11, t0=0, t1=7.2, rate=8, area=[_hv_w_sp[0] - 0.07, _hv_w_sp[1] - 0.25, _hv_w_sp[0] + 0.07, _hv_w_sp[1] - 0.1],
+           vel=[0, -2.9, 0, -2.5], life=[0.78, 0.86], size=[0.05, 0.1], tint="#ffe090", a=0.85, fade=[0.15, 0.15], stretch=0.5),
+        em("task_eject_droplet.png", -10, t0=0, t1=7.2, rate=10, area=[_hv_w_imp[0] - 0.1, _hv_w_imp[1] - 0.02, _hv_w_imp[0] + 0.1, _hv_w_imp[1] + 0.02],
+           vel=[-0.5, 0.4, 0.5, 1.2], acc=[0, -6], life=[0.25, 0.45], size=[0.05, 0.09], tint="#ffb030", a=1),
+        em(HV + "well_ripple.png", -13, t0=0, t1=7.2, rate=1.2, area=[_hv_w_imp[0] - 0.02, _hv_w_imp[1] - 0.01, _hv_w_imp[0] + 0.02, _hv_w_imp[1] + 0.01],
+           vel=[0, 0, 0, 0], life=[1.4, 1.6], size=[0.3, 0.34], grow=0.35, fade=[0.1, 0.7], a=0.8),
+        em(HV + "bee_far.png", -40, t0=0, t1=7.2, rate=0.7, area=[-6.8, 1.4, -6.4, 2.9], vel=[0.7, -0.1, 1.2, 0.1], life=[10, 12],
+           size=[0.2, 0.28]),
+        em("task_eject_mote.png", 19, t0=0, t1=7.2, rate=4, area=[-4.0, -1.0, 3.0, 2.8], vel=[-0.06, 0.02, 0.08, 0.15], life=[3, 5],
+           size=[0.03, 0.05], tint="#ffe49a", a=0.7, fade=[0.3, 0.4]),
+        burst("task_eject_droplet.png", 22, HV_W_SPLASH, 22, area=[HV_W_X - 0.35, HV_W_HONEY - 0.05, HV_W_X + 0.35, HV_W_HONEY + 0.05],
+              vel=[-2.0, 1.5, 2.0, 4.0], acc=[0, -9], life=[0.6, 1.0], size=[0.08, 0.16], tint="#ffa020", a=1, stretch=0.4),
+        burst("task_eject_puff.png", 22, HV_W_SPLASH, 6, area=[HV_W_X - 0.3, HV_W_HONEY - 0.05, HV_W_X + 0.3, HV_W_HONEY + 0.1],
+              vel=[-0.6, 0.2, 0.6, 0.8], drag=2.0, life=[0.4, 0.7], size=[0.3, 0.5], grow=0.4, tint="#ffb040", a=0.6),
+        em(HV + "well_bubble.png", 21, t0=4.8, t1=6.5, rate=4, area=[HV_W_X - 0.3, HV_W_HONEY - 0.02, HV_W_X + 0.3, HV_W_HONEY],
+           vel=[0, 0, 0, 0.02], life=[0.35, 0.7], size=[0.12, 0.22], grow=0.5, fade=[0.3, 0.2], a=1),
+        burst("task_eject_mote.png", 22, 6.95, 10, area=[HV_W_X - 0.1, HV_W_HONEY, HV_W_X + 0.2, HV_W_HONEY + 0.3],
+              vel=[-1.0, 0.2, 1.0, 1.4], acc=[0, -4], life=[0.3, 0.5], size=[0.05, 0.09], tint="#ffd060", a=1),
+    ],
+    "events": [ev(0.1, sound="rush", vol=0.18), ev(1.0, sound="creak", vol=0.55), ev(1.6, sound="grind", vol=0.35), ev(2.2, sound="creak", vol=0.45),
+               ev(2.6, sound="grind", vol=0.4), ev(HV_W_STOP, sound="clack", vol=0.8), ev(HV_W_STOP, shake=[0.25, 0.07]),
+               ev(3.55, sound="step", vol=0.4), ev(3.85, sound="whoosh", vol=0.45), ev(HV_W_SPLASH, sound="splash", vol=1.0),
+               ev(HV_W_SPLASH, shake=[0.2, 0.04]), ev(5.3, sound="pop", vol=0.25), ev(5.8, sound="pop", vol=0.22), ev(6.2, sound="pop", vol=0.2),
+               ev(6.95, sound="pop", vol=0.8)],
+})
+
+# ---------------------------------------------------------------------------- SKIP: Amberhive - Die Koenigin gaehnt
+# Niemand fliegt. Thronsaal mit Fliederboden und Samtvorhaengen: die Bienenkoenigin sitzt gelangweilt auf dem Wabenthron,
+# ein Diener faechelt ihr Luft zu. Sie gaehnt herzhaft, winkt muede ab, nickt weg. Die Krone rutscht schief, eine Rotzblase, Zzz.
+_hv_q = _hvm("queen_pts")
+HV_Q_NECK = _hv_rel(_hv_q["neck"], _hv_q["seat"])       # Hals relativ zum Sitz (Anker des Koerpers)
+HV_Q_SH = _hv_rel(_hv_q["shoulder"], _hv_q["seat"])
+HV_Q_CROWN = _hv_rel(_hv_q["crown"], _hv_q["neck"])
+_hv_q_objs = [
+    _hv("bg", "queen_bg", -100),
+    _hv_glow("throneGlow", 0, 0.9, 4.4, z=-60, tint="#ffd890", a=0.22, amp=0.05, f=1.2),
+]
+for i, (gx, gy) in enumerate(_hv_q["glows"]):
+    if abs(gx) < 1.45 or gy > 2.2:                      # hinter Thron oder Schabracke: kein Lichthof davor
+        continue
+    _hv_q_objs.append(_hv_glow(f"cell{i}", gx, gy, 0.95, z=-55, a=0.32, amp=0.14, f=1.1 + 0.23 * i))
+for i, (fx, fy) in enumerate(_hv_q["candles"]):
+    _hv_q_objs.append(_hv_glow(f"cg{i}", fx, fy + 0.12, 1.0, z=-30, tint="#ffc060", a=0.45, amp=0.15, f=6 + i * 0.4))
+    _hv_q_objs.append(_hv(f"fl{i}", "queen_flame", -20, x=_r4(fx), y=_r4(fy), flicker={"amp": 0.1, "f": 9 + i},
+                          wobble=[{"p": "sx", "amp": 0.1, "f": 7 + i * 0.6, "ph": i}, {"p": "rot", "amp": 4, "f": 3 + i * 0.3, "ph": i}]))
+_hv_q_objs.append(_hv("body", "queen_body", -6,
+                      wobble=[{"p": "sy", "amp": 0.012, "f": 0.5, "t0": 0, "t1": 4.6}, {"p": "sy", "amp": 0.025, "f": 0.35, "t0": 5.0, "t1": 7.0}],
+                      keys=[key(0, sy=1), key(1.6, "hold", sy=1), key(2.2, "io", sy=1.03), key(3.0, "io", sy=1)]))
+for side, wid, ph in ((-1, "wingL", 0.0), (1, "wingR", 1.2)):
+    wx, wy = _hv_rel(_hv_q["wing"][0 if side < 0 else 1], _hv_q["seat"])
+    _hv_q_objs.append(_hv(wid, "queen_wing", -8, parent="body", x=wx, y=wy, a=0.88,
+                          keys=[key(0, rot=-36 * side), key(4.6, "hold", rot=-36 * side), key(5.2, "io", rot=-58 * side)],
+                          wobble=[{"p": "sy", "amp": 0.2, "f": 3, "t0": 0, "t1": 4.6, "ph": ph}]))
+_hv_q_objs += [
+    _hv("arm", "queen_arm", -4, parent="body", x=HV_Q_SH[0], y=HV_Q_SH[1],
+        keys=[key(0, rot=0), key(3.0, "hold", rot=0), key(3.3, "out", rot=78), key(4.0, rot=70), key(4.4, "io", rot=0)],
+        wobble=[{"p": "rot", "amp": 1.5, "f": 4, "t0": 0.3, "t1": 1.5}, {"p": "rot", "amp": 18, "f": 2.6, "t0": 3.3, "t1": 4.0}]),
+    {"id": "head", "parent": "body", "x": HV_Q_NECK[0], "y": HV_Q_NECK[1],
+     "keys": [key(0, "lin", rot=0, y=HV_Q_NECK[1], sy=1), key(1.6, "hold", rot=0, y=HV_Q_NECK[1], sy=1),
+              key(2.1, "io", rot=4, y=_r4(HV_Q_NECK[1] + 0.06), sy=1.05), key(2.6, "io", rot=3, y=_r4(HV_Q_NECK[1] + 0.08), sy=1.07),
+              key(3.0, "io", rot=0, y=HV_Q_NECK[1], sy=1), key(3.6, "io", rot=-4, y=HV_Q_NECK[1]), key(4.4, "io", rot=0, y=HV_Q_NECK[1]),
+              key(5.0, "io", rot=-13, y=_r4(HV_Q_NECK[1] - 0.08)), key(5.15, "out", rot=-11)],
+     "wobble": [{"p": "rot", "amp": 2, "f": 0.45, "t0": 0, "t1": 1.6}, {"p": "rot", "amp": 1.5, "f": 0.35, "t0": 5.2, "t1": 7.0}]},
+    _hv("headAwake", "queen_head_awake", -3, parent="head", x=0, y=0,
+        keys=[key(0, "hold", a=1), key(1.7, "hold", a=0), key(3.0, "hold", a=1), key(4.75, "hold", a=0)]),
+    _hv("headYawn", "queen_head_yawn", -3, parent="head", x=0, y=0, keys=[key(0, "hold", a=0), key(1.7, "hold", a=1), key(3.0, "hold", a=0)]),
+    _hv("headSleep", "queen_head_sleep", -3, parent="head", x=0, y=0, keys=[key(0, "hold", a=0), key(4.75, "hold", a=1)]),
+    _hv("crown", "queen_crown", -2, parent="head",
+        keys=[key(0, rot=0, x=HV_Q_CROWN[0], y=HV_Q_CROWN[1]), key(4.85, "hold", rot=0, x=HV_Q_CROWN[0], y=HV_Q_CROWN[1]),
+              key(5.1, "back", rot=-17, x=_r4(HV_Q_CROWN[0] + 0.13), y=_r4(HV_Q_CROWN[1] - 0.05))]),
+    _hv("snot", "queen_snot", -1, parent="head", x=0.17, y=0.2,
+        keys=[key(0, "hold", a=0, s=0), key(5.2, "hold", a=0.9, s=0.2), key(5.9, "io", s=1.0), key(6.4, "io", s=0.5), key(6.8, "io", s=1.1)]),
+]
+_hv_q_objs += _hv_bee("servant", 2, [key(0, "lin", x=-1.95, y=1.75, rot=0, flip=1)], s=0.9,
+                      bob=[{"p": "y", "amp": 0.05, "f": 1.4}, {"p": "rot", "amp": 3, "f": 0.7}])
+_hv_q_objs.append(_hv("fan", "queen_fan", 4, parent="servant", x=0.32, y=-0.22, rot=-28,
+                      wobble=[{"p": "rot", "amp": 24, "f": 1.4, "t0": 0, "t1": 4.8}, {"p": "rot", "amp": 13, "f": 0.7, "t0": 4.8, "t1": 7.0}]))
+SCENES.append({
+    "id": "hive_skip_queen", "map": "amberhive", "skip": True, "title": "Die Koenigin gaehnt", "length": 6.8, "text": [1.0, 2.8],
+    "bounds": [12, 6.8],
+    "camera": [key(0, "lin", z=1.1, x=0, y=-0.1), key(1.6, z=1.15, x=0, y=0.1), key(2.4, "io", z=1.34, x=0.05, y=0.55),
+               key(3.1, "io", z=1.2, x=0.2, y=0.2), key(4.4, z=1.2, x=0.15, y=0.2), key(5.4, "io", z=1.32, x=0.1, y=0.5),
+               key(6.8, z=1.36, x=0.1, y=0.5)],
+    "objects": _hv_q_objs,
+    "player": {"keys": [key(0, "lin", x=0, y=0, s=1)]},
+    "emitters": [
+        em(HV + "queen_z.png", 5, t0=5.2, t1=6.8, rate=1.4, area=[0.5, 1.35, 0.65, 1.5], vel=[0.2, 0.35, 0.4, 0.55], life=[1.4, 1.8],
+           size=[0.16, 0.3], grow=0.8, spin=[-25, 25], fade=[0.2, 0.4], a=0.95),
+        em("task_eject_mote.png", 10, t0=0, t1=6.8, rate=4, area=[-2.5, -1.0, 2.5, 2.6], vel=[-0.06, 0.02, 0.08, 0.14], life=[3, 5],
+           size=[0.03, 0.05], tint="#ffe6a8", a=0.7, fade=[0.3, 0.4]),
+    ],
+    "events": [ev(0, sound="organ", vol=0.18), ev(1.8, sound="growl", vol=0.3), ev(3.3, sound="whoosh", vol=0.25),
+               ev(3.7, sound="whoosh", vol=0.2), ev(4.6, sound="creak", vol=0.2), ev(5.1, sound="click", vol=0.35),
+               ev(5.6, sound="growl", vol=0.14), ev(6.5, sound="growl", vol=0.14)],
+})
+
+# ---------------------------------------------------------------------------- SKIP: Amberhive - Stilles Sonnendeck
+# Niemand fliegt. Das Sonnendeck oben auf dem Stock: links die Wachskuppel mit Wimpel, Dielen, Petrol-Gelaender, weit unten
+# das Land, Wolken ziehen. Eine Biene summt heran, landet auf der grossen Bluete im Kuebel, die Bluete wippt. Sie nippt.
+# Ein Honigtropfen sammelt sich am Bluetenblatt und faellt auf die Dielen. Plopp.
+_hv_d = _hvm("deck_pts")
+HV_D_TIPW = (_r4(_hv_d["tip"][0]), _r4(_hv_d["tip"][1]))           # Blattspitze im Bild
+HV_D_TIP = _hv_rel(_hv_d["tip"], _hv_d["flower"])       # ... und relativ zur Bluetenmitte
+HV_D_LAND = (_r4(_hv_d["land"][0]), _r4(_hv_d["land"][1]))
+HV_D_SPLAT = (_r4(_hv_d["splat"][0]), _r4(_hv_d["splat"][1]))
+_hv_d_fl = _hv_rel(_hv_d["flower"], _hv_d["stem"])
+SCENES.append({
+    "id": "hive_skip_sundeck", "map": "amberhive", "skip": True, "title": "Stilles Sonnendeck", "length": 6.6, "text": [1.0, 2.8],
+    "bounds": [12, 6.8],
+    "camera": [key(0, "lin", z=1.06, x=-0.5, y=0.35), key(2.4, "io", z=1.4, x=0.9, y=0.3), key(3.4, z=1.55, x=1.2, y=0.3),
+               key(4.6, "io", z=1.52, x=1.35, y=-0.4), key(5.3, "io", z=1.48, x=1.35, y=-1.1), key(6.6, z=1.42, x=1.2, y=-0.9)],
+    "objects": [
+        _hv("bg", "deck_bg", -100),
+        _hv_glow("sunGlow", _hv_d["sun"][0], _hv_d["sun"][1], 2.7, z=-95, tint="#fff0b0", a=0.42, amp=0.06, f=0.6),
+        _hv_glow("doorGlow", _hv_d["door"][0], _hv_d["door"][1], 1.6, z=-90, tint="#ffc860", a=0.28, amp=0.14, f=1.4),
+        {"id": "cloud0", "sprite": HV + "deck_cloud0.png", "z": -80, "depth": 0.5, "keys": [key(0, "lin", x=0.9, y=2.75), key(6.6, "lin", x=1.6)]},
+        {"id": "cloud1", "sprite": HV + "deck_cloud1.png", "z": -80, "depth": 0.5, "keys": [key(0, "lin", x=-1.1, y=1.9), key(6.6, "lin", x=-0.65)]},
+        {"id": "cloud2", "sprite": HV + "deck_cloud2.png", "z": -80, "depth": 0.5, "keys": [key(0, "lin", x=5.15, y=2.95), key(6.6, "lin", x=5.5)]},
+        _hv("flag", "deck_flag", -70, x=_r4(_hv_d["flag"][0]), y=_r4(_hv_d["flag"][1]),
+            wobble=[{"p": "rot", "amp": 5, "f": 0.9}, {"p": "sy", "amp": 0.14, "f": 2.3}, {"p": "sx", "amp": 0.05, "f": 1.7, "ph": 1.0}]),
+        _hv("stem", "deck_stem", 2, wobble=[{"p": "rot", "amp": 1.2, "f": 0.3}]),
+        _hv("flower", "deck_flower", 3, parent="stem",
+            keys=[key(0, x=_hv_d_fl[0], y=_hv_d_fl[1], rot=0), key(2.5, "hold", x=_hv_d_fl[0], y=_hv_d_fl[1], rot=0),
+                  key(2.62, "out", y=_r4(_hv_d_fl[1] - 0.07), rot=-5), key(3.1, "back", y=_hv_d_fl[1], rot=0)]),
+        _hv("drop", "deck_drop", 4, parent="flower", x=HV_D_TIP[0], y=HV_D_TIP[1],
+            keys=[key(0, "hold", a=0, s=0, sy=1), key(3.5, "hold", a=1, s=0.1, sy=1), key(4.5, "io", s=1.0, sy=1), key(4.6, "io", sy=1.3),
+                  key(4.62, "hold", a=0)]),
+        _hv("dropFall", "deck_drop", 4, x=HV_D_TIPW[0], y=HV_D_TIPW[1],
+            keys=[key(0, "hold", a=0, sy=1.3, y=HV_D_TIPW[1]), key(4.62, "hold", a=1, sy=1.3, y=HV_D_TIPW[1]),
+                  key(5.1, "in", y=_r4(HV_D_SPLAT[1] + 0.3), sy=1.5), key(5.12, "hold", a=0)]),
+        _hv("splat", "deck_splat", 1, x=HV_D_SPLAT[0], y=HV_D_SPLAT[1],
+            keys=[key(0, "hold", a=0, s=0.3), key(5.1, "hold", a=1, s=0.3), key(5.3, "out", s=1.0)]),
+    ] + _hv_bee("visitor", 5, [key(0, "hold", x=-6.8, y=2.1, rot=0, flip=1), key(0.3, "hold", x=-6.8, y=2.1, rot=0),
+                               key(1.3, "lin", x=-3.2, y=2.4, rot=-5), key(2.0, "io", x=-0.2, y=1.6, rot=5),
+                               key(2.25, "out", x=_r4(HV_D_LAND[0] - 0.08), y=_r4(HV_D_LAND[1] + 0.45), rot=0),
+                               key(2.55, "io", x=HV_D_LAND[0], y=HV_D_LAND[1], rot=0), key(2.65, "out", y=_r4(HV_D_LAND[1] - 0.07), rot=0),
+                               key(3.05, "io", y=HV_D_LAND[1], rot=0), key(3.4, "io", rot=-16), key(4.3, "io", rot=-16), key(4.7, "io", rot=0),
+                               key(5.25, "hold", y=HV_D_LAND[1], rot=0), key(5.4, "out", y=_r4(HV_D_LAND[1] + 0.12), rot=6),
+                               key(5.65, "in", y=HV_D_LAND[1], rot=0)],
+                s=0.6, flap=[(0, 2.75, 0.55), (5.2, 5.7, 0.4)], wing_keys=[(0, "lin", 0), (2.75, "hold", 0), (2.95, "io", 30)],
+                bob=[{"p": "y", "amp": 0.08, "f": 1.6, "t0": 0, "t1": 2.2}, {"p": "rot", "amp": 4, "f": 2.4, "t0": 3.4, "t1": 4.3},
+                     {"p": "rot", "amp": 2, "f": 0.6, "t0": 5.7, "t1": 6.6}]),
+    "player": {"keys": [key(0, "lin", x=0, y=0, s=1)]},
+    "emitters": [
+        em(HV + "bee_far.png", -60, t0=0, t1=6.6, rate=0.5, area=[-6.8, 0.6, -6.4, 2.4], vel=[0.5, -0.05, 0.9, 0.05], life=[14, 16],
+           size=[0.12, 0.18]),
+        em("task_eject_mote.png", 10, t0=0, t1=6.6, rate=3, area=[-4.0, -2.0, 4.0, 2.5], vel=[0.05, 0.02, 0.2, 0.12], life=[3, 5],
+           size=[0.03, 0.05], tint="#fff2a0", a=0.7, fade=[0.3, 0.4]),
+        em("task_eject_mote.png", 1, t0=0, t1=6.6, rate=1.6, area=[-6.4, -3.0, -1.0, -1.3], vel=[0.9, -0.05, 1.6, 0.2], life=[4, 6],
+           size=[0.06, 0.09], tint="#ffb8cc", a=0.9, fade=[0.15, 0.3]),
+        burst("task_eject_mote.png", 6, 2.6, 10, area=[HV_D_LAND[0] - 0.2, HV_D_LAND[1] - 0.25, HV_D_LAND[0] + 0.2, HV_D_LAND[1] - 0.1],
+              vel=[-0.5, 0.1, 0.5, 0.6], drag=1.2, life=[1.0, 1.6], size=[0.04, 0.07], tint="#ffe040", a=1),
+        burst("task_eject_droplet.png", 6, 5.1, 5, area=[HV_D_SPLAT[0] - 0.05, HV_D_SPLAT[1], HV_D_SPLAT[0] + 0.05, HV_D_SPLAT[1] + 0.05],
+              vel=[-0.6, 0.6, 0.6, 1.2], acc=[0, -7], life=[0.25, 0.4], size=[0.04, 0.07], tint="#ffa020", a=1),
+    ],
+    "events": [ev(0, sound="rush", vol=0.12), ev(2.6, sound="twig", vol=0.2), ev(5.1, sound="pop", vol=0.4)],
+})
+
+
 # ============================================================================ Unknown's Collection: Void
 # Eigene Datei fuer UC (UnknownsCollection/Resources/eject_void.json), spielt auf jeder Karte.
 # Der Rauswurf faellt durch den Void: der Spieler treibt ins violette Nichts, hinter ihm oeffnet sich ein
@@ -1064,6 +1477,16 @@ def damp(sc):
 
 
 def main():
+    import sys
+    if "--amberhive-only" in sys.argv:
+        doc = json.loads(OUT.read_text(encoding="utf-8"))
+        replacements = {sc["id"]: sc for sc in SCENES if sc.get("map") == "amberhive"}
+        for sc in replacements.values():
+            damp(sc)
+        doc["scenes"] = [replacements.get(sc["id"], sc) for sc in doc["scenes"]]
+        OUT.write_text(json.dumps(doc, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        print(OUT, "Amberhive: 4 Szenen aktualisiert")
+        return
     lint()
     for sc in SCENES:
         damp(sc)
@@ -1073,8 +1496,11 @@ def main():
     for sc in VOID_SCENES:
         damp(sc)
     vdoc = dict(doc, scenes=VOID_SCENES)
-    UC_JSON.write_text(json.dumps(vdoc, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(UC_JSON, f"{UC_JSON.stat().st_size / 1024:.1f} KB, {len(VOID_SCENES)} scene(s)")
+    if UC_JSON.is_relative_to(OUT.parent.parent):
+        UC_JSON.write_text(json.dumps(vdoc, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        print(UC_JSON, f"{UC_JSON.stat().st_size / 1024:.1f} KB, {len(VOID_SCENES)} scene(s)")
+    else:
+        print("UC-Ausgabe ausserhalb dieser Arbeitskopie ausgelassen")
 
 
 if __name__ == "__main__":

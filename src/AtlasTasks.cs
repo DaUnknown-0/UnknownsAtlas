@@ -80,7 +80,8 @@ internal static class AtlasTasks
     // ------------------------------------------------------------ Autotest (Diagnostics.TaskTest)
 
     private static float _diagAt = -1f, _shotAt, _sabAt = -1f;
-    private static int _ejectShots;
+    private static int _ejectShots, _ejectN;
+    private static bool _ejectClip;          // "eject:0:clip": Bildserie (10 pro Sekunde) statt drei Fotos
     private static int _diagPhase;
     private static AtlasMinigame _diagGame;
 
@@ -95,6 +96,8 @@ internal static class AtlasTasks
         if (!AtlasMapShot.AutotestRun) return;
         // mehrere Minispiele nacheinander in derselben Runde: "tomb,projector,steam@1"
         var list = all.Split(',');
+        // Nach einem Amberhive-Welttest erst weiter, wenn dessen Physikproben abgeschlossen sind.
+        if (_diagIndex > 0 && AmberhiveWorld.Current?.DiagnosticsRunning == true) return;
         if (_diagPhase == 4 || _diagPhase == 5)
         {
             if (_diagPhase == 4 && _diagIndex + 1 < list.Length) { _diagIndex++; _diagPhase = 0; _diagAt = Time.time + 1.5f; }
@@ -110,6 +113,8 @@ internal static class AtlasTasks
         switch (_diagPhase)
         {
             case 0:
+                // Amberhive fuehrt diese Welt-Tests selbst aus. Keine fremde Diagnose-UI schliessen.
+                if (kind is "hive" or "hiveclip" or "hivesab") { _diagPhase = 4; return; }
                 // die letzte Ansichts-Station oeffnet die Kameras und laesst sie offen: selbst schliessen
                 if (Minigame.Instance != null)
                 {
@@ -175,8 +180,13 @@ internal static class AtlasTasks
                 if (kind.StartsWith("eject:", StringComparison.Ordinal) || kind.StartsWith("ejectskip:", StringComparison.Ordinal))
                 {
                     bool sk = kind.StartsWith("ejectskip:", StringComparison.Ordinal);
-                    AtlasEject.Diag(int.TryParse(kind.Substring(sk ? 10 : 6), out var ei) ? ei : 0, sk);
-                    _ejectShots = 3; _shotAt = Time.time + 2.0f; _diagPhase = 7;
+                    string arg = kind.Substring(sk ? 10 : 6);
+                    _ejectClip = arg.EndsWith(":clip", StringComparison.Ordinal);
+                    if (_ejectClip) arg = arg.Substring(0, arg.Length - 5);
+                    AtlasEject.Diag(int.TryParse(arg, out var ei) ? ei : 0, sk);
+                    _ejectShots = _ejectClip ? 150 : 3; _ejectN = 0; _shotAt = Time.time + (_ejectClip ? 0.05f : 2.0f); _diagPhase = 7;
+                    // Bildserie: feste Aufnahme-Bildrate, die Spielzeit laeuft pro Bild genau 1/20 s (Speichern bremst nicht)
+                    if (_ejectClip) Time.captureFramerate = 20;
                     return;
                 }
                 if (kind.StartsWith("world:", StringComparison.Ordinal))
@@ -229,10 +239,10 @@ internal static class AtlasTasks
                 break;
             case 7:
                 if (Time.time < _shotAt) return;
-                Shot(kind, $"t{4 - _ejectShots}");
+                Shot(kind, _ejectClip ? $"f{_ejectN++:D3}" : $"t{4 - _ejectShots}");
                 _ejectShots--;
-                _shotAt = Time.time + 1.6f;
-                if (_ejectShots <= 0) { _shotAt = Time.time + 6f; _diagPhase = 8; }
+                _shotAt = Time.time + (_ejectClip ? 0.01f : 1.6f);
+                if (_ejectShots <= 0) { _shotAt = Time.time + 6f; _diagPhase = 8; if (_ejectClip) Time.captureFramerate = 0; }
                 break;
             case 8:
                 // warten, bis WrapUp gelaufen ist (Controller weg), dann weiter

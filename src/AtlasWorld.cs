@@ -23,6 +23,7 @@
 //  17 Ticket [sub][...]                 Zug-Sabotage "Conductor's Round" (AtlasTicket)
 //  18 Runaway [sub][...]                Zug-Sabotage "Runaway Train" (AtlasRunaway)
 //  19 Smoke [sub][...]                  Zug-Sabotage "Smoke in the Cars" (AtlasSmoke)
+//  24 Hive [sub][arg]                  Amberhive (AtlasAmberhive): 0 Drehbruecke [phase], 1 Honigflut [zone], Host -> alle
 //  20 Crisis [sub][...]                 Krisen auf den Vanilla-Karten (AtlasVanillaCrisis), auch ohne Atlas-Karte
 //                                       (a gemeinsam, b Rex). Lag bis 08.10. faelschlich auf 8 und wurde
 //                                       dort vom Hello-Handshake abgefangen; Clients ohne Op 16 ignorieren es.
@@ -220,6 +221,7 @@ internal static class AtlasWorld
                 case AtlasParkFun.OpFun: AtlasParkFun.Receive(__instance, fromHost, reader); break;
                 case AtlasPlanetarium.OpShow when fromHost: AtlasPlanetarium.Start(); break;
                 case AtlasFerry.OpFerry: AtlasFerry.Receive(__instance, fromHost, reader); break;
+                case AtlasAmberhive.OpHive: AtlasAmberhive.Receive(__instance, fromHost, reader); break;
             }
         }
         catch (Exception e) { AtlasPlugin.Logger.LogWarning($"{LogPrefix} rpc: {e.Message}"); }

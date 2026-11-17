@@ -2,7 +2,7 @@
 
 Neue Karten für Among Us · Copyright (C) 2026 DaUnknown-0 · GPL-3.0-or-later
 
-Drei vollständig spielbare Karten, auswählbar neben den Vanilla-Karten, jede mit eigenen Räumen, eigenen
+Fünf vollständig spielbare Karten, auswählbar neben den Vanilla-Karten, jede mit eigenen Räumen, eigenen
 Minispielen für die Tasks, eigenen Sabotagen, eigenen Rauswurf-Szenen und einer Welt, die sich während der
 Runde bewegt:
 
@@ -16,6 +16,13 @@ Runde bewegt:
   Riesenrad, Achterbahn-Bahnhof, Geisterbahn, Wildwasserbahn, Schießbude, Autoscooter, Show Control und mehr,
   dazu zusätzliche Räume, die es auf der Skeld nicht gibt.
 
+- **Polaris Express**: ein Zug mit begehbaren Wagen, bewegtem Hintergrund und eigenen Aufgaben.
+- **Amberhive**: eine Forschungsstation in einem riesigen Bienenstock. Wahlweise eine Etage oder zwei
+  mit begehbarer Krone, drei Treppenverbindungen und Nektarrutsche. Eine Drehbrücke über dem Honigsee,
+  Honigfluten, Rundwege, reaktive Bienen, wanderndes Sonnenlicht und eine eigene Klangkulisse beleben die Karte.
+  Die Host-Option **Amberhive Pollen Trails** schaltet Pollenspuren ein. Die Lautstärke der Klangkulisse
+  lässt sich auf jedem Client einstellen.
+
 Wiki: <https://daunknown-0.github.io/tor-mods-wiki/atlas.html>
 
 ## Installation
@@ -27,7 +34,7 @@ Wiki: <https://daunknown-0.github.io/tor-mods-wiki/atlas.html>
    jemandem nicht, sperrt Atlas den Start und nennt über dem Startknopf, wer fehlt oder veraltet ist. Mit
    TOR - Forgotten Fixes erscheint Atlas zusätzlich als Spalte im Mod-Check.
 
-Im **Freeplay** stehen die drei Karten als eigene Knöpfe unter den Vanilla-Karten. In einer **Lobby**
+Im **Freeplay** stehen die Atlas-Karten als eigene Knöpfe unter den Vanilla-Karten. In einer **Lobby**
 wählt der Host sie in der Kartenauswahl der Spieleinstellungen; Banner und Übersicht zeigen dann das Logo
 der Atlas-Karte. Atlas aktualisiert sich selbst (Hauptmenü und Mod Manager von Forgotten Fixes).
 

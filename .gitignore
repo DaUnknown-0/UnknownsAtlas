@@ -12,3 +12,16 @@ tools/_*.png
 
 # lokale Agent-Notizen
 .claude/
+
+# Amberhive: nur aktive Generatorquellen, keine Arbeits- oder Testergebnisse
+tools/hive/_*/
+tools/hive/duo_v4/_out/
+tools/hive/duo_v4/*verification.json
+tools/hive/sound/verification.json
+# Atlas-Quellbilder lokal behalten, versioniert werden nur die fertigen .atx
+assets/amberhive/amberhive_floor_*.jpg
+assets/amberhive/amberhive_props_*.png
+assets/amberhive/amberhive_consoles_*.png
+
+# Kontaktboegen sind Vorschauen, keine Generator-Eingaben
+tools/hive/art/eject/*_kontakt.png
