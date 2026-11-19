@@ -2,7 +2,7 @@
 // Licensed under GPL-3.0-or-later. See LICENSE for details.
 //
 // AtlasCinematic - gerenderter Vorspann einer Karte (Bildfolge mit Stimme, Geraeuschen und Untertiteln) vor dem
-// Rollen-Intro. Eingebaut fuer die Zugkarte (Polaris Express); andere Mods melden ihre Karte ueber RegisterIntro an.
+// Rollen-Intro. Eingebaut fuer die Zugkarte (Polaris Express) und Amberhive; andere Mods melden ihre Karte ueber RegisterIntro an.
 //
 // Wann (User 24.10.): beim ersten Start dieser Karte durch den Host an diesem Abend (solange sein Spiel laeuft),
 // fuer ALLE gleichzeitig; der Host kann ihn fuer alle ueberspringen. Host-Option 1728 "Atlas: Map Intro"
@@ -64,6 +64,7 @@ public static class AtlasCinematic
     internal static void RegisterBuiltIn()
     {
         Sources["train"] = () => PackReader("UnknownsAtlas.Maps.train.train_intro.cine");
+        Sources["amberhive"] = () => PackReader("UnknownsAtlas.Maps.amberhive.amberhive_intro.cine");
     }
 
     private static Func<string, byte[]> PackReader(string res)

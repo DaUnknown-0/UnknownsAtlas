@@ -387,6 +387,7 @@ internal static class AtlasMuseumBuilder
         int placed = 0, unplaced = 0;
         FootprintCount = 0;
         Extended.Clear();
+        WallChecked.Clear();
         foreach (var c in consoles)
         {
             if (c == null) continue;
@@ -402,6 +403,10 @@ internal static class AtlasMuseumBuilder
             SortLikePlayer(c.transform);
             DisableOwnColliders(c.gameObject);
             c.checkWalls = false;
+            if (D.World is AmberhiveWorld &&
+                (key is "Admin/NoOxyConsole/1" or "LowerEngine/AlignEngineConsole/1" or "UpperEngine/AlignEngineConsole/0" ||
+                 (key == "Storage/gasCanConsole/0" && D.Stairs?.Length > 0)))
+                WallChecked.Add(c.Pointer);
             c.onlySameRoom = false;
             c.onlyFromBelow = false;
             // Winzige Skeld-Bilder (A2 = Reactor/LowerHandConsole: 0,34 x 0,06 m) sind im Museum
@@ -733,6 +738,7 @@ internal static class AtlasMuseumBuilder
     }
 
     private static readonly HashSet<IntPtr> Extended = new();
+    internal static readonly HashSet<IntPtr> WallChecked = new();
 
     [HarmonyPatch(typeof(Console), nameof(Console.CanUse))]
     internal static class ReachPatch
@@ -2111,7 +2117,8 @@ internal static class AtlasConsoleWallCheck
             Vector2 d = from - at;
             float len = d.magnitude;
             if (len < 0.05f) return;
-            Vector2 to = at + d / len * Mathf.Min(0.4f, len * 0.5f);
+            Vector2 to = AtlasMuseumBuilder.WallChecked.Contains(__instance.Pointer)
+                ? at : at + d / len * Mathf.Min(0.4f, len * 0.5f);
             if (PhysicsHelpers.AnythingBetween(from, to, Constants.ShipOnlyMask, false))
             {
                 canUse = false;

@@ -72,8 +72,8 @@ PIT = (0.0, 0.0, 2.55)                 # Kreis: Mitte, Radius
 BRIDGE_W = 1.7                         # Breite der Bruecke; Laenge = Seedurchmesser + Ueberstand
 
 CORRIDORS = [
-    (2.6, [(-13.9, 0.0), (-5.4, 0.0)]),        # West: Lamphouse - Brunnen
-    (2.6, [(5.4, 0.0), (13.9, 0.0)]),          # Ost: Brunnen - Wachsgiesserei
+    (2.6, [(-13.9, 0.0), (-4.4, 0.0)]),        # West: Lamphouse - Brunnen
+    (2.6, [(4.4, 0.0), (13.9, 0.0)]),          # Ost: Brunnen - Wachsgiesserei
 ]
 # (x0, y0, x1, y1, Art, System der Tuer oder None). Hoeher als breit = Nord-Sued-Durchgang (waagerechte Tuer).
 PASSAGES = [
@@ -92,7 +92,7 @@ PASSAGES = [
     (-14.4, 7.9, -11.7, 9.5, "door", "Security"),           # Guard - Jar Cellar
     (-18.2, -7.8, -16.2, -3.0, "door", "LowerEngine"),      # West Press - Lamphouse
     (16.2, -7.8, 18.2, -3.0, "door", "UpperEngine"),        # East Press - Foundry
-    (-14.8, -13.8, -12.5, -12.8, "door", "LowerEngine"),    # Anschluss in beide gefasten Raeume, gleiche Tuerbreite
+    (-14.8, -13.95, -12.5, -12.65, "door", "LowerEngine"),    # Anschluss in beide gefasten Raeume, gleiche Tuerbreite
     (11.9, -13.4, 14.4, -12.0, "door", "UpperEngine"),      # East Press - Sun Compass
     (-10.1, -12.6, -7.9, -9.7, "gap", None),                # Wasp Watch - Bellows
     (8.1, -11.2, 10.3, -9.7, "gap", None),                  # Sun Compass - Nursery
@@ -145,8 +145,8 @@ FIXED = {
 VENTS = {
     0: (-19.0, 8.6), 1: (-18.8, -1.6), 2: (-19.0, -12.8),           # West
     3: (19.0, 8.6), 4: (18.8, -1.6), 5: (19.0, -12.8),              # Ost
-    6: (-4.45, 7.7), 7: (-3.7, -2.4), 8: (-1.6, -13.9),              # Vent 6 an der bewährten V4-Position
-    9: (-10.6, 8.2), 10: (10.8, -8.2),
+    6: (-4.45, 7.7), 7: (-3.5, -2.15), 8: (-1.6, -13.9),              # Vent 6 an der bewährten V4-Position
+    9: (-10.6, 8.2), 10: (10.5, -8.25),
 }
 VENT_NETS = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10]]
 VENT_BRIDGES = []
@@ -207,8 +207,8 @@ PROPS = [
     # Mead Hall
     ("mead_table", ("rect", -4.0, 9.2, -2.4, 10.1), "glass"),
     ("mead_table", ("rect", 2.4, 9.2, 4.0, 10.1), "glass"),
-    ("mead_barrel", ("circle", -2.7, 14.15, 0.45), "opaque"),
-    ("mead_barrel", ("circle", 2.7, 14.15, 0.45), "opaque"),
+    ("mead_barrel", ("circle", -2.0, 14.15, 0.45), "opaque"),
+    ("mead_barrel", ("circle", 2.0, 14.15, 0.45), "opaque"),
     ("hive_banner", ("rect", -0.9, 14.45, 0.9, 14.7), "deco", 1),
     # Koeniginnenkammer
     ("queen_throne", ("rect", -1.2, -13.3, 1.2, -12.2), "opaque"),

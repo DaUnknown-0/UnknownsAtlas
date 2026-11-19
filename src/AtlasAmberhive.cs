@@ -234,6 +234,14 @@ internal sealed class AmberhiveWorld : IAtlasMapWorld
         if (_root == null) return;
         if (MeetingHud.Instance == null && ExileController.Instance == null) _clock += Mathf.Max(0f, dt);
         if (AmHost) HostTick();
+        if (MeetingHud.Instance != null || ExileController.Instance != null)
+            _pendingBodies.Clear();
+        else if (Time.time >= _nextBodyCheck && (_pendingBodies.Count > 0 || (AmHost && _phase % 2 == 1)))
+        {
+            _nextBodyCheck = Time.time + 0.25f;
+            if (AmHost) ClearBridgeBodies();
+            else ApplyPendingBodies();
+        }
         TickBridge();
         TickFlood();
         if (_animFrames != null && _anims.Count == 0 && Time.frameCount % 30 == 0) BindAnims();
@@ -540,6 +548,13 @@ internal sealed class AmberhiveWorld : IAtlasMapWorld
         if (_life?.Receive(fromHost, sub, r) == true) return; // AMBERHIVE LIFE: Subs 16 bis 19.
         if (sub == 4) { if (AmHost) HostChute(from); return; }
         if (!fromHost) return;
+        if (sub == 5)
+        {
+            byte id = r.ReadByte();
+            _pendingBodies[id] = new Vector2(r.ReadSingle(), r.ReadSingle());
+            ApplyPendingBodies();
+            return;
+        }
         if (sub == 2)
         {
             int phase = r.ReadByte(); float age = r.ReadSingle();
@@ -682,9 +697,49 @@ internal sealed class AmberhiveWorld : IAtlasMapWorld
         }
     }
 
+    private float _nextBodyCheck;
+    private readonly Dictionary<byte, Vector2> _pendingBodies = new();
+
+    private static void MoveBody(DeadBody body, Vector2 target)
+    {
+        // TruePosition ist der Meldepunkt und kann vom Transform abweichen.
+        Vector3 pos = body.transform.position + (Vector3)(target - body.TruePosition);
+        pos.z = pos.y / 1000f;
+        body.transform.position = pos;
+    }
+
+    private void ApplyPendingBodies()
+    {
+        // Die Killanimation kann beim Empfaenger noch laufen, wenn das Ziel eintrifft.
+        foreach (var body in Object.FindObjectsOfType<DeadBody>())
+            if (_pendingBodies.Remove(body.ParentId, out var dest)) MoveBody(body, dest);
+    }
+
+    private void ClearBridgeBodies()
+    {
+        var axis = _phase == 1 ? Vector2.up : Vector2.right;
+        foreach (var body in Object.FindObjectsOfType<DeadBody>())
+        {
+            var delta = body.TruePosition - _h.PitCenter;
+            if (delta.magnitude >= _h.PitRadius + 0.25f) continue;
+            float sign = Vector2.Dot(delta, axis) >= 0f ? 1f : -1f;
+            var dest = _h.PitCenter + axis * sign * (_h.PitRadius + 0.5f);
+            MoveBody(body, dest);
+            AtlasWorld.Send(AtlasAmberhive.OpHive, w =>
+            {
+                w.Write((byte)5); w.Write(body.ParentId); w.Write(dest.x); w.Write(dest.y);
+            });
+        }
+    }
+
     /// <summary>Beginn einer Drehung: wer auf der Bruecke steht, kommt ans naechste Brueckenende (nur der eigene Spieler).</summary>
     private void ClearBridge()
     {
+        if (AmHost)
+        {
+            ClearBridgeBodies();
+            _nextBodyCheck = Time.time + 0.25f;
+        }
         var lp = PlayerControl.LocalPlayer;
         if (lp == null || lp.Data == null || lp.Data.IsDead || lp.inVent) return;
         var p = lp.GetTruePosition();

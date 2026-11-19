@@ -75,6 +75,10 @@ def main(args):
         if asset_cache.exists():
             shutil.move(str(asset_cache), str(backup / "atlas-assets_user"))
             moved_cache = True
+        if os.environ.get("PREFILL_CACHE"):
+            # Optional: Cache vorab aus einem Ordner fuellen (z. B. UnknownsAtlas-Assets/files), damit grosse Pakete
+            # wie der Vorspann beim Test schon da sind; der Store prueft sie trotzdem gegen den Katalog.
+            shutil.copytree(os.environ["PREFILL_CACHE"], asset_cache)
         if shots.exists():
             # Spiel und Arbeitskopie liegen auf verschiedenen Laufwerken.
             shutil.move(str(shots), str(backup / "AtlasShots_user"))

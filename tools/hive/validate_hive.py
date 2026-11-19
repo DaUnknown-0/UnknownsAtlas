@@ -14,7 +14,7 @@ from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import dijkstra
 from shapely import contains_xy
 from shapely.affinity import rotate
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import LineString, Point, Polygon, box
 from shapely.ops import unary_union
 
 HERE = Path(__file__).resolve().parent
@@ -48,6 +48,11 @@ def check(data, phase, closed=None, baseline=False):
         else:
             obstacles.append(box(x-length/2, y-.12, x+length/2, y+.12).buffer(RADIUS))
     free = free.difference(unary_union(obstacles))
+    if not baseline:
+        for p in data["vents"].values():
+            assert free.covers(Point(p)), f"Ventanker blockiert: {p}"
+        if phase == "WE" and closed is None:
+            assert free.covers(LineString([(-6, 0), (6, 0)])), "Direkter Brueckenweg blockiert"
     xs = np.arange(data["minX"], data["maxX"], STEP)
     ys = np.arange(data["minY"], data["maxY"], STEP)
     xx, yy = np.meshgrid(xs, ys)

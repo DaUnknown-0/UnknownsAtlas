@@ -57,6 +57,7 @@ GROUPS = [
 # Dateiname -> (Quelldatei, Ressourcenname)
 CINEMATICS = {
     "train_intro.cine": (ROOT.parent / "Assets" / "Cinematics" / "train" / "train_intro.cine", "UnknownsAtlas.Maps.train.train_intro.cine"),
+    "amberhive_intro.cine": (ROOT.parent / "Assets" / "Cinematics" / "amberhive_opus" / "amberhive_intro.cine", "UnknownsAtlas.Maps.amberhive.amberhive_intro.cine"),
 }
 
 
