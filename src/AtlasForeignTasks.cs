@@ -188,10 +188,17 @@ internal static class AtlasForeignTasks
     // Mehrstufige Leihaufgaben (Airship "Reset Breakers": 7 Kaesten, je Schritt nur ConsoleId == Data[Schritt]) haben auf
     // der Karte EINE Konsole mit ConsoleId 0: vanilla verweigerte sie, sobald die ausgeloste Reihenfolge einen anderen Kasten
     // verlangte (User 29.10.: "die task funktioniert nicht" nach Schritt 2 von 7). An ihrer eigenen Konsole gilt jeder Schritt.
-    [HarmonyLib.HarmonyPatch(typeof(NormalPlayerTask), nameof(NormalPlayerTask.ValidConsole))]
+    [HarmonyLib.HarmonyPatch]
     private static class OwnConsoleValid
     {
-        private static void Postfix(NormalPlayerTask __instance, Console console, ref bool __result)
+        private static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+        {
+            yield return HarmonyLib.AccessTools.DeclaredMethod(typeof(NormalPlayerTask), nameof(NormalPlayerTask.ValidConsole));
+            // TowelTask checks Airship towel IDs in its own override, including during map marker lookup.
+            yield return HarmonyLib.AccessTools.DeclaredMethod(typeof(TowelTask), nameof(TowelTask.ValidConsole));
+        }
+
+        private static void Postfix(NormalPlayerTask __instance, [HarmonyLib.HarmonyArgument(0)] Console console, ref bool __result)
         {
             if (__result || _holder == null || console == null || __instance == null || __instance.IsComplete) return;
             try
