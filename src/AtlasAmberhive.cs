@@ -849,8 +849,11 @@ internal sealed class AmberhiveWorld : IAtlasMapWorld
     private void HostChute(PlayerControl from)
     {
         if (!_two || !_h.HasChute || MeetingHud.Instance != null || ExileController.Instance != null) return;
-        if (from == null || from.Data == null || from.Data.IsDead || from.inVent || !from.CanMove) return;
-        if (Vector2.Distance(from.GetTruePosition(), _h.ChuteTop) > 1.35f) return;
+        if (from == null || from.Data == null || from.Data.IsDead || from.inVent) return;
+        // CanMove liest den UI-Zustand des Hosts (Chat, Karte, Aufgabe), nicht den des Gastes.
+        // Fuer Gaeste daher nur netzneutrale Felder pruefen.
+        if (from.AmOwner ? !from.CanMove : (!from.moveable || from.onLadder || from.inMovingPlat)) return;
+        if (!AtlasUse.HostNear(from, _h.ChuteTop, 1.0f)) return;
         if (_chuteCooldown.TryGetValue(from.PlayerId, out float until) && _clock < until) return;
         _chuteCooldown[from.PlayerId] = _clock + 2f;
         byte pid = from.PlayerId;

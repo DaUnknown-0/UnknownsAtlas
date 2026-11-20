@@ -80,6 +80,9 @@ internal sealed class AtlasAmberhiveLife : IDisposable
     private int _generation;
     private uint _serial;
     private int _sightFrame = -1;
+    private int _fullCursor = -1;               // Vollabgleich der Abdruecke: naechstes Paket, -1 = keiner laeuft
+    private float _nextFull;
+    private bool _refresh;                      // Sicht und Laeufer nur jeden dritten Frame neu bewerten
     private Vector2 _sightAt;
     private float _sightRadiusSquared;
     private bool _sightReady;
@@ -111,7 +114,7 @@ internal sealed class AtlasAmberhiveLife : IDisposable
         internal SpriteRenderer Flame, Halo;
         internal Vector2 Feet;
         internal Vector3 Scale;
-        internal float Phase;
+        internal float Phase, Draft, Direction;
     }
 
     internal AtlasAmberhiveLife(Transform parent, AtlasMapDef def, Func<Vector2, bool> wet)
@@ -142,14 +145,17 @@ internal sealed class AtlasAmberhiveLife : IDisposable
         if (authority != _wasHost)
         {
             _wasHost = authority;
-            if (authority) { ClearTrails(); _generation++; _nextState = 0f; _synced = true; }
+            if (authority) { ClearTrails(); _generation++; _nextState = 0f; _synced = true; _fullCursor = -1; }
         }
         if (!paused) _clock += dt;
         if (paused && !_wasPaused)
         {
             ClearTrails();
-            if (authority) { _generation++; _nextState = 0f; }
+            if (authority) { _generation++; _nextState = 0f; _fullCursor = -1; }
         }
+        // Nach Meeting/Rauswurf einmal voll abgleichen: Gaeste, die den Rauswurf spaeter beenden, haben
+        // die ersten Deltas verworfen.
+        if (!paused && _wasPaused && authority) _nextFull = Time.time + 1.5f;
         _wasPaused = paused;
         if (Time.time >= _nextProps) { _nextProps = Time.time + 1f; BindProps(); }
         if (authority)
@@ -157,7 +163,7 @@ internal sealed class AtlasAmberhiveLife : IDisposable
             bool enabled = HostOption();
             if (_enabled != enabled)
             {
-                _enabled = enabled; ClearTrails(); _generation++; _nextState = 0f;
+                _enabled = enabled; ClearTrails(); _generation++; _nextState = 0f; _fullCursor = -1;
             }
             bool dark = AtlasWorld.LightsOut();
             if (Freeplay && (_glowTest?.Value ?? false)) dark = (int)(_clock / 8f) % 2 == 1;
@@ -175,16 +181,27 @@ internal sealed class AtlasAmberhiveLife : IDisposable
             {
                 _nextState = Time.time + 1f;
                 SendState();
-                SendPrints(_prints);
+            }
+            // Deltas reichen im Normalfall (zuverlaessige RPCs). Die volle Liste nur selten als Abgleich und
+            // hoechstens ein Paket je Frame: der Server trennt Spieler bei Datenschueben.
+            if (_fullCursor < 0 && Time.time >= _nextFull)
+            {
+                _nextFull = Time.time + Lifetime;
+                if (_prints.Count > 0) _fullCursor = 0;
+            }
+            if (_fullCursor >= 0)
+            {
+                if (_fullCursor >= _prints.Count) _fullCursor = -1;
+                else { SendPrints(_prints, _fullCursor, PacketPrints); _fullCursor += PacketPrints; }
             }
             if (_pending.Count > 0 && Time.time >= _nextPrintSend)
             {
                 _nextPrintSend = Time.time + .1f; SendPrints(_pending); _pending.Clear();
             }
         }
-        _visibleMoving.Clear();
-        _visibleOwners.Clear();
-        if (!paused) LocalWalkers();
+        _refresh = Time.frameCount % 3 == 0;
+        if (paused) { _visibleMoving.Clear(); _visibleOwners.Clear(); }
+        else if (_refresh) LocalWalkers();
         TickPrints(); TickSun(); TickLamps(); TickCandles();
         _pollenMat.enabled = _hasPollen && _enabled && _synced && !paused;
         if ((_logTest?.Value ?? false) && Time.time >= _nextLog)
@@ -308,13 +325,16 @@ internal sealed class AtlasAmberhiveLife : IDisposable
 
     private void LocalWalkers()
     {
+        _visibleMoving.Clear();
+        _visibleOwners.Clear();
         foreach (var p in PlayerControl.AllPlayerControls)
         {
             if (p == null) continue;
             byte id = p.PlayerId;
-            if (!PublicWalker(p) || InTransit(id) || !InSight(p.GetTruePosition())) { _localWalkers.Remove(id); continue; }
-            _visibleOwners.Add(id);
             Vector2 pos = p.GetTruePosition();
+            // Billige Pruefungen zuerst; PublicWalker (Reflection, Farb-Getter) nur fuer sichtbare Spieler.
+            if (InTransit(id) || !InSight(pos) || !PublicWalker(p)) { _localWalkers.Remove(id); continue; }
+            _visibleOwners.Add(id);
             if (!_localWalkers.TryGetValue(id, out var w)) { _localWalkers[id] = NewWalker(pos, Time.time); continue; }
             Vector2 delta = pos - w.Pos;
             float elapsed = Mathf.Max(.01f, Time.time - w.At);
@@ -358,7 +378,8 @@ internal sealed class AtlasAmberhiveLife : IDisposable
         {
             var p = _prints[i]; float age = _clock - p.Born;
             if (age >= Lifetime || !_enabled) { DestroyPrint(p); _prints.RemoveAt(i); continue; }
-            p.Sr.enabled = _synced && !Paused && InSight(p.Pos);
+            if (!_synced || Paused) p.Sr.enabled = false;
+            else if (_refresh) p.Sr.enabled = InSight(p.Pos);
             p.Sr.color = new Color(1f, .7f, .12f, .82f * Mathf.Clamp01((Lifetime - age) / 1.2f));
         }
         for (int i = _honey.Count - 1; i >= 0; i--)
@@ -367,7 +388,7 @@ internal sealed class AtlasAmberhiveLife : IDisposable
             if (age >= 1.25f) { DestroyPrint(p); _honey.RemoveAt(i); continue; }
             bool ownerVisible = _visibleOwners.Contains(p.Owner);
             // Nach Sichtverlust verwerfen: keine spaetere Rekonstruktion fremder Bewegung.
-            if (!ownerVisible || !InSight(p.Pos)) { DestroyPrint(p); _honey.RemoveAt(i); continue; }
+            if (_refresh && (!ownerVisible || !InSight(p.Pos))) { DestroyPrint(p); _honey.RemoveAt(i); continue; }
             p.Sr.enabled = !Paused;
             p.Sr.color = new Color(.85f, .48f, .1f, .45f * (1f - age / 1.25f));
         }
@@ -501,15 +522,20 @@ internal sealed class AtlasAmberhiveLife : IDisposable
     {
         foreach (var c in _candles)
         {
-            float draft = 0f, direction = 0f;
-            if (InSight(c.Feet))
-                foreach (var w in _visibleMoving)
-                {
-                    float d = Vector2.Distance(w.Pos, c.Feet);
-                    if (d > 2f || !ClearLine(w.Pos, c.Feet)) continue;
-                    draft = Mathf.Max(draft, 1f - d / 2f);
-                    direction += Mathf.Sign(c.Feet.x - w.Pos.x) * (1f - d / 2f);
-                }
+            if (_refresh)
+            {
+                float dr = 0f, dir = 0f;
+                if (_visibleMoving.Count > 0 && InSight(c.Feet))
+                    foreach (var w in _visibleMoving)
+                    {
+                        float d = Vector2.Distance(w.Pos, c.Feet);
+                        if (d > 2f || !ClearLine(w.Pos, c.Feet)) continue;
+                        dr = Mathf.Max(dr, 1f - d / 2f);
+                        dir += Mathf.Sign(c.Feet.x - w.Pos.x) * (1f - d / 2f);
+                    }
+                c.Draft = dr; c.Direction = dir;
+            }
+            float draft = c.Draft, direction = c.Direction;
             float flicker = 1f + .055f * Mathf.Sin(Time.time * 9f + c.Phase) + draft * .25f * Mathf.Sin(Time.time * 34f + c.Phase);
             c.Flame.transform.localScale = new Vector3(c.Scale.x / flicker, c.Scale.y * flicker, 1f);
             c.Flame.transform.localRotation = Quaternion.Euler(0f, 0f, direction * -24f);
@@ -528,11 +554,12 @@ internal sealed class AtlasAmberhiveLife : IDisposable
         });
     }
 
-    private void SendPrints(List<Print> source)
+    private void SendPrints(List<Print> source, int first = 0, int max = int.MaxValue)
     {
-        for (int start = 0; start < source.Count; start += PacketPrints)
+        int end = max >= source.Count - first ? source.Count : first + max;
+        for (int start = first; start < end; start += PacketPrints)
         {
-            int offset = start, count = Mathf.Min(PacketPrints, source.Count - start);
+            int offset = start, count = Mathf.Min(PacketPrints, end - start);
             AtlasWorld.Send(AtlasAmberhive.OpHive, w =>
             {
                 w.Write((byte)17); w.Write(_generation); w.Write(_clock); w.Write((byte)count);

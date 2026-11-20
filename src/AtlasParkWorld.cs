@@ -280,9 +280,16 @@ internal static class AtlasParkWorld
                 }
             }
             bool blink = _ev != Ev.None && Mathf.Repeat(el * 2.5f, 1f) < 0.5f;
-            int crossing = el < Announce + 3f ? 0 : 1;
-            for (int i = 0; i < Crossings.Count; i++)
-                SetGate(Crossings[i], coaster && i == crossing, blink && _ev == Ev.Coaster && i == crossing);
+            // Schranke zu, solange der Zug (Mitte plus halbe Zuglaenge plus 1 m) an ihr ist; aus der Bahn
+            // abgeleitet statt fester Zeiten, damit sie genau dann zu ist, wenn der Zug darueber faehrt.
+            Vector2 trainAt = default;
+            bool trainOn = coaster && PathPoint(AtlasParkWorldData.TrackLoop, (el - Announce) / 6f, out trainAt, out _);
+            for (int i = 0; i < Crossings.Count && i < AtlasParkWorldData.Crossings.Length; i++)
+            {
+                var (cMin, cMax, _) = AtlasParkWorldData.Crossings[i];
+                bool shut = trainOn && RectDistance(cMin, cMax, trainAt) < TrainReach;
+                SetGate(Crossings[i], shut, blink && shut);
+            }
             foreach (var g in CarouselGates) SetGate(g, carousel, false);
             LampTick(dt);
             if (_carousel != null)
@@ -346,11 +353,20 @@ internal static class AtlasParkWorld
     }
 
     /// <summary>Sprite entlang eines Polygonzugs; u in [0,1], u &lt; 0 = ausblenden.</summary>
-    private static void Move(SpriteRenderer sr, Vector2[] path, float u)
+    /// <summary>Halbe Zuglaenge (3,6 m) plus 1 m Abstand: so nah darf der Zug einer offenen Schranke kommen.</summary>
+    private const float TrainReach = 1.8f + 1f;
+
+    private static float RectDistance(Vector2 min, Vector2 max, Vector2 p)
     {
-        if (sr == null) return;
-        if (u < 0f || u > 1f || path == null || path.Length < 2) { sr.gameObject.SetActive(false); return; }
-        if (!sr.gameObject.activeSelf) sr.gameObject.SetActive(true);
+        float dx = Mathf.Max(min.x - p.x, 0f, p.x - max.x), dy = Mathf.Max(min.y - p.y, 0f, p.y - max.y);
+        return Mathf.Sqrt(dx * dx + dy * dy);
+    }
+
+    /// <summary>Punkt und Richtung bei Anteil u (0..1) der Strecke; false ausserhalb.</summary>
+    private static bool PathPoint(Vector2[] path, float u, out Vector2 at, out Vector2 dir)
+    {
+        at = dir = Vector2.zero;
+        if (u < 0f || u > 1f || path == null || path.Length < 2) return false;
         float total = 0f;
         for (int i = 1; i < path.Length; i++) total += Vector2.Distance(path[i - 1], path[i]);
         float want = u * total;
@@ -359,14 +375,22 @@ internal static class AtlasParkWorld
             float seg = Vector2.Distance(path[i - 1], path[i]);
             if (want <= seg || i == path.Length - 1)
             {
-                var p = Vector2.Lerp(path[i - 1], path[i], seg > 0f ? Mathf.Clamp01(want / seg) : 0f);
-                var d = path[i] - path[i - 1];
-                sr.transform.position = new Vector3(p.x, p.y, AtlasMuseumBuilder.SortZ(p.y - 0.4f));
-                sr.transform.eulerAngles = new Vector3(0f, 0f, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
-                return;
+                at = Vector2.Lerp(path[i - 1], path[i], seg > 0f ? Mathf.Clamp01(want / seg) : 0f);
+                dir = path[i] - path[i - 1];
+                return true;
             }
             want -= seg;
         }
+        return false;
+    }
+
+    private static void Move(SpriteRenderer sr, Vector2[] path, float u)
+    {
+        if (sr == null) return;
+        if (!PathPoint(path, u, out var p, out var d)) { sr.gameObject.SetActive(false); return; }
+        if (!sr.gameObject.activeSelf) sr.gameObject.SetActive(true);
+        sr.transform.position = new Vector3(p.x, p.y, AtlasMuseumBuilder.SortZ(p.y - 0.4f));
+        sr.transform.eulerAngles = new Vector3(0f, 0f, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
     }
 
     // ------------------------------------------------------------------ Geisterbahn
@@ -530,7 +554,7 @@ internal static class AtlasParkWorld
         {
             lp.NetTransform.SnapTo(new Vector2((min.x + max.x) / 2f, (min.y + max.y) / 2f + AtlasMuseumBuilder.FeetOffset()));
             EndEvent(); Apply(Ev.Coaster);
-            _diagGuard = 2; _diagGuardAt = Time.time + Announce + 3.8f;
+            _diagGuard = 2; _diagGuardAt = Time.time + Announce + 1.4f;   // Uebergang 2 ist etwa +0,8 bis +1,8 s zu
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag guard: player placed inside crossing 1, coaster starting");
             return;
         }

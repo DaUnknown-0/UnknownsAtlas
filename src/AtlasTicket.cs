@@ -135,7 +135,7 @@ internal static class AtlasTicket
     private static void HostStamp(PlayerControl from)
     {
         if (!Active || from == null || from.Data == null || from.Data.IsDead || from.inVent) return;
-        if (!Array.Exists(D.TicketStations, st => Vector2.Distance(from.GetTruePosition(), st) < Reach && AtlasUse.ClearLine(from, st))) return;
+        if (!Array.Exists(D.TicketStations, st => AtlasUse.HostNear(from, st, Reach) && AtlasUse.ClearLine(from, st))) return;
         if (Stamped.Add(from.PlayerId))
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} host: {from.Data.PlayerName} stamped ({Stamped.Count}/{Needed().Count})");
     }

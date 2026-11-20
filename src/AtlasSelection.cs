@@ -81,7 +81,9 @@ internal static class AtlasSelection
         // otherwise the host keeps the old answer and the start stays blocked.
         try
         {
-            if (_pendingKey != null && string.Equals(_pendingKey, e.Key, StringComparison.OrdinalIgnoreCase))
+            // Nur ausserhalb einer Runde uebernehmen: mitten in der Runde wuerde die Wahl auf eine Karte zeigen,
+            // die hier nie gebaut wurde. Der Host wiederholt seine Wahl in der Lobby ohnehin.
+            if (_pendingKey != null && ShipStatus.Instance == null && string.Equals(_pendingKey, e.Key, StringComparison.OrdinalIgnoreCase))
             {
                 _pendingKey = null;
                 Set(Maps.Count, broadcast: false);
