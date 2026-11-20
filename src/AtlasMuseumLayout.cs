@@ -217,6 +217,6 @@ public static class AtlasMuseumLayout
 
     // ---------------------------------------------------------------- Spawn
 
-    public static readonly Vector2 Spawn = new(0f, -8f);
+    public static readonly Vector2 Spawn = new(0f, -7.25f);
     public const float SpawnRadius = 3.2f;
 }

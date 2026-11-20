@@ -384,7 +384,18 @@ internal static class AtlasWorld
         {
             var pool = new List<int>();
             for (int i = 0; i < TreeSpots.Count; i++) if (!Trees.ContainsKey(i)) pool.Add(i);
-            for (int i = 0; i < trees && pool.Count > 0; i++) { int j = Random.Range(0, pool.Count); idx.Add(pool[j]); pool.RemoveAt(j); }
+            // Keep one path to the lookout open even when adding trees to an existing fall.
+            if (Trees.ContainsKey(8)) pool.Remove(9);
+            if (Trees.ContainsKey(9)) pool.Remove(8);
+            for (int i = 0; i < trees && pool.Count > 0; i++)
+            {
+                int j = Random.Range(0, pool.Count);
+                int tree = pool[j];
+                idx.Add(tree);
+                pool.RemoveAt(j);
+                if (tree == 8) pool.Remove(9);
+                if (tree == 9) pool.Remove(8);
+            }
             foreach (var i in idx) TreeUntil[i] = Time.time + 45f;
         }
         ApplySabStart(kind, idx);

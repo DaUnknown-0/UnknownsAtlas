@@ -280,7 +280,9 @@ internal static class AtlasParkWorld
                 }
             }
             bool blink = _ev != Ev.None && Mathf.Repeat(el * 2.5f, 1f) < 0.5f;
-            foreach (var g in Crossings) SetGate(g, coaster, blink && _ev == Ev.Coaster);
+            int crossing = el < Announce + 3f ? 0 : 1;
+            for (int i = 0; i < Crossings.Count; i++)
+                SetGate(Crossings[i], coaster && i == crossing, blink && _ev == Ev.Coaster && i == crossing);
             foreach (var g in CarouselGates) SetGate(g, carousel, false);
             LampTick(dt);
             if (_carousel != null)
@@ -528,7 +530,7 @@ internal static class AtlasParkWorld
         {
             lp.NetTransform.SnapTo(new Vector2((min.x + max.x) / 2f, (min.y + max.y) / 2f + AtlasMuseumBuilder.FeetOffset()));
             EndEvent(); Apply(Ev.Coaster);
-            _diagGuard = 2; _diagGuardAt = Time.time + Announce + 0.8f;
+            _diagGuard = 2; _diagGuardAt = Time.time + Announce + 3.8f;
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag guard: player placed inside crossing 1, coaster starting");
             return;
         }

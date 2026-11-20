@@ -118,7 +118,7 @@ TURNSTILES = [("in", ("rect", -4.5, -3.5, -2.0, -3.0)), ("out", ("rect", 2.0, -3
 
 # ------------------------------------------------------------------ Spielpunkte
 SPAWN = (0.0, 1.2)
-SPAWN_RADIUS = 2.4
+SPAWN_RADIUS = 1.9
 EMERGENCY = (0.0, 3.4)
 SURVEILLANCE = (4.1, -8.1)      # Park Office, Security-Nebenraum: Monitorwand NW
 ADMIN_TABLE = (-1.5, -8.3)      # Park Office, Lageplan
@@ -145,9 +145,9 @@ FIXED = {
 # Vents: drei Ringe quer ueber die Karte, dazu zwei Querverbindungen ueber den dritten Nachbarn
 # (Vent.Center). Vent 4 entfaellt mit dem Spiegelkabinett (faellt dem Wipe zu).
 VENTS = {
-    0: (-19.3, 9.3), 3: (-4.3, 16.0), 12: (9.4, 16.6), 6: (21.8, 16.1),
-    1: (-16.6, -5.0), 5: (-18.2, -2.2), 13: (-5.3, -10.9), 7: (20.3, -2.3),
-    2: (-20.3, -18.3), 9: (-2.2, -20.3), 10: (5.4, -17.4), 11: (14.3, -20.3), 8: (18.2, -15.2),
+    0: (-19.3, 9.3), 3: (-4.3, 16.0), 12: (9.65, 16.35), 6: (21.95, 15.25),
+    1: (-16.6, -5.0), 5: (-18.2, -2.2), 13: (-5.3, -10.9), 7: (20.1, -2.15),
+    2: (-19.0, -18.3), 9: (-2.2, -20.3), 10: (5.4, -17.4), 11: (14.3, -20.3), 8: (18.2, -15.2),
 }
 VENT_NETS = [
     [0, 3, 12, 6],          # Nord: Schiessbude, Riesenrad, Lichtturm-Hof, Musikzentrale
@@ -219,6 +219,6 @@ WHEEL_R = 3.0
 WHEEL_BOARD = (0.4, 9.2)
 # Achterbahn-Pendelwagen: Bahnsteig (Use-Punkt), Halt auf der Strecke, Fahrweg A -> B
 SHUTTLE_A = ((17.2, 5.3), (17.2, 7.9))              # Coaster Station, Suedschenkel
-SHUTTLE_B = ((-4.6, 19.2), (-5.2, 20.9))            # Riesenrad-Nordwestecke, Stichstrecke
+SHUTTLE_B = ((-4.6, 18.55), (-5.2, 20.9))            # Riesenrad-Nordwestecke, Stichstrecke
 SHUTTLE_PATH = [(17.2, 7.9), (7.4, 7.9), (7.4, 20.9), (-5.2, 20.9)]
 

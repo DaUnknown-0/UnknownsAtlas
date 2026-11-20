@@ -78,6 +78,9 @@ internal static class AtlasUse
         return Vector2.Distance(from.GetTruePosition(), spot) < radius + HostSlack;
     }
 
+    internal static bool ClearLine(PlayerControl player, Vector2 spot) =>
+        !PhysicsHelpers.AnythingBetween(player.GetTruePosition(), spot, 1 << AtlasMuseumBuilder.LayerShip, false);
+
     private const float HostSlack = 2f;
 
     /// <summary>Gemeinsame Bedingung fuer Stationen in der Welt: lebend, frei beweglich, nichts offen.</summary>

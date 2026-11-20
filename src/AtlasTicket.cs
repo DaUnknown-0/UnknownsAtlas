@@ -53,14 +53,13 @@ internal static class AtlasTicket
     /// <summary>Wer schon gestempelt hat (vom Host verteilt).</summary>
     public static readonly HashSet<byte> Stamped = new();
     public static bool LocalStamped => PlayerControl.LocalPlayer != null && Stamped.Contains(PlayerControl.LocalPlayer.PlayerId);
-    private static bool _localSent;
 
     // Host
     private static float _hostSendAt;
 
     public static void Reset()
     {
-        Active = false; TimeLeft = 0f; Stamped.Clear(); _localSent = false;
+        Active = false; TimeLeft = 0f; Stamped.Clear();
         _hint = null; _arrows.Clear();
     }
 
@@ -99,8 +98,7 @@ internal static class AtlasTicket
     /// <summary>Minispiel: der eigene Fahrschein ist gestempelt.</summary>
     public static void Stamp()
     {
-        if (!Active || _localSent) return;
-        _localSent = true;
+        if (!Active || LocalStamped) return;
         AtlasWeatherFx.Sfx("ding", 0.7f);
         if (AmHost) HostStamp(PlayerControl.LocalPlayer);
         else Send(SubStamp, null);
@@ -136,7 +134,8 @@ internal static class AtlasTicket
 
     private static void HostStamp(PlayerControl from)
     {
-        if (!Active || from == null || from.Data == null || from.Data.IsDead) return;
+        if (!Active || from == null || from.Data == null || from.Data.IsDead || from.inVent) return;
+        if (!Array.Exists(D.TicketStations, st => Vector2.Distance(from.GetTruePosition(), st) < Reach && AtlasUse.ClearLine(from, st))) return;
         if (Stamped.Add(from.PlayerId))
             AtlasPlugin.Logger.LogInfo($"{LogPrefix} host: {from.Data.PlayerName} stamped ({Stamped.Count}/{Needed().Count})");
     }
@@ -201,7 +200,7 @@ internal static class AtlasTicket
     {
         Active = true;
         Countdown = sec; TimeLeft = sec;
-        Stamped.Clear(); _localSent = false;
+        Stamped.Clear();
         _flashStart = Time.time;
         AtlasWeatherFx.Sfx("ding", 0.9f);
         MakeArrows();
@@ -417,7 +416,7 @@ internal static class AtlasTicket
         bool near = false;
         if (!LocalStamped)
             foreach (var st in D.TicketStations)
-                if (AtlasUse.CanReach(lp, st, Reach)) { near = true; at = st; break; }
+                if (AtlasUse.CanReach(lp, st, Reach) && AtlasUse.ClearLine(lp, st)) { near = true; at = st; break; }
         ShowHint(near ? "stamp" : null, at);
         if (!near) return;
         AtlasUse.Offer("STAMP", Icon, OpenStation);
@@ -492,6 +491,17 @@ internal static class AtlasTicket
         {
             case "ticket":
                 HostStart();
+                break;
+            case "ticketwalls" when D.Key == "train":
+                if (!Active) HostStart();
+                var player = PlayerControl.LocalPlayer;
+                foreach (var foot in new[] { new Vector2(-22.35f, 1.50f), new Vector2(11.20f, 4.90f) })
+                {
+                    snap(foot + Vector2.up * AtlasMuseumBuilder.FeetOffset());
+                    Physics2D.SyncTransforms();
+                    HostStamp(player);
+                    AtlasPlugin.Logger.LogInfo($"{LogPrefix} diag wall at {player.GetTruePosition()}: {(LocalStamped ? "FAIL" : "PASS")}");
+                }
                 break;
             case "ticketstamp":
                 if (!Active) HostStart();

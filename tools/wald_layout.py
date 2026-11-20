@@ -91,8 +91,8 @@ PATHS = [
 ]
 
 # ------------------------------------------------------------------ Spielpunkte
-SPAWN = (0.0, 2.0)
-SPAWN_RADIUS = 2.4
+SPAWN = (0.0, 0.5)
+SPAWN_RADIUS = 1.6
 EMERGENCY = (0.0, 2.5)          # Messe: Glocke vor dem langen Tisch (Pfosten frei vom Tisch)
 SURVEILLANCE = (-25.0, -9.0)    # Wachstube, vor der Monitorwand
 ADMIN_TABLE = (-12.0, 1.3)      # Feldstation: Suedkante des Kartentischs

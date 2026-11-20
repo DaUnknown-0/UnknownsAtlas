@@ -152,6 +152,12 @@ internal static class AtlasTasks
                     return;
                 }
                 // "colliders": jeden Kollider der Karte (Lage, Groesse, Besitzer, Trigger) als Zeile ins Log
+                if (kind == "spawnring")
+                {
+                    CheckSpawnRing();
+                    _diagPhase = 4;
+                    return;
+                }
                 if (kind == "colliders")
                 {
                     DumpColliders();
@@ -322,6 +328,31 @@ internal static class AtlasTasks
         yield return new WaitForSeconds(1.5f);
         Shot("fade", "away");
         _diagPhase = 4;
+    }
+
+    private static void CheckSpawnRing()
+    {
+        var ship = ShipStatus.Instance;
+        float feetOffset = AtlasMuseumBuilder.FeetOffset();
+        foreach (float offset in new[] { 0f, feetOffset })
+        {
+            int blocked = 0;
+            string firstHit = "";
+            for (int degree = 0; degree < 360; degree++)
+            {
+                float angle = degree * Mathf.Deg2Rad;
+                Vector2 foot = (Vector2)ship.InitialSpawnCenter + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ship.SpawnRadius;
+                foot.y -= offset;
+                foreach (var hit in Physics2D.OverlapCircleAll(foot, 0.25f, Constants.ShipAndObjectsMask))
+                {
+                    if (hit == null || hit.isTrigger) continue;
+                    if (blocked == 0) firstHit = hit.name;
+                    blocked++;
+                    break;
+                }
+            }
+            AtlasPlugin.Logger.LogInfo($"{LogPrefix} spawnring {ship.InitialSpawnCenter}, radius {ship.SpawnRadius:F2}, foot offset {offset:F3}: {blocked}/360 blocked {firstHit}");
+        }
     }
 
     private static void DumpColliders()

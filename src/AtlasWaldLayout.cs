@@ -64,8 +64,8 @@ internal static class AtlasWaldLayout
     public static readonly Vector2 SurveillanceConsole = new(-25.000f, -9.000f);
     public static readonly Vector2 AdminTable = new(-12.000f, 1.300f);
     public static readonly Vector2 FreeplayLaptop = new(3.800f, -1.200f);
-    public static readonly Vector2 Spawn = new(0.000f, 2.000f);
-    public const float SpawnRadius = 2.4f;
+    public static readonly Vector2 Spawn = new(0.000f, 0.500f);
+    public const float SpawnRadius = 1.6f;
     public static readonly Dictionary<int, Vector2> Vents = new()
     {
         [11] = new(-19.800f, 10.600f),

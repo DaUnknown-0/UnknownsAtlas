@@ -387,7 +387,7 @@ internal static class AtlasMuseumBuilder
         int placed = 0, unplaced = 0;
         FootprintCount = 0;
         Extended.Clear();
-        WallChecked.Clear();
+        WallCheckOffsets.Clear();
         foreach (var c in consoles)
         {
             if (c == null) continue;
@@ -403,10 +403,14 @@ internal static class AtlasMuseumBuilder
             SortLikePlayer(c.transform);
             DisableOwnColliders(c.gameObject);
             c.checkWalls = false;
-            if (D.World is AmberhiveWorld &&
+            if (D.Key == "museum" && key is "Security/FixWiringConsole/5" or "LifeSupp/DivertPowerConsole/1")
+                WallCheckOffsets[c.Pointer] = Vector2.down * (key == "Security/FixWiringConsole/5" ? 0.30f : 0.35f);
+            else if ((D.Key == "park" && key is "Admin/FixWiringConsole/2" or "Electrical/CalibrateConsole/0" or "LifeSupp/CleanFilterConsole/0" or "Storage/gasCanConsole/0" or "UpperEngine/FuelEngineConsole/0") ||
+                (D.Key == "wald" && key is "Security/FixWiringConsole/5" or "LowerEngine/FuelEngineConsole/0") ||
+                D.World is AmberhiveWorld &&
                 (key is "Admin/NoOxyConsole/1" or "LowerEngine/AlignEngineConsole/1" or "UpperEngine/AlignEngineConsole/0" ||
                  (key == "Storage/gasCanConsole/0" && D.Stairs?.Length > 0)))
-                WallChecked.Add(c.Pointer);
+                WallCheckOffsets[c.Pointer] = Vector2.zero;
             c.onlySameRoom = false;
             c.onlyFromBelow = false;
             // Winzige Skeld-Bilder (A2 = Reactor/LowerHandConsole: 0,34 x 0,06 m) sind im Museum
@@ -738,7 +742,7 @@ internal static class AtlasMuseumBuilder
     }
 
     private static readonly HashSet<IntPtr> Extended = new();
-    internal static readonly HashSet<IntPtr> WallChecked = new();
+    internal static readonly Dictionary<IntPtr, Vector2> WallCheckOffsets = new();
 
     [HarmonyPatch(typeof(Console), nameof(Console.CanUse))]
     internal static class ReachPatch
@@ -749,7 +753,9 @@ internal static class AtlasMuseumBuilder
             try
             {
                 var from = pc.Object.GetTruePosition();
-                if (PhysicsHelpers.AnythingBetween(from, (Vector2)__instance.transform.position, 1 << LayerShip, false)) canUse = false;
+                WallCheckOffsets.TryGetValue(__instance.Pointer, out var offset);
+                var target = (Vector2)__instance.transform.position + offset;
+                if (PhysicsHelpers.AnythingBetween(from, target, 1 << LayerShip, false)) canUse = false;
             }
             catch { }
         }
@@ -2116,9 +2122,13 @@ internal static class AtlasConsoleWallCheck
             Vector2 at = __instance.transform.position;
             Vector2 d = from - at;
             float len = d.magnitude;
-            if (len < 0.05f) return;
-            Vector2 to = AtlasMuseumBuilder.WallChecked.Contains(__instance.Pointer)
-                ? at : at + d / len * Mathf.Min(0.4f, len * 0.5f);
+            Vector2 to;
+            if (AtlasMuseumBuilder.WallCheckOffsets.TryGetValue(__instance.Pointer, out var offset)) to = at + offset;
+            else
+            {
+                if (len < 0.05f) return;
+                to = at + d / len * Mathf.Min(0.4f, len * 0.5f);
+            }
             if (PhysicsHelpers.AnythingBetween(from, to, Constants.ShipOnlyMask, false))
             {
                 canUse = false;

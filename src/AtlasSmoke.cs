@@ -36,6 +36,9 @@ internal static class AtlasSmoke
     private static AtlasMapDef D => AtlasMuseumBuilder.D;
     private static bool AmHost => AmongUsClient.Instance != null && AmongUsClient.Instance.AmHost;
     public static bool Available => D != null && D.SmokeHatches != null && D.SmokeHatches.Length > 0;
+    private static bool HatchVisible(PlayerControl player, int index) =>
+        D.Key != "train" || index != 1 || AtlasUse.ClearLine(player, D.SmokeHatches[index]);
+
     public static int HatchCount => Available ? D.SmokeHatches.Length : 0;
 
     // ------------------------------------------------------------------ Zustand (alle Clients)
@@ -115,7 +118,7 @@ internal static class AtlasSmoke
     {
         if (!Active || from == null || from.Data == null || from.Data.IsDead || i >= HatchCount) return;
         if (IsOpen(i)) return;
-        if (!AtlasUse.HostNear(from, D.SmokeHatches[i], Reach)) return;   // nur an der Luke selbst
+        if (!AtlasUse.HostNear(from, D.SmokeHatches[i], Reach) || !HatchVisible(from, i)) return;   // nur an der Luke selbst
         OpenBits |= (byte)(1 << i);
         AtlasPlugin.Logger.LogInfo($"{LogPrefix} host: hatch {i} opened by {from.Data.PlayerName} ({OpenCount}/{HatchCount})");
     }
@@ -339,7 +342,7 @@ internal static class AtlasSmoke
         var lp = PlayerControl.LocalPlayer;
         int near = -1; Vector2 at = default;
         for (int i = 0; i < HatchCount; i++)
-            if (!IsOpen(i) && AtlasUse.CanReach(lp, D.SmokeHatches[i], Reach)) { near = i; at = D.SmokeHatches[i]; break; }
+            if (!IsOpen(i) && AtlasUse.CanReach(lp, D.SmokeHatches[i], Reach) && HatchVisible(lp, i)) { near = i; at = D.SmokeHatches[i]; break; }
         ShowHint(near >= 0, at);
         if (near < 0) return;
         int h = near;

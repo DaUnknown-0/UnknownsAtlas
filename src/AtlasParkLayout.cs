@@ -50,7 +50,7 @@ internal static class AtlasParkLayout
         ["Security/FixWiringConsole/5"] = new(6.870f, -7.050f),
         ["Shields/DivertPowerConsole/1"] = new(14.450f, 11.080f),
         ["Shields/ShieldConsole/0"] = new(13.140f, 16.740f),
-        ["Storage/AirlockConsole/0"] = new(-16.680f, -18.450f),
+        ["Storage/AirlockConsole/0"] = new(-20.450f, -15.270f),
         ["Storage/FixWiringConsole/1"] = new(-13.050f, -17.850f),
         ["Storage/gasCanConsole/0"] = new(-13.500f, -12.550f),
         ["UpperEngine/AlignEngineConsole/0"] = new(-18.000f, 5.450f),
@@ -65,18 +65,18 @@ internal static class AtlasParkLayout
     public static readonly Vector2 AdminTable = new(-1.500f, -8.300f);
     public static readonly Vector2 FreeplayLaptop = new(5.200f, -1.600f);
     public static readonly Vector2 Spawn = new(0.000f, 1.200f);
-    public const float SpawnRadius = 2.4f;
+    public const float SpawnRadius = 1.9f;
     public static readonly Dictionary<int, Vector2> Vents = new()
     {
         [0] = new(-19.300f, 9.300f),
         [3] = new(-4.300f, 16.000f),
-        [12] = new(9.400f, 16.600f),
-        [6] = new(21.800f, 16.100f),
+        [12] = new(9.650f, 16.350f),
+        [6] = new(21.950f, 15.250f),
         [1] = new(-16.600f, -5.000f),
         [5] = new(-18.200f, -2.200f),
         [13] = new(-5.300f, -10.900f),
-        [7] = new(20.300f, -2.300f),
-        [2] = new(-20.300f, -18.300f),
+        [7] = new(20.100f, -2.150f),
+        [2] = new(-19.000f, -18.300f),
         [9] = new(-2.200f, -20.300f),
         [10] = new(5.400f, -17.400f),
         [11] = new(14.300f, -20.300f),
@@ -165,7 +165,7 @@ internal static class AtlasParkWorldData
     public const float WheelRadius = 3.000f;
     public static readonly Vector2 WheelBoard = new(0.400f, 9.200f);
     public static readonly Vector2 ShuttleA = new(17.200f, 5.300f), ShuttleStopA = new(17.200f, 7.900f);
-    public static readonly Vector2 ShuttleB = new(-4.600f, 19.200f), ShuttleStopB = new(-5.200f, 20.900f);
+    public static readonly Vector2 ShuttleB = new(-4.600f, 18.550f), ShuttleStopB = new(-5.200f, 20.900f);
     public static readonly Vector2[] ShuttlePath = new Vector2[] { new(17.200f, 7.900f), new(7.400f, 7.900f), new(7.400f, 20.900f), new(-5.200f, 20.900f) };
     /// <summary>Laternen am Weg (Lichtebene, gehen bei Park Blackout aus); Bild task_park_lamppost(_off).png.</summary>
     public static readonly Vector2[] Lamps = new Vector2[] { new(-7.500f, 2.750f), new(7.750f, 0.750f), new(-1.000f, 7.500f), new(-7.750f, 11.250f), new(-16.250f, 7.250f), new(6.750f, 11.600f), new(11.100f, 7.500f), new(5.500f, -5.750f), new(10.500f, -5.750f), new(16.000f, -4.000f), new(-9.500f, -11.750f), new(10.500f, -11.750f), new(-11.500f, -15.250f), new(14.500f, -11.750f) };

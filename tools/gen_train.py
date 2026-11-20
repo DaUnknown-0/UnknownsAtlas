@@ -59,7 +59,7 @@ TGANG = (1.1, 2.85)                         # Korridortender: Gang an der Suedse
 # Aussen-Laufsteg (User 20.10.: "richtig komplizierte Wege"): Trittbrett an der Suedseite ueber die ganze Zuglaenge,
 # Abgaenge in der Mitte jeder Wagenluecke (neben den Faltenbalg-Tueren, damit geschlossene Tueren dicht bleiben) und
 # an Schlussplattform und Lok-Umlauf. Ergibt einen zweiten Weg parallel zum Mittelgang und Schleifen.
-RB_Y = (-0.55, 0.35)
+RB_Y = (-0.75, 0.35)
 RB_STEP_W = 0.8
 RUNBOARD = []                               # von build() gefuellt: Steg + Abgaenge (fuer die Grafik)
 Z_MAIN, Z_UPPER = 1.2, 3.5                  # Fussbodenhoehen ueber Schiene (3D): Hauptebene, Oberdeck
@@ -119,7 +119,7 @@ VPARTS = [
 HPARTS = [
     (-4.9, -19.4, -15.4, 0.2, [(-19.1, -17.8, "sleeper"), (-17.0, -15.7, "sleeper")]),    # Schlafabteile (Oberdeck)
     (3.6, -19.4, -15.4, 0.2, [(-19.0, -17.8, "luggage"), (-17.0, -15.8, "luggage")]),     # Gepaeckkaefige (Hauptebene)
-    (2.9, 16.5, 20.1, 0.4, [(16.8, 17.9, "tender"), (18.7, 19.8, "tender")]),            # Kohlenbunker
+    (2.9, 16.5, 20.1, 0.4, [(16.8, 17.9, "tender"), (18.7, 20.0, "tender")]),            # Kohlenbunker
 ]
 # Waende ohne Oeffnung (senkrecht): x, y0, y1
 VSOLID = [(-19.4, 3.6, AY1), (-17.4, 3.6, AY1), (-15.4, 3.6, AY1),
@@ -142,14 +142,14 @@ def stairwells():
             main = box(xa, AY1 - STAIR_DEPTH, xa + STAIR_LEN, AY1)
             upper = box(xa, BY1B - STAIR_DEPTH, xa + STAIR_LEN, BY1B)
             out.append({"car": key, "main": main, "upper": upper,
-                        "a": (round(xc, 3), round(AY1 - STAIR_DEPTH - 0.55, 3)),
-                        "b": (round(xc, 3), round(BY1B - STAIR_DEPTH - 0.55, 3))})
+                        "a": (round(xc, 3), round(AY1 - STAIR_DEPTH - 0.75, 3)),
+                        "b": (round(xc - 0.2 if key == "sleeper" and xa > x0 + 0.2 else xc, 3), round(BY1B - STAIR_DEPTH - 0.75, 3))})
     return out
 
 
 # ------------------------------------------------------------------ Spielpunkte
 SPAWN = (-7.3, 3.25)
-SPAWN_RADIUS = 1.0
+SPAWN_RADIUS = 0.6
 DUMMY_RADIUS = (3.4, 1.0)
 EMERGENCY = (-7.3, 3.4)
 SURVEILLANCE = (-24.6, 5.0)           # Zugfuehrerabteil: Monitore
@@ -234,7 +234,7 @@ SMOKE = {"seconds": 60, "button": (18.3, -1.45), "source": (18.2, 4.6),
 VENTS = {
     0: (-25.8, 1.5), 1: (-17.4, 1.5), 2: (-7.0, -6.5), 3: (-11.3, 1.5),         # West
     5: (-28.4, 1.5), 6: (-17.4, -6.5), 7: (0.8, 1.5), 8: (6.2, -6.5),           # Mitte
-    9: (3.15, 4.95), 10: (9.0, 1.5), 11: (12.1, 1.5), 12: (16.95, 4.95), 13: (28.3, 5.0),    # Ost
+    9: (3.35, 4.75), 10: (9.0, 1.5), 11: (12.1, 1.5), 12: (16.95, 4.75), 13: (28.25, 4.75),    # Ost
 }
 VENT_NETS = [
     [0, 1, 2, 3],               # Zugfuehrerabteil, Gepaeckraum, Kueche, Speisewagen (Speiseaufzug)
